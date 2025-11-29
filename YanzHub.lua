@@ -35,6 +35,9 @@ local Games = {
     
     -- Rivals
     [17625359962] = "https://raw.githubusercontent.com/lphisv5/rbxScriptEN/refs/heads/main/Rivals.lua",
+    [117398147513099] = "https://raw.githubusercontent.com/lphisv5/rbxScriptEN/refs/heads/main/Rivals.lua",
+    [6035872082] = "https://raw.githubusercontent.com/lphisv5/rbxScriptEN/refs/heads/main/Rivals.lua",
+
 }
 
 local placeId = game.PlaceId

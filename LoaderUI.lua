@@ -71,6 +71,11 @@ local Games = {
         Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/Rivals.lua",
         Icon = "⚡"
     },
+    [92122513197996] = {
+        Name = "Dig to Escape"
+        Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/DigtoEscape.lua",
+        Icon = "🚨"
+    },
 }
 
 local function Notify(title, message, duration)
@@ -291,29 +296,25 @@ local function CreateSelector()
         
         Instance.new("UICorner", loadBtn).CornerRadius = UDim.new(0, 8)
         
-        -- Button interactions
         loadBtn.MouseButton1Click:Connect(function()
             LoadGame(gameInfo.placeId)
             gui.Enabled = false
         end)
         
-        -- Highlight current game
         if game.PlaceId == gameInfo.placeId then
             button.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
             Instance.new("UIStroke", button).Color = Color3.fromRGB(52, 152, 219)
         end
     end
     
-    -- Update scroll size
     listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
         scrollFrame.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 10)
     end)
     
-    -- Close button
     local closeBtn = Instance.new("TextButton")
     closeBtn.Size = UDim2.new(0.4, 0, 0.08, 0)
     closeBtn.Position = UDim2.new(0.3, 0, 0.95, 0)
-    closeBtn.Text = "✕"
+    closeBtn.Text = "❌"
     closeBtn.Font = Enum.Font.GothamBold
     closeBtn.TextSize = 16
     closeBtn.TextColor3 = Color3.new(1, 1, 1)
@@ -328,7 +329,6 @@ local function CreateSelector()
         getgenv()._DeltaLoaderUI = nil
     end)
     
-    -- Toggle with RightShift
     UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if not gameProcessed and input.KeyCode == Enum.KeyCode.RightShift then
             gui.Enabled = not gui.Enabled
@@ -338,7 +338,6 @@ local function CreateSelector()
     Notify("Loader", "RightShift to toggle UI", 4)
 end
 
--- Auto-run or show selector
 if Games[game.PlaceId] then
     local current = Games[game.PlaceId]
     Notify("Auto-loading", current.Name, 2)
@@ -360,7 +359,6 @@ if Games[game.PlaceId] then
         Notify("Error", "Failed to download", 3)
     end
 else
-    -- Show selector
     task.wait(0.5)
     CreateSelector()
 end

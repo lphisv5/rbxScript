@@ -24,11 +24,6 @@ local Games = {
         Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/Aimbot-bloxfruits.lua",
         Icon = "🍇"
     },
-    [4442272183] = {
-        Name = "Blox Fruits (Alt)",
-        Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/Aimbot-bloxfruits.lua",
-        Icon = "🍈"
-    },
     [93978595733734] = {
         Name = "Violence District",
         Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/Violence-District.lua",

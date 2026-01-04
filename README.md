@@ -1,23 +1,23 @@
-# 🎮 rbxScript | YANZ Hub Collection
+# 🎮 YANZ Hub | Driving Empire
 
-**[EN] A curated collection of Roblox Lua scripts and utilities — ready to explore, adapt, and build upon.**  
-**[TH] คลังสคริปต์ Lua สำหรับ Roblox จาก YANZ Hub — พร้อมใช้งาน ปรับแต่ง และศึกษาได้ง่าย**
+**[EN] A collection of Roblox scripts centered around Driving Empire, plus a universal loader (`yanz.lua`) that automatically runs scripts based on the game you’re playing.**  
+**[TH] คลังสคริปต์ Roblox เน้นที่ Driving Empire พร้อมตัวรันสคริปต์ (`yanz.lua`) ที่รันสคริปต์เฉพาะเกมอัตโนมัติ**
 
 ---
 
 ## ⭐ Features / ฟีเจอร์เด่น
 
 **[EN]**
-- A variety of ready‑to‑use Lua scripts for Roblox  
-- Organized by script purpose (games, tools, hub systems)  
-- Great reference for learning Lua patterns  
-- Easy to customize, extend, and integrate  
+- **Driving Empire Open Source:** fully editable, ready to run  
+- **Multi-game launcher:** `yanz.lua` detects your current game and loads the appropriate script  
+- Lightweight, Delta-compatible scripts  
+- Easy to customize or expand for your own projects  
 
 **[TH]**
-- สคริปต์ Lua พร้อมใช้งานสำหรับ Roblox หลากหลายแบบ  
-- แบ่งหมวดหมู่ชัดเจน (เกม, เครื่องมือ, ระบบ Hub)  
-- เหมาะสำหรับเรียนรู้การเขียน Lua จากตัวอย่างจริง  
-- ปรับแต่ง ขยาย หรือรวมเข้ากับโปรเจกต์ของคุณง่าย
+- **Driving Empire แบบ Open Source:** แก้ไขได้เต็มที่ พร้อมใช้งานทันที  
+- **ตัวรันหลายเกม:** `yanz.lua` ตรวจสอบเกมที่เล่นและโหลดสคริปต์ที่เหมาะสมให้อัตโนมัติ  
+- สคริปต์เบา ใช้กับ Delta ได้  
+- ปรับแต่งหรือขยายเพิ่มได้ง่าย
 
 ---
 
@@ -25,16 +25,10 @@
 
 | Script | Purpose / ฟังก์ชัน |
 |--------|-------------------|
-| `Yanz-Hub.lua` | Hub framework with automation & utilities / ระบบ Hub พร้อมฟังก์ชันออโต้ |
-| `Race-Clicker.lua` | Clicker game mechanics / สคริปต์เกมคลิกเกอร์ |
-| `PlantsVsBrainrots.lua` | Example game mechanic / ตัวอย่างฟีเจอร์เกม |
-| `Ninja-Legends.lua` | Script tailored for Ninja Legends / สำหรับเกม Ninja Legends |
-| `MM2.lua` | Murder Mystery 2 style logic / ระบบสไตล์ Murder Mystery 2 |
-| `Doors.lua` | Doors game logic / ระบบเกม Doors |
-| `BuildABoat.lua` | Build & race mechanics / ระบบสร้างเรือและแข่ง |
-| `+1BlocksEverySecond.lua` | Incremental blocks script / สคริปต์บล็อกเพิ่มต่อวินาที |
+| `DrivingEmpire.lua` | Open source hub for Driving Empire / Hub Open Source สำหรับ Driving Empire |
+| `yanz.lua` | Multi-game launcher / ตัวรันสคริปต์หลายเกม |
 
-*(Feel free to explore each folder/file — เปิดดูได้ทุกไฟล์เพื่อศึกษาและใช้งาน)*
+*(เปิดดูไฟล์เพื่อศึกษาการทำงานและปรับแต่งตามต้องการ)*
 
 ---
 
@@ -43,27 +37,29 @@
 **[EN]**
 1. Clone or download this repository  
 2. Open Roblox Studio  
-3. Add a Script/LocalScript  
-4. Copy the script you want  
-5. Paste it into Studio and run/playtest  
+3. Add a Script / LocalScript  
+4. Copy the script you want (`DrivingEmpire.lua` or `yanz.lua`)  
+5. Paste it into Studio or your Executor and run/playtest  
 
 **[TH]**
 1. ดาวน์โหลดหรือ clone โปรเจกต์นี้  
 2. เปิด Roblox Studio  
 3. เพิ่ม Script หรือ LocalScript  
-4. คัดลอกสคริปต์ที่ต้องการ  
-5. วางลงใน Studio แล้วทดสอบรัน
+4. คัดลอกสคริปต์ที่ต้องการ (`DrivingEmpire.lua` หรือ `yanz.lua`)  
+5. วางลงใน Studio หรือ Executor แล้วทดสอบรัน
 
 ---
 
 ## 🧠 Contribution / ร่วมพัฒนา
 
 **[EN]**
-- Contributions welcome! Add scripts, improve existing ones, fix bugs, write docs.  
+- Open source — contributions welcome  
+- Fix bugs, add new features, or improve existing scripts  
 - Fork → branch → commit → pull request  
 
 **[TH]**
-- ยินดีรับการร่วมพัฒนา! เพิ่มสคริปต์, ปรับปรุง, แก้บัค, เขียนเอกสาร  
+- Open Source — ยินดีรับการร่วมพัฒนา  
+- แก้บัค, เพิ่มฟีเจอร์, หรือปรับปรุงสคริปต์เดิม  
 - Fork → branch → commit → pull request
 
 ---

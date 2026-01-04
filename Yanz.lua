@@ -60,7 +60,7 @@ local Games = {
         Icon = "⚡"
     },
     [92122513197996] = {
-        Name = "Dig to Escape"
+        Name = "Dig to Escape",
         Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/DigtoEscape.lua",
         Icon = "🚨"
     },

@@ -773,36 +773,35 @@ Tabs.ShopTab:AddButton({
     Callback = function()
 
         local Players = game:GetService("Players")
-        local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
         local player = Players.LocalPlayer
         local playerGui = player:WaitForChild("PlayerGui")
+        local playerScripts = player:WaitForChild("PlayerScripts")
 
-        local DialogueEnded =
-            ReplicatedStorage
-                :WaitForChild("RE")
-                :WaitForChild("DialogueEnded")
-
-        -- bypass dialogue (ให้ controller ทำงาน)
-        for i = 1, 3 do
-            DialogueEnded:FireServer("Boat Expert", i, 1)
-        end
-
-        -- รอ controller inject shop
-        task.wait(0.3)
-
-        -- เปิด shop GUI ที่พร้อมแล้ว
-        for _, gui in ipairs(playerGui:GetChildren()) do
-            if gui:IsA("ScreenGui") and gui.Name:lower():find("shop") then
-                gui.Enabled = true
-                print("Boat Expert shop fully initialized")
-                return
+        local shopController
+        for _, v in ipairs(playerScripts:GetDescendants()) do
+            if v:IsA("ModuleScript") and v.Name:lower():find("shop") then
+                shopController = v
+                break
             end
         end
 
-        warn("ShopGui not initialized")
+        if not shopController then
+            warn("Shop controller not found")
+            return
+        end
+
+        local Shop = require(shopController)
+
+        if Shop.Open then
+            Shop:Open("Boat Expert")
+            print("Boat Expert shop opened (controller)")
+            return
+        end
+
+        warn("Shop.Open function not found")
     end
 })
+
 
 -- Server
 Tabs.Server:AddSection({"Server Controls"})

@@ -773,25 +773,34 @@ Tabs.ShopTab:AddButton({
     Callback = function()
 
         local Players = game:GetService("Players")
+        local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
         local player = Players.LocalPlayer
         local playerGui = player:WaitForChild("PlayerGui")
 
-        local shopGui = nil
+        local DialogueEnded =
+            ReplicatedStorage
+                .Packages
+                ._Index["sleitnick_net@0.2.0"]
+                .net
+                .RE
+                .DialogueEnded
+
+        for i = 1, 3 do
+            DialogueEnded:FireServer("Boat Expert", i, 1)
+        end
+
+        task.wait(0.3)
 
         for _, gui in ipairs(playerGui:GetChildren()) do
             if gui:IsA("ScreenGui") and gui.Name:lower():find("shop") then
-                shopGui = gui
-                break
+                gui.Enabled = true
+                print("Boat Expert shop fully initialized")
+                return
             end
         end
 
-        if shopGui then
-            shopGui.Enabled = true
-            shopGui:SetAttribute("ShopName", "Boat Expert")
-            print("Boat Expert shop forced open")
-        else
-            warn("ShopGui not found")
-        end
+        warn("ShopGui not initialized")
     end
 })
 

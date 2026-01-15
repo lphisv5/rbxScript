@@ -771,11 +771,19 @@ Tabs.ShopTab:AddSection({"Buy a boat from NPC."})
 Tabs.ShopTab:AddButton({
     Name = "Boat Expert Shop",
     Callback = function()
-
-        local Players = game:GetService("Players")
-        local player = Players.LocalPlayer
-        local playerGui = player:WaitForChild("PlayerGui")
-        local playerScripts = player:WaitForChild("PlayerScripts")
+            
+local function triggerNPC(npcName)
+    for _, v in ipairs(workspace:GetDescendants()) do
+        if v:IsA("Model") and v.Name == npcName then
+            local prompt = v:FindFirstChildWhichIsA("ProximityPrompt", true)
+            if prompt then
+                fireproximityprompt(prompt)
+                return true
+            end
+        end
+    end
+    return false
+end
 
         local shopController
         for _, v in ipairs(playerScripts:GetDescendants()) do

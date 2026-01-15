@@ -771,12 +771,20 @@ Tabs.ShopTab:AddSection({"Buy a boat from NPC."})
 Tabs.ShopTab:AddButton({
     Name = "Boat Expert Shop",
     Callback = function()
+
+        local Players = game:GetService("Players")
+        local player = Players.LocalPlayer
+        local playerGui = player:WaitForChild("PlayerGui")
+
+        local shopGui = nil
+
         for _, gui in ipairs(playerGui:GetChildren()) do
             if gui:IsA("ScreenGui") and gui.Name:lower():find("shop") then
                 shopGui = gui
                 break
             end
         end
+
         if shopGui then
             shopGui.Enabled = true
             shopGui:SetAttribute("ShopName", "Boat Expert")

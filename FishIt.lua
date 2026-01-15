@@ -780,18 +780,18 @@ Tabs.ShopTab:AddButton({
 
         local DialogueEnded =
             ReplicatedStorage
-                .Packages
-                ._Index["sleitnick_net@0.2.0"]
-                .net
-                .RE
-                .DialogueEnded
+                :WaitForChild("RE")
+                :WaitForChild("DialogueEnded")
 
+        -- bypass dialogue (ให้ controller ทำงาน)
         for i = 1, 3 do
             DialogueEnded:FireServer("Boat Expert", i, 1)
         end
 
+        -- รอ controller inject shop
         task.wait(0.3)
 
+        -- เปิด shop GUI ที่พร้อมแล้ว
         for _, gui in ipairs(playerGui:GetChildren()) do
             if gui:IsA("ScreenGui") and gui.Name:lower():find("shop") then
                 gui.Enabled = true

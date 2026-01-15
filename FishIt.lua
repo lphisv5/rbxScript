@@ -704,112 +704,136 @@ Tabs.ShopTab:AddSection({"Shop Controls"})
 
 Tabs.ShopTab:AddButton({
     Name = "Alien Merchant Shop",
-    Description = "Opens the Alien Merchant shop interface",
+    Description = "Teleports to the Alien Merchant and opens the shop interface",
     Callback = function()
-        local netModule = game:GetService("ReplicatedStorage").Packages._Index["sleitnick_net@0.2.0"].net
-        local dialogueEndedRemote = netModule:FindFirstChild("RE/DialogueEnded")
-        
-        if dialogueEndedRemote then
-            pcall(function()
-                dialogueEndedRemote:FireServer("Alien Merchant", 1, 1)
-                print("Opened Alien Merchant")
-            end)
-        else
-            warn("⚠️ RE/DialogueEnded remote not found!")
+        local player = game.Players.LocalPlayer
+        local char = player.Character or player.CharacterAdded:Wait()
+        local hrp = char:WaitForChild("HumanoidRootPart")
+
+        hrp.CFrame = CFrame.new(-133.01, 4.09, 2760.28)
+
+        task.wait(0.5)
+
+        local function findAlienPrompt()
+            for _, v in ipairs(workspace:GetDescendants()) do
+                if v:IsA("ProximityPrompt") then
+                    local model = v:FindFirstAncestorWhichIsA("Model")
+                    if model and model.Name == "Alien Merchant" then
+                        return v
+                    end
+                end
+            end
         end
+
+        for i = 1, 5 do
+            local prompt = findAlienPrompt()
+            if prompt then
+                fireproximityprompt(prompt)
+                print("✅ Alien Merchant shop opened")
+                return
+            end
+            task.wait(0.2)
+        end
+
+        warn("❌ Alien Merchant ProximityPrompt not found")
     end
 })
 
+
 Tabs.ShopTab:AddButton({
     Name = "Lantern Keeper Shop",
-    Description = "Opens the Lantern Keeper shop interface",
+    Description = "Teleports to the Lantern Keeper and opens the shop interface",
     Callback = function()
-        local netModule = game:GetService("ReplicatedStorage").Packages._Index["sleitnick_net@0.2.0"].net
-        local dialogueEndedRemote = netModule:FindFirstChild("RE/DialogueEnded")
-        
-        if dialogueEndedRemote then
-            pcall(function()
-                dialogueEndedRemote:FireServer("Lantern Keeper", 1, 1)
-                print("Opened Lantern Keeper")
-            end)
-        else
-            warn("⚠️ RE/DialogueEnded remote not found!")
+        hrp.CFrame = CFrame.new(9.50, 24.78, 2943.13))
+
+        task.wait(0.6)
+
+        for i = 1, 5 do
+            for _, v in ipairs(workspace:GetDescendants()) do
+                if v:IsA("ProximityPrompt") then
+                    local model = v:FindFirstAncestorWhichIsA("Model")
+                    if model and model.Name == "Lantern Keeper" then
+                        fireproximityprompt(v)
+                        return
+                    end
+                end
+            end
+            task.wait(0.2)
         end
     end
 })
 
 Tabs.ShopTab:AddButton({
     Name = "Seth Shop",
+    Description = "Opens the Seth shop interface",
     Callback = function()
-        local Net = require(
-            ReplicatedStorage
-                .Packages
-                ._Index["sleitnick_net@0.2.0"]
-                .net
-        )
+        local player = game.Players.LocalPlayer
+        local char = player.Character or player.CharacterAdded:Wait()
+        local hrp = char:WaitForChild("HumanoidRootPart")
 
-        local DialogueEnded = Net:GetRemoteEvent("DialogueEnded")
+        hrp.CFrame = CFrame.new(111.79, 17.28, 2871.42)
 
-        for i = 1, 3 do
-            DialogueEnded:FireServer("Seth", i, 1)
-        end
+        task.wait(0.5)
 
-        for _, gui in ipairs(playerGui:GetChildren()) do
-            if gui:IsA("ScreenGui") and gui.Name:lower():find("shop") then
-                gui.Enabled = true
-                gui:SetAttribute("ShopName", "Seth")
-                print("Seth shop opened (bypass)")
-                return
+        local function findSethPrompt()
+            for _, v in ipairs(workspace:GetDescendants()) do
+                if v:IsA("ProximityPrompt") then
+                    local model = v:FindFirstAncestorWhichIsA("Model")
+                    if model and model.Name == "Seth" then
+                        return v
+                    end
+                end
             end
         end
-        warn("ShopGui not found for Seth")
+
+        local prompt = findSethPrompt()
+        if prompt then
+            fireproximityprompt(prompt)
+            print("✅ Seth shop opened")
+        else
+            warn("❌ Seth prompt not found")
+        end
     end
 })
 
 Tabs.ShopTab:AddSection({"Buy a boat from NPC."})
 
 Tabs.ShopTab:AddButton({
-    Name = "Boat Expert Shop",
+    Name = "Boats Shop",
+    Description = "Opens the boats shop interface",
     Callback = function()
-            
-local function triggerNPC(npcName)
-    for _, v in ipairs(workspace:GetDescendants()) do
-        if v:IsA("Model") and v.Name == npcName then
-            local prompt = v:FindFirstChildWhichIsA("ProximityPrompt", true)
+        local player = game.Players.LocalPlayer
+        local char = player.Character or player.CharacterAdded:Wait()
+        local hrp = char:WaitForChild("HumanoidRootPart")
+
+        hrp.CFrame = CFrame.new(33.21, 9.56, 2788.74)
+
+        task.wait(0.5)
+
+        local function findBoatPrompt()
+            for _, v in ipairs(workspace:GetDescendants()) do
+                if v:IsA("ProximityPrompt") then
+                    local model = v:FindFirstAncestorWhichIsA("Model")
+                    if model and (model.Name == "Boat Expert" or model.Name:lower():find("boat")) then
+                        return v
+                    end
+                end
+            end
+        end
+
+        for i = 1, 5 do
+            local prompt = findBoatPrompt()
             if prompt then
                 fireproximityprompt(prompt)
-                return true
+                print("✅ Boats shop opened")
+                return
             end
-        end
-    end
-    return false
-end
-
-        local shopController
-        for _, v in ipairs(playerScripts:GetDescendants()) do
-            if v:IsA("ModuleScript") and v.Name:lower():find("shop") then
-                shopController = v
-                break
-            end
+            task.wait(0.2)
         end
 
-        if not shopController then
-            warn("Shop controller not found")
-            return
-        end
-
-        local Shop = require(shopController)
-
-        if Shop.Open then
-            Shop:Open("Boat Expert")
-            print("Boat Expert shop opened (controller)")
-            return
-        end
-
-        warn("Shop.Open function not found")
+        warn("❌ Boats ProximityPrompt not found")
     end
 })
-
 
 -- Server
 Tabs.Server:AddSection({"Server Controls"})

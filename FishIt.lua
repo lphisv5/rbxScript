@@ -1,3 +1,4 @@
+
 -- Anti AFK
 local VirtualUser = game:GetService('VirtualUser')
 local AntiAFKEnabled = true
@@ -744,7 +745,7 @@ Tabs.ShopTab:AddButton({
     Name = "Lantern Keeper Shop",
     Description = "Teleports to the Lantern Keeper and opens the shop interface",
     Callback = function()
-        hrp.CFrame = CFrame.new(9.50, 24.78, 2943.13))
+        hrp.CFrame = CFrame.new(9.50, 24.78, 2943.13)
 
         task.wait(0.6)
 

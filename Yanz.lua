@@ -152,4 +152,3 @@ if currentGame then
 else
     loadstring(game:HttpGet("https://raw.githubusercontent.com/lphisv5/rbxScript/main/LoaderUI.lua"))()
 end
-

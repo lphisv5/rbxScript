@@ -8,23 +8,25 @@ local LocalPlayer = Players.LocalPlayer
 local IS_DELTA = true
 local LOGO_ID = "rbxassetid://134012859226921"
 
+-- [ ลบไอคอนออกตามคำขอ คงไว้แค่ข้อมูลที่จำเป็นเพื่อความมินิมอลและไม่บั๊ก ]
 local Games = {
-    [11800876530] = { Name = "+1 Blocks Every Second", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/+1BlocksEverySecond.lua", Icon = "rbxassetid://11684360677" },
-    [16613614528] = { Name = "Fish It", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/FishIt.lua", Icon = "rbxassetid://11130140228" },
-    [537413528] = { Name = "Build A Boat", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/BuildABoat.lua", Icon = "rbxassetid://6023565507" },
-    [5561680777] = { Name = "+1 Size Race", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/+1SizeRace.lua", Icon = "rbxassetid://11130139191" },
-    [2753915549] = { Name = "Blox Fruits", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/Aimbot-bloxfruits.lua", Icon = "rbxassetid://13317719710" },
-    [17715189837] = { Name = "Violence District", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/Violence-District.lua", Icon = "rbxassetid://11130138760" },
-    [3351674303] = { Name = "Driving Empire", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/driving-empire.lua", Icon = "rbxassetid://11130139598" },
-    [124082555806669] = { Name = "Don't Get Crushed", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/Dont-Get-Crushed.lua", Icon = "rbxassetid://6023565259" },
-    [87365339041375] = { Name = "Dig to Earth", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/DigtoEarths.lua", Icon = "rbxassetid://11130140604" },
-    [6823998518] = { Name = "Cut Trees", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/CutTrees.lua", Icon = "rbxassetid://11684360980" },
-    [9296463169] = { Name = "Math Murder", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/MathMurder.lua", Icon = "rbxassetid://11684361517" },
-    [18126510175] = { Name = "Rivals", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/Rivals.lua", Icon = "rbxassetid://6023566164" },
-    [12506460846] = { Name = "Dig to Escape", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/DigtoEscape.lua", Icon = "rbxassetid://11130138612" },
-    [16083051666] = { Name = "Blind Shot", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/BlindShot.lua", Icon = "rbxassetid://11130138981" },
+    [11800876530] = { Name = "+1 Blocks Every Second", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/+1BlocksEverySecond.lua" },
+    [16613614528] = { Name = "Fish It", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/FishIt.lua" },
+    [537413528] = { Name = "Build A Boat", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/BuildABoat.lua" },
+    [5561680777] = { Name = "+1 Size Race", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/+1SizeRace.lua" },
+    [2753915549] = { Name = "Blox Fruits", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/Aimbot-bloxfruits.lua" },
+    [17715189837] = { Name = "Violence District", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/Violence-District.lua" },
+    [3351674303] = { Name = "Driving Empire", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/driving-empire.lua" },
+    [124082555806669] = { Name = "Don't Get Crushed", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/Dont-Get-Crushed.lua" },
+    [87365339041375] = { Name = "Dig to Earth", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/DigtoEarths.lua" },
+    [6823998518] = { Name = "Cut Trees", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/CutTrees.lua" },
+    [9296463169] = { Name = "Math Murder", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/MathMurder.lua" },
+    [18126510175] = { Name = "Rivals", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/Rivals.lua" },
+    [12506460846] = { Name = "Dig to Escape", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/DigtoEscape.lua" },
+    [16083051666] = { Name = "Blind Shot", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/BlindShot.lua" },
 }
 
+-- [ Utility Functions ]
 local function CreateTween(instance, info, properties)
     local tween = TweenService:Create(instance, info, properties)
     tween:Play()
@@ -62,6 +64,7 @@ local function MakeDraggable(topbarobject, object)
     end)
 end
 
+-- [ Notification System ]
 local NotifyGui = Instance.new("ScreenGui")
 NotifyGui.Name = "YanzAdvancedNotify"
 NotifyGui.ResetOnSpawn = false
@@ -133,6 +136,7 @@ local function Notify(title, message, duration)
     end)
 end
 
+-- [ Main Script Logic ]
 local function LoadGame(placeId)
     local gameData = Games[placeId]
     if not gameData then return end
@@ -162,6 +166,7 @@ local function LoadGame(placeId)
     end
 end
 
+-- [ UI Construction ]
 local function BuildUI()
     if getgenv()._YanzUI then
         local ui = getgenv()._YanzUI
@@ -208,6 +213,7 @@ local function BuildUI()
     mainCorner.CornerRadius = UDim.new(0, 12)
     mainCorner.Parent = mainFrame
     
+    -- RGB ARGB Border
     local mainStroke = Instance.new("UIStroke")
     mainStroke.Color = Color3.new(1, 1, 1)
     mainStroke.Thickness = 2.5
@@ -248,6 +254,7 @@ local function BuildUI()
     
     MakeDraggable(topBar, mainFrame)
 
+    -- โลโก้คงที่
     local logo = Instance.new("ImageLabel")
     logo.Size = UDim2.new(0, 42, 0, 42)
     logo.Position = UDim2.new(0, 15, 0, 9)
@@ -273,26 +280,37 @@ local function BuildUI()
     }
     titleGradient.Parent = title
 
+    -- [ Discord Button ดีไซน์ใหม่ ]
     local discordBtn = Instance.new("TextButton")
-    discordBtn.Size = UDim2.new(0, 160, 0, 34)
-    discordBtn.Position = UDim2.new(1, -210, 0.5, -17)
+    discordBtn.Size = UDim2.new(0, 150, 0, 34)
+    discordBtn.Position = UDim2.new(1, -195, 0.5, -17)
     discordBtn.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
-    discordBtn.Text = "      Join Discord"
-    discordBtn.Font = Enum.Font.GothamBold
-    discordBtn.TextSize = 13
-    discordBtn.TextColor3 = Color3.new(1, 1, 1)
+    discordBtn.Text = "" -- ปิด Text เดิม เพื่อใช้ Label จัดตำแหน่งให้สวยกว่า
     discordBtn.Parent = topBar
     
     local discordCorner = Instance.new("UICorner")
     discordCorner.CornerRadius = UDim.new(0, 8)
     discordCorner.Parent = discordBtn
     
+    -- โลโก้ Discord จัดให้พอดี
     local discordIcon = Instance.new("ImageLabel")
-    discordIcon.Size = UDim2.new(0, 20, 0, 20)
-    discordIcon.Position = UDim2.new(0, 15, 0.5, -10)
+    discordIcon.Size = UDim2.new(0, 22, 0, 22)
+    discordIcon.Position = UDim2.new(0, 12, 0.5, -11)
     discordIcon.Image = "rbxassetid://14828135898"
     discordIcon.BackgroundTransparency = 1
     discordIcon.Parent = discordBtn
+
+    -- ข้อความ Join Discord จัดกึ่งกลาง
+    local discordText = Instance.new("TextLabel")
+    discordText.Size = UDim2.new(1, -40, 1, 0)
+    discordText.Position = UDim2.new(0, 40, 0, 0)
+    discordText.Text = "Join Discord"
+    discordText.Font = Enum.Font.GothamBold
+    discordText.TextSize = 13
+    discordText.TextColor3 = Color3.new(1, 1, 1)
+    discordText.BackgroundTransparency = 1
+    discordText.TextXAlignment = Enum.TextXAlignment.Left
+    discordText.Parent = discordBtn
 
     discordBtn.MouseEnter:Connect(function() CreateTween(discordBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(105, 116, 245)}) end)
     discordBtn.MouseLeave:Connect(function() CreateTween(discordBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(88, 101, 242)}) end)
@@ -305,18 +323,19 @@ local function BuildUI()
         end
     end)
 
+    -- [ ปุ่มปิด (Close) แก้สี่เหลี่ยมบั๊ก ]
     local closeBtn = Instance.new("TextButton")
     closeBtn.Size = UDim2.new(0, 30, 0, 30)
     closeBtn.Position = UDim2.new(1, -40, 0.5, -15)
-    closeBtn.Text = "✕"
-    closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.Text = "X" -- เปลี่ยนจาก ✕ เป็น X ใหญ่
+    closeBtn.Font = Enum.Font.GothamBlack -- ใช้ฟอนต์หนาๆ ให้ดูเป็นไอคอน
     closeBtn.TextSize = 16
     closeBtn.TextColor3 = Color3.fromRGB(200, 200, 210)
     closeBtn.BackgroundTransparency = 1
     closeBtn.Parent = topBar
     
-    closeBtn.MouseEnter:Connect(function() CreateTween(closeBtn, TweenInfo.new(0.2), {TextColor3 = Color3.fromRGB(255, 80, 80), Rotation = 90}) end)
-    closeBtn.MouseLeave:Connect(function() CreateTween(closeBtn, TweenInfo.new(0.2), {TextColor3 = Color3.fromRGB(200, 200, 210), Rotation = 0}) end)
+    closeBtn.MouseEnter:Connect(function() CreateTween(closeBtn, TweenInfo.new(0.2), {TextColor3 = Color3.fromRGB(255, 80, 80)}) end)
+    closeBtn.MouseLeave:Connect(function() CreateTween(closeBtn, TweenInfo.new(0.2), {TextColor3 = Color3.fromRGB(200, 200, 210)}) end)
     closeBtn.MouseButton1Click:Connect(function()
         local ui = getgenv()._YanzUI
         ui.Enabled = false
@@ -353,24 +372,15 @@ local function BuildUI()
         cardCorner.CornerRadius = UDim.new(0, 10)
         cardCorner.Parent = card
         
-        -- [ ขอบการ์ดเกมสวยๆ ]
         local cardStroke = Instance.new("UIStroke")
         cardStroke.Color = Color3.fromRGB(50, 50, 65)
         cardStroke.Thickness = 1.2
         cardStroke.Parent = card
         
-        -- เปลี่ยนการแสดงผลไอคอน
-        local icon = Instance.new("ImageLabel")
-        icon.Size = UDim2.new(0, 36, 0, 36)
-        icon.Position = UDim2.new(0, 12, 0.5, -18)
-        icon.Image = data.Icon
-        icon.BackgroundTransparency = 1
-        icon.ScaleType = Enum.ScaleType.Fit
-        icon.Parent = card
-        
+        -- จัดวางตำแหน่ง Text ใหม่เพราะไม่มี Icon แล้ว
         local name = Instance.new("TextLabel")
-        name.Size = UDim2.new(1, -120, 0, 20)
-        name.Position = UDim2.new(0, 58, 0, 15)
+        name.Size = UDim2.new(1, -75, 0, 20)
+        name.Position = UDim2.new(0, 15, 0, 15)
         name.Text = data.Name
         name.Font = Enum.Font.GothamBold
         name.TextSize = 14
@@ -380,8 +390,8 @@ local function BuildUI()
         name.Parent = card
         
         local idLabel = Instance.new("TextLabel")
-        idLabel.Size = UDim2.new(1, -120, 0, 15)
-        idLabel.Position = UDim2.new(0, 58, 0, 38)
+        idLabel.Size = UDim2.new(1, -75, 0, 15)
+        idLabel.Position = UDim2.new(0, 15, 0, 38)
         idLabel.Text = "ID: " .. tostring(placeId)
         idLabel.Font = Enum.Font.Gotham
         idLabel.TextSize = 11
@@ -406,14 +416,12 @@ local function BuildUI()
         
         card.MouseEnter:Connect(function()
             CreateTween(card, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {BackgroundColor3 = Color3.fromRGB(32, 32, 42)})
-            CreateTween(cardStroke, TweenInfo.new(0.3), {Color = Color3.fromRGB(100, 180, 255)}) -- ขอบสว่างขึ้น
-            CreateTween(icon, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = UDim2.new(0, 42, 0, 42), Position = UDim2.new(0, 9, 0.5, -21)})
+            CreateTween(cardStroke, TweenInfo.new(0.3), {Color = Color3.fromRGB(100, 180, 255)})
         end)
         
         card.MouseLeave:Connect(function()
             CreateTween(card, TweenInfo.new(0.3), {BackgroundColor3 = Color3.fromRGB(24, 24, 32)})
             CreateTween(cardStroke, TweenInfo.new(0.3), {Color = Color3.fromRGB(50, 50, 65)})
-            CreateTween(icon, TweenInfo.new(0.3), {Size = UDim2.new(0, 36, 0, 36), Position = UDim2.new(0, 12, 0.5, -18)})
         end)
         
         exeBtn.MouseEnter:Connect(function() CreateTween(exeBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(60, 140, 255)}) end)
@@ -471,3 +479,5 @@ if Games[game.PlaceId] then
 else
     BuildUI()
 end
+
+

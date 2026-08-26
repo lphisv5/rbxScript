@@ -1,6 +1,5 @@
 local Games = {
     [12331842898] = { Name = "+1 Blocks Every Second", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/+1BlocksEverySecond.lua", Icon = "🔲" },
-    [121864768012064] = { Name = "Fish It", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/FishIt.lua", Icon = "🐟" },
     [537413528] = { Name = "Build A Boat", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/BuildABoat.lua", Icon = "🚢" },
     [86098086356851] = { Name = "+1 Size Race", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/+1SizeRace.lua", Icon = "📏" },
     [2753915549] = { Name = "Blox Fruits", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/Aimbot-bloxfruits.lua", Icon = "🍇" },
@@ -28,8 +27,24 @@ if currentGame then
     local gui = Instance.new("ScreenGui")
     gui.Name = "DeltaPremiumLoader"
     gui.ResetOnSpawn = false
-    local successGui = pcall(function() gui.Parent = CoreGui end)
-    if not successGui then gui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+    
+    local success, err = pcall(function()
+        gui.Parent = CoreGui
+    end)
+    
+    if not success then
+        local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+        if playerGui then
+            gui.Parent = playerGui
+        else
+            playerGui = LocalPlayer:WaitForChild("PlayerGui", 5)
+            if playerGui then
+                gui.Parent = playerGui
+            else
+                return
+            end
+        end
+    end
     
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(0, 320, 0, 60)
@@ -58,10 +73,16 @@ if currentGame then
     strokeGradient.Parent = stroke
     
     local rotation = 0
-    local gradientAnim = RunService.RenderStepped:Connect(function(dt)
-        rotation = (rotation + (dt * 100)) % 360
-        strokeGradient.Rotation = rotation
-    end)
+    local gradientAnim = nil
+    
+    if RunService then
+        gradientAnim = RunService.RenderStepped:Connect(function(dt)
+            if dt and dt > 0 then
+                rotation = (rotation + (dt * 100)) % 360
+                strokeGradient.Rotation = rotation
+            end
+        end)
+    end
     
     local logo = Instance.new("ImageLabel")
     logo.Size = UDim2.new(0, 36, 0, 36)
@@ -109,7 +130,7 @@ if currentGame then
             return game:HttpGet(currentGame.Url, true)
         end)
         
-        if success then
+        if success and response then
             status.Text = "Compiling script..."
             task.wait(0.3)
             
@@ -117,7 +138,14 @@ if currentGame then
             if fn then
                 status.Text = "Successfully loaded!"
                 status.TextColor3 = Color3.fromRGB(100, 255, 120)
-                strokeGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0, Color3.fromRGB(50, 255, 100)), ColorSequenceKeypoint.new(1, Color3.fromRGB(50, 255, 100))}
+
+                if strokeGradient then
+                    strokeGradient.Color = ColorSequence.new{
+                        ColorSequenceKeypoint.new(0, Color3.fromRGB(50, 255, 100)), 
+                        ColorSequenceKeypoint.new(1, Color3.fromRGB(50, 255, 100))
+                    }
+                end
+                
                 task.wait(1.5)
                 
                 local slideOut = TweenService:Create(frame, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
@@ -126,10 +154,17 @@ if currentGame then
                 })
                 slideOut:Play()
                 slideOut.Completed:Wait()
-                
-                gradientAnim:Disconnect()
-                gui:Destroy()
-                
+
+                if gradientAnim then
+                    gradientAnim:Disconnect()
+                    gradientAnim = nil
+                end
+
+                if gui then
+                    gui:Destroy()
+                    gui = nil
+                end
+
                 local execSuccess, execErr = pcall(fn)
                 if not execSuccess then
                     warn("[Delta Loader] Runtime error:", execErr)
@@ -137,18 +172,47 @@ if currentGame then
             else
                 status.Text = "Compile error!"
                 status.TextColor3 = Color3.fromRGB(255, 80, 80)
-                strokeGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 80, 80)), ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 80, 80))}
+                
+                if strokeGradient then
+                    strokeGradient.Color = ColorSequence.new{
+                        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 80, 80)), 
+                        ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 80, 80))
+                    }
+                end
+                
                 task.wait(3)
-                gui:Destroy()
+                if gui then
+                    gui:Destroy()
+                    gui = nil
+                end
             end
         else
             status.Text = "Download failed!"
             status.TextColor3 = Color3.fromRGB(255, 80, 80)
-            strokeGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 80, 80)), ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 80, 80))}
+            
+            if strokeGradient then
+                strokeGradient.Color = ColorSequence.new{
+                    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 80, 80)), 
+                    ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 80, 80))
+                }
+            end
+            
             task.wait(3)
-            gui:Destroy()
+            if gui then
+                gui:Destroy()
+                gui = nil
+            end
         end
     end)
 else
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/lphisv5/rbxScript/main/LoaderUI.lua"))()
+    local success, result = pcall(function()
+        return game:HttpGet("https://raw.githubusercontent.com/lphisv5/rbxScript/main/LoaderUI.lua", true)
+    end)
+    
+    if success and result then
+        local fn, err = loadstring(result)
+        if fn then
+            pcall(fn)
+        end
+    end
 end

@@ -8,7 +8,6 @@ local LocalPlayer = Players.LocalPlayer
 local IS_DELTA = true
 local LOGO_ID = "rbxassetid://134012859226921"
 
--- [ ลบไอคอนออกตามคำขอ คงไว้แค่ข้อมูลที่จำเป็นเพื่อความมินิมอลและไม่บั๊ก ]
 local Games = {
     [11800876530] = { Name = "+1 Blocks Every Second", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/+1BlocksEverySecond.lua" },
     [16613614528] = { Name = "Fish It", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/FishIt.lua" },
@@ -25,18 +24,34 @@ local Games = {
     [12506460846] = { Name = "Dig to Escape", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/DigtoEscape.lua" },
     [16083051666] = { Name = "Blind Shot", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/BlindShot.lua" },
 }
-
--- [ Utility Functions ]
 local function CreateTween(instance, info, properties)
-    local tween = TweenService:Create(instance, info, properties)
-    tween:Play()
-    return tween
+    if not instance or not instance.Parent then return nil end
+    local success, tween = pcall(function()
+        return TweenService:Create(instance, info, properties)
+    end)
+    if success and tween then
+        tween:Play()
+        return tween
+    end
+    return nil
+end
+
+local function SafeParent(gui, preferredParent)
+    local success = pcall(function() gui.Parent = preferredParent end)
+    if not success then
+        local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui", 5)
+        if playerGui then
+            pcall(function() gui.Parent = playerGui end)
+        end
+    end
 end
 
 local function MakeDraggable(topbarobject, object)
     local Dragging, DragInput, DragStart, StartPosition
+    local Connection = nil
 
     local function Update(input)
+        if not object or not object.Parent then return end
         local Delta = input.Position - DragStart
         local pos = UDim2.new(StartPosition.X.Scale, StartPosition.X.Offset + Delta.X, StartPosition.Y.Scale, StartPosition.Y.Offset + Delta.Y)
         CreateTween(object, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = pos})
@@ -46,9 +61,11 @@ local function MakeDraggable(topbarobject, object)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             Dragging = true
             DragStart = input.Position
-            StartPosition = object.Position
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then Dragging = false end
+            StartPosition = object.Positionำ
+            input:GetPropertyChangedSignal("UserInputState"):Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then 
+                    Dragging = false 
+                end
             end)
         end
     end)
@@ -59,27 +76,38 @@ local function MakeDraggable(topbarobject, object)
         end
     end)
 
-    UserInputService.InputChanged:Connect(function(input)
-        if input == DragInput and Dragging then Update(input) end
+    Connection = UserInputService.InputChanged:Connect(function(input)
+        if input == DragInput and Dragging then 
+            Update(input) 
+        end
     end)
+    
+    return Connection
 end
 
--- [ Notification System ]
 local NotifyGui = Instance.new("ScreenGui")
 NotifyGui.Name = "YanzAdvancedNotify"
 NotifyGui.ResetOnSpawn = false
-local successGui = pcall(function() NotifyGui.Parent = CoreGui end)
-if not successGui then NotifyGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+SafeParent(NotifyGui, CoreGui)
+
+local ActiveNotifications = {}
 
 local function Notify(title, message, duration)
     duration = duration or 3
+    
+    if #ActiveNotifications >= 5 then
+        local oldest = table.remove(ActiveNotifications, 1)
+        if oldest and oldest.Parent then oldest:Destroy() end
+    end
     
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(0, 300, 0, 70)
     frame.Position = UDim2.new(1, 10, 1, -100)
     frame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
     frame.BackgroundTransparency = 0.1
+    frame.ZIndex = 100
     frame.Parent = NotifyGui
+    table.insert(ActiveNotifications, frame)
     
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 10)
@@ -107,6 +135,7 @@ local function Notify(title, message, duration)
     titleLabel.TextColor3 = Color3.new(1, 1, 1)
     titleLabel.BackgroundTransparency = 1
     titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    titleLabel.ZIndex = 101
     titleLabel.Parent = frame
     
     local msgLabel = Instance.new("TextLabel")
@@ -119,12 +148,16 @@ local function Notify(title, message, duration)
     msgLabel.BackgroundTransparency = 1
     msgLabel.TextXAlignment = Enum.TextXAlignment.Left
     msgLabel.TextWrapped = true
+    msgLabel.ZIndex = 101
     msgLabel.Parent = frame
     
-    local targetPos = UDim2.new(1, -320, 1, -100 - (#NotifyGui:GetChildren() * 80))
+    local index = #ActiveNotifications
+    local targetPos = UDim2.new(1, -320, 1, -100 - ((index - 1) * 80))
     CreateTween(frame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Position = targetPos})
     
     task.delay(duration, function()
+        if not frame or not frame.Parent then return end
+        
         local slideOut = CreateTween(frame, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
             Position = UDim2.new(1, 10, frame.Position.Y.Scale, frame.Position.Y.Offset),
             BackgroundTransparency = 1
@@ -132,11 +165,23 @@ local function Notify(title, message, duration)
         CreateTween(stroke, TweenInfo.new(0.4), {Transparency = 1})
         CreateTween(titleLabel, TweenInfo.new(0.4), {TextTransparency = 1})
         CreateTween(msgLabel, TweenInfo.new(0.4), {TextTransparency = 1})
-        slideOut.Completed:Connect(function() frame:Destroy() end)
+        
+        if slideOut then
+            slideOut.Completed:Once(function() 
+                if frame and frame.Parent then frame:Destroy() end
+                for i, v in ipairs(ActiveNotifications) do
+                    if v == frame then
+                        table.remove(ActiveNotifications, i)
+                        break
+                    end
+                end
+            end)
+        else
+            frame:Destroy()
+        end
     end)
 end
 
--- [ Main Script Logic ]
 local function LoadGame(placeId)
     local gameData = Games[placeId]
     if not gameData then return end
@@ -147,29 +192,36 @@ local function LoadGame(placeId)
         return game:HttpGet(gameData.Url, true)
     end)
     
-    if not success then
-        Notify("Execution Failed", "Check your internet or URL", 3)
+    if not success or type(response) ~= "string" or #response == 0 then
+        Notify("Execution Failed", "Network error or invalid response", 3)
         return
     end
     
     local fn, err = loadstring(response)
     if not fn then
-        Notify("Compile Error", string.sub(err, 1, 60) .. "...", 4)
+        Notify("Compile Error", string.sub(tostring(err), 1, 60) .. "...", 4)
         return
     end
     
     local execSuccess, execErr = pcall(fn)
     if not execSuccess then
-        Notify("Runtime Error", string.sub(execErr, 1, 60) .. "...", 4)
+        Notify("Runtime Error", string.sub(tostring(execErr), 1, 60) .. "...", 4)
     else
         Notify("Successfully Loaded", gameData.Name .. " is now active!", 4)
     end
 end
 
--- [ UI Construction ]
+local DragConnection = nil
+
 local function BuildUI()
     if getgenv()._YanzUI then
         local ui = getgenv()._YanzUI
+        if not ui.Gui or not ui.Gui.Parent then
+            getgenv()._YanzUI = nil
+            BuildUI()
+            return
+        end
+        
         ui.Enabled = not ui.Enabled
         
         if ui.Enabled then
@@ -179,15 +231,19 @@ local function BuildUI()
                 BackgroundTransparency = 0
             })
             CreateTween(ui.CanvasGroup, TweenInfo.new(0.3), {GroupTransparency = 0})
+            CreateTween(ui.MainStroke, TweenInfo.new(0.3), {Transparency = 0})
         else
             local hideTween = CreateTween(ui.Main, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
                 Size = UDim2.new(0, 550, 0, 400),
                 BackgroundTransparency = 1
             })
             CreateTween(ui.CanvasGroup, TweenInfo.new(0.2), {GroupTransparency = 1})
-            hideTween.Completed:Connect(function() 
-                if not ui.Enabled then ui.Gui.Enabled = false end 
-            end)
+            CreateTween(ui.MainStroke, TweenInfo.new(0.2), {Transparency = 1})
+            if hideTween then
+                hideTween.Completed:Once(function() 
+                    if not ui.Enabled and ui.Gui then ui.Gui.Enabled = false end 
+                end)
+            end
         end
         return
     end
@@ -195,8 +251,7 @@ local function BuildUI()
     local gui = Instance.new("ScreenGui")
     gui.Name = "YanzHubPremium"
     gui.ResetOnSpawn = false
-    local successGui = pcall(function() gui.Parent = CoreGui end)
-    if not successGui then gui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+    SafeParent(gui, CoreGui)
     
     local mainFrame = Instance.new("Frame")
     mainFrame.Name = "Main"
@@ -206,18 +261,18 @@ local function BuildUI()
     mainFrame.BackgroundColor3 = Color3.fromRGB(16, 16, 22)
     mainFrame.BackgroundTransparency = 1
     mainFrame.BorderSizePixel = 0
-    mainFrame.ClipsDescendants = false
+    mainFrame.ClipsDescendants = true
     mainFrame.Parent = gui
     
     local mainCorner = Instance.new("UICorner")
     mainCorner.CornerRadius = UDim.new(0, 12)
     mainCorner.Parent = mainFrame
     
-    -- RGB ARGB Border
     local mainStroke = Instance.new("UIStroke")
     mainStroke.Color = Color3.new(1, 1, 1)
     mainStroke.Thickness = 2.5
     mainStroke.Transparency = 1
+    mainStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     mainStroke.Parent = mainFrame
     
     local rgbGradient = Instance.new("UIGradient")
@@ -234,7 +289,7 @@ local function BuildUI()
 
     task.spawn(function()
         local rot = 0
-        while mainFrame.Parent do
+        while mainFrame and mainFrame.Parent and mainStroke and mainStroke.Parent do
             rot = (rot + 1.5) % 360
             rgbGradient.Rotation = rot
             task.wait(0.01)
@@ -250,11 +305,11 @@ local function BuildUI()
     local topBar = Instance.new("Frame")
     topBar.Size = UDim2.new(1, 0, 0, 60)
     topBar.BackgroundTransparency = 1
+    topBar.Active = true
     topBar.Parent = canvasGroup
     
-    MakeDraggable(topBar, mainFrame)
+    DragConnection = MakeDraggable(topBar, mainFrame)
 
-    -- โลโก้คงที่
     local logo = Instance.new("ImageLabel")
     logo.Size = UDim2.new(0, 42, 0, 42)
     logo.Position = UDim2.new(0, 15, 0, 9)
@@ -280,19 +335,18 @@ local function BuildUI()
     }
     titleGradient.Parent = title
 
-    -- [ Discord Button ดีไซน์ใหม่ ]
     local discordBtn = Instance.new("TextButton")
     discordBtn.Size = UDim2.new(0, 150, 0, 34)
     discordBtn.Position = UDim2.new(1, -195, 0.5, -17)
     discordBtn.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
-    discordBtn.Text = "" -- ปิด Text เดิม เพื่อใช้ Label จัดตำแหน่งให้สวยกว่า
+    discordBtn.Text = ""
+    discordBtn.AutoButtonColor = false
     discordBtn.Parent = topBar
     
     local discordCorner = Instance.new("UICorner")
     discordCorner.CornerRadius = UDim.new(0, 8)
     discordCorner.Parent = discordBtn
     
-    -- โลโก้ Discord จัดให้พอดี
     local discordIcon = Instance.new("ImageLabel")
     discordIcon.Size = UDim2.new(0, 22, 0, 22)
     discordIcon.Position = UDim2.new(0, 12, 0.5, -11)
@@ -300,7 +354,6 @@ local function BuildUI()
     discordIcon.BackgroundTransparency = 1
     discordIcon.Parent = discordBtn
 
-    -- ข้อความ Join Discord จัดกึ่งกลาง
     local discordText = Instance.new("TextLabel")
     discordText.Size = UDim2.new(1, -40, 1, 0)
     discordText.Position = UDim2.new(0, 40, 0, 0)
@@ -323,26 +376,35 @@ local function BuildUI()
         end
     end)
 
-    -- [ ปุ่มปิด (Close) แก้สี่เหลี่ยมบั๊ก ]
     local closeBtn = Instance.new("TextButton")
     closeBtn.Size = UDim2.new(0, 30, 0, 30)
     closeBtn.Position = UDim2.new(1, -40, 0.5, -15)
-    closeBtn.Text = "X" -- เปลี่ยนจาก ✕ เป็น X ใหญ่
-    closeBtn.Font = Enum.Font.GothamBlack -- ใช้ฟอนต์หนาๆ ให้ดูเป็นไอคอน
+    closeBtn.Text = "X"
+    closeBtn.Font = Enum.Font.GothamBlack
     closeBtn.TextSize = 16
     closeBtn.TextColor3 = Color3.fromRGB(200, 200, 210)
     closeBtn.BackgroundTransparency = 1
+    closeBtn.AutoButtonColor = false
     closeBtn.Parent = topBar
     
     closeBtn.MouseEnter:Connect(function() CreateTween(closeBtn, TweenInfo.new(0.2), {TextColor3 = Color3.fromRGB(255, 80, 80)}) end)
     closeBtn.MouseLeave:Connect(function() CreateTween(closeBtn, TweenInfo.new(0.2), {TextColor3 = Color3.fromRGB(200, 200, 210)}) end)
     closeBtn.MouseButton1Click:Connect(function()
         local ui = getgenv()._YanzUI
-        ui.Enabled = false
-        local hideTween = CreateTween(ui.Main, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Size = UDim2.new(0, 550, 0, 400), BackgroundTransparency = 1})
-        CreateTween(ui.CanvasGroup, TweenInfo.new(0.2), {GroupTransparency = 1})
-        CreateTween(mainStroke, TweenInfo.new(0.2), {Transparency = 1})
-        hideTween.Completed:Connect(function() ui.Gui.Enabled = false end)
+        if ui then
+            ui.Enabled = false
+            local hideTween = CreateTween(ui.Main, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+                Size = UDim2.new(0, 550, 0, 400), 
+                BackgroundTransparency = 1
+            })
+            CreateTween(ui.CanvasGroup, TweenInfo.new(0.2), {GroupTransparency = 1})
+            CreateTween(mainStroke, TweenInfo.new(0.2), {Transparency = 1})
+            if hideTween then
+                hideTween.Completed:Once(function() 
+                    if ui.Gui then ui.Gui.Enabled = false end 
+                end)
+            end
+        end
     end)
 
     local scrollFrame = Instance.new("ScrollingFrame")
@@ -352,6 +414,8 @@ local function BuildUI()
     scrollFrame.BorderSizePixel = 0
     scrollFrame.ScrollBarThickness = 4
     scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(200, 200, 210)
+    scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
     scrollFrame.Parent = canvasGroup
     
     local gridLayout = Instance.new("UIGridLayout")
@@ -365,6 +429,7 @@ local function BuildUI()
         local card = Instance.new("Frame")
         card.Name = data.Name
         card.BackgroundColor3 = Color3.fromRGB(24, 24, 32)
+        card.LayoutOrder = placeId
         card.Parent = scrollFrame
         table.insert(cards, card)
         
@@ -377,7 +442,6 @@ local function BuildUI()
         cardStroke.Thickness = 1.2
         cardStroke.Parent = card
         
-        -- จัดวางตำแหน่ง Text ใหม่เพราะไม่มี Icon แล้ว
         local name = Instance.new("TextLabel")
         name.Size = UDim2.new(1, -75, 0, 20)
         name.Position = UDim2.new(0, 15, 0, 15)
@@ -387,6 +451,7 @@ local function BuildUI()
         name.TextColor3 = Color3.new(1, 1, 1)
         name.BackgroundTransparency = 1
         name.TextXAlignment = Enum.TextXAlignment.Left
+        name.TextTruncate = Enum.TextTruncate.AtEnd
         name.Parent = card
         
         local idLabel = Instance.new("TextLabel")
@@ -408,6 +473,7 @@ local function BuildUI()
         exeBtn.TextSize = 12
         exeBtn.TextColor3 = Color3.new(1, 1, 1)
         exeBtn.BackgroundColor3 = Color3.fromRGB(40, 120, 255)
+        exeBtn.AutoButtonColor = false
         exeBtn.Parent = card
         
         local btnCorner = Instance.new("UICorner")
@@ -436,12 +502,14 @@ local function BuildUI()
             idLabel.TextColor3 = Color3.fromRGB(0, 255, 120)
         end
     end
-    
-    gridLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        scrollFrame.CanvasSize = UDim2.new(0, 0, 0, gridLayout.AbsoluteContentSize.Y + 20)
-    end)
 
-    getgenv()._YanzUI = {Gui = gui, Main = mainFrame, CanvasGroup = canvasGroup, Enabled = true}
+    getgenv()._YanzUI = {
+        Gui = gui, 
+        Main = mainFrame, 
+        CanvasGroup = canvasGroup, 
+        MainStroke = mainStroke,
+        Enabled = true
+    }
     
     CreateTween(mainFrame, TweenInfo.new(0.6, Enum.EasingStyle.Elastic, Enum.EasingDirection.Out), {
         Size = UDim2.new(0, 600, 0, 450),
@@ -458,8 +526,13 @@ local function BuildUI()
     task.spawn(function()
         task.wait(0.2)
         for i, card in ipairs(cards) do
-            CreateTween(card, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Position = UDim2.new(0, 0, 0, 0), GroupTransparency = 0})
-            task.wait(0.03) 
+            if card and card.Parent then
+                CreateTween(card, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+                    Position = UDim2.new(0, 0, 0, 0), 
+                    GroupTransparency = 0
+                })
+                task.wait(0.03) 
+            end
         end
     end)
     
@@ -467,7 +540,8 @@ local function BuildUI()
 end
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if not gameProcessed and input.KeyCode == Enum.KeyCode.RightShift then
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.RightShift then
         BuildUI()
     end
 end)
@@ -479,5 +553,3 @@ if Games[game.PlaceId] then
 else
     BuildUI()
 end
-
-

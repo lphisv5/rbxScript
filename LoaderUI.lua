@@ -23,6 +23,7 @@ local Games = {
     [18126510175] = { Name = "Rivals", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/Rivals.lua" },
     [12506460846] = { Name = "Dig to Escape", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/DigtoEscape.lua" },
     [16083051666] = { Name = "Blind Shot", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/BlindShot.lua" },
+    [137228775845999] = { Name = "Ghost Driver", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/refs/heads/main/ghostdriver.lua", Icon = "🚗" },
 }
 local function CreateTween(instance, info, properties)
     if not instance or not instance.Parent then return nil end

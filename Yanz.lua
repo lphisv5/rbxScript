@@ -13,6 +13,7 @@ local Games = {
     [92122513197996] = { Name = "Dig to Escape", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/DigtoEscape.lua", Icon = "🚨" },
     [118614517739521] = { Name = "Blind Shot", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/BlindShot.lua", Icon = "🥷" },
     [137228775845999] = { Name = "Ghost Driver", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/refs/heads/main/ghostdriver.lua", Icon = "🚗" },
+    [4282985734] = { Name = "Combat Warriors", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/refs/heads/main/combat-warriors.lua", Icon = "⚔️" },
 }
 
 local currentGame = Games[game.PlaceId]

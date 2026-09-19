@@ -26,6 +26,7 @@ local Games = {
     [137228775845999] = { Name = "Ghost Driver", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/refs/heads/main/ghostdriver.lua" },
     [4282985734] = { Name = "Combat Warriors", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/refs/heads/main/combat-warriors.lua" },
 }
+
 local function CreateTween(instance, info, properties)
     if not instance or not instance.Parent then return nil end
     local success, tween = pcall(function()
@@ -63,7 +64,7 @@ local function MakeDraggable(topbarobject, object)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             Dragging = true
             DragStart = input.Position
-            StartPosition = object.Positionำ
+            StartPosition = object.Position -- แก้ไขเอาอักขระแปลกปลอมออกแล้ว
             input:GetPropertyChangedSignal("UserInputState"):Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then 
                     Dragging = false 
@@ -315,9 +316,18 @@ local function BuildUI()
     local logo = Instance.new("ImageLabel")
     logo.Size = UDim2.new(0, 42, 0, 42)
     logo.Position = UDim2.new(0, 15, 0, 9)
-    logo.Image = LOGO_ID
+    -- ดึงรูปไอคอนเกมปัจจุบันอัตโนมัติ (หากไม่ได้อยู่ในเกมที่รองรับจะใช้ LOGO_ID เดิม)
+    if Games[game.PlaceId] then
+        logo.Image = "rbxthumb://type=GameIcon&id=" .. game.GameId .. "&w=150&h=150"
+    else
+        logo.Image = LOGO_ID
+    end
     logo.BackgroundTransparency = 1
     logo.Parent = topBar
+
+    local logoCorner = Instance.new("UICorner")
+    logoCorner.CornerRadius = UDim.new(0, 8)
+    logoCorner.Parent = logo
 
     local title = Instance.new("TextLabel")
     title.Size = UDim2.new(0, 300, 1, 0)

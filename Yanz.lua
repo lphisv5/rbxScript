@@ -103,7 +103,7 @@ if currentGame then
     local title = Instance.new("TextLabel")
     title.Size = UDim2.new(1, -100, 0, 24)
     title.Position = UDim2.new(0, 60, 0, 8)
-    title.Text = currentGame.Name -- เหลือแค่ชื่อเกมอย่างเดียวแล้ว
+    title.Text = currentGame.Name
     title.Font = Enum.Font.GothamBold
     title.TextSize = 16
     title.TextColor3 = Color3.new(1, 1, 1)

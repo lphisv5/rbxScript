@@ -3,6 +3,7 @@ local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local CoreGui = game:GetService("CoreGui")
+local TeleportService = game:GetService("TeleportService")
 local LocalPlayer = Players.LocalPlayer
 
 local IS_DELTA = true
@@ -10,21 +11,20 @@ local LOGO_ID = "rbxassetid://134012859226921"
 
 local Games = {
     [11800876530] = { Name = "+1 Blocks Every Second", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/+1BlocksEverySecond.lua" },
-    [16613614528] = { Name = "Fish It", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/FishIt.lua" },
     [537413528] = { Name = "Build A Boat", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/BuildABoat.lua" },
     [5561680777] = { Name = "+1 Size Race", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/+1SizeRace.lua" },
-    [2753915549] = { Name = "Blox Fruits", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/Aimbot-bloxfruits.lua" },
+    [2753915549] = { Name = "Blox Fruits", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/AimBot-BF.lua" },
     [17715189837] = { Name = "Violence District", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/Violence-District.lua" },
     [3351674303] = { Name = "Driving Empire", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/driving-empire.lua" },
     [124082555806669] = { Name = "Don't Get Crushed", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/Dont-Get-Crushed.lua" },
-    [87365339041375] = { Name = "Dig to Earth", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/DigtoEarths.lua" },
+    [87365339041375] = { Name = "Dig to Earth", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/DigtoEarth.lua" },
     [6823998518] = { Name = "Cut Trees", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/CutTrees.lua" },
     [9296463169] = { Name = "Math Murder", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/MathMurder.lua" },
     [18126510175] = { Name = "Rivals", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/Rivals.lua" },
     [12506460846] = { Name = "Dig to Escape", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/DigtoEscape.lua" },
     [16083051666] = { Name = "Blind Shot", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/BlindShot.lua" },
-    [137228775845999] = { Name = "Ghost Driver", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/refs/heads/main/ghostdriver.lua" },
-    [4282985734] = { Name = "Combat Warriors", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/refs/heads/main/combat-warriors.lua" },
+    [137228775845999] = { Name = "Ghost Driver", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/ghostdriver.lua" },
+    [4282985734] = { Name = "Combat Warriors", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/combat-warriors.lua" },
 }
 
 local function CreateTween(instance, info, properties)
@@ -64,7 +64,7 @@ local function MakeDraggable(topbarobject, object)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             Dragging = true
             DragStart = input.Position
-            StartPosition = object.Position -- แก้ไขเอาอักขระแปลกปลอมออกแล้ว
+            StartPosition = object.Position
             input:GetPropertyChangedSignal("UserInputState"):Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then 
                     Dragging = false 
@@ -108,7 +108,7 @@ local function Notify(title, message, duration)
     frame.Position = UDim2.new(1, 10, 1, -100)
     frame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
     frame.BackgroundTransparency = 0.1
-    frame.ZIndex = 100
+    frame.ZIndex = 300
     frame.Parent = NotifyGui
     table.insert(ActiveNotifications, frame)
     
@@ -138,7 +138,7 @@ local function Notify(title, message, duration)
     titleLabel.TextColor3 = Color3.new(1, 1, 1)
     titleLabel.BackgroundTransparency = 1
     titleLabel.TextXAlignment = Enum.TextXAlignment.Left
-    titleLabel.ZIndex = 101
+    titleLabel.ZIndex = 301
     titleLabel.Parent = frame
     
     local msgLabel = Instance.new("TextLabel")
@@ -151,7 +151,7 @@ local function Notify(title, message, duration)
     msgLabel.BackgroundTransparency = 1
     msgLabel.TextXAlignment = Enum.TextXAlignment.Left
     msgLabel.TextWrapped = true
-    msgLabel.ZIndex = 101
+    msgLabel.ZIndex = 301
     msgLabel.Parent = frame
     
     local index = #ActiveNotifications
@@ -212,6 +212,146 @@ local function LoadGame(placeId)
     else
         Notify("Successfully Loaded", gameData.Name .. " is now active!", 4)
     end
+end
+
+local function PromptTeleport(placeId, gameData)
+    if game.PlaceId == placeId then
+        Notify("Already In Game", "Executing script for " .. gameData.Name .. "...", 3)
+        LoadGame(placeId)
+        return
+    end
+
+    local ui = getgenv()._YanzUI
+    if not ui or not ui.Main then return end
+
+    if ui.Main:FindFirstChild("ConfirmModal") then
+        ui.Main.ConfirmModal:Destroy()
+    end
+
+    local modalOverlay = Instance.new("Frame")
+    modalOverlay.Name = "ConfirmModal"
+    modalOverlay.Size = UDim2.new(1, 0, 1, 0)
+    modalOverlay.BackgroundColor3 = Color3.fromRGB(10, 10, 15)
+    modalOverlay.BackgroundTransparency = 1
+    modalOverlay.ZIndex = 200
+    modalOverlay.Parent = ui.Main
+
+    local modalBox = Instance.new("Frame")
+    modalBox.Size = UDim2.new(0, 0, 0, 0)
+    modalBox.Position = UDim2.new(0.5, 0, 0.5, 0)
+    modalBox.AnchorPoint = Vector2.new(0.5, 0.5)
+    modalBox.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
+    modalBox.BorderSizePixel = 0
+    modalBox.ClipsDescendants = true
+    modalBox.ZIndex = 201
+    modalBox.Parent = modalOverlay
+
+    local modalCorner = Instance.new("UICorner")
+    modalCorner.CornerRadius = UDim.new(0, 12)
+    modalCorner.Parent = modalBox
+
+    local modalStroke = Instance.new("UIStroke")
+    modalStroke.Color = Color3.fromRGB(60, 120, 255)
+    modalStroke.Thickness = 1.5
+    modalStroke.Parent = modalBox
+
+    local modalTitle = Instance.new("TextLabel")
+    modalTitle.Size = UDim2.new(1, -30, 0, 30)
+    modalTitle.Position = UDim2.new(0, 15, 0, 15)
+    modalTitle.Text = "TELEPORT CONFIRMATION"
+    modalTitle.Font = Enum.Font.GothamBlack
+    modalTitle.TextSize = 15
+    modalTitle.TextColor3 = Color3.new(1, 1, 1)
+    modalTitle.BackgroundTransparency = 1
+    modalTitle.TextXAlignment = Enum.TextXAlignment.Left
+    modalTitle.ZIndex = 202
+    modalTitle.Parent = modalBox
+
+    local modalMsg = Instance.new("TextLabel")
+    modalMsg.Size = UDim2.new(1, -30, 0, 45)
+    modalMsg.Position = UDim2.new(0, 15, 0, 48)
+    modalMsg.Text = "Are you sure you want to teleport to " .. gameData.Name .. "?\nYou will be redirected automatically."
+    modalMsg.Font = Enum.Font.Gotham
+    modalMsg.TextSize = 12
+    modalMsg.TextColor3 = Color3.fromRGB(180, 180, 195)
+    modalMsg.BackgroundTransparency = 1
+    modalMsg.TextXAlignment = Enum.TextXAlignment.Left
+    modalMsg.TextYAlignment = Enum.TextYAlignment.Top
+    modalMsg.TextWrapped = true
+    modalMsg.ZIndex = 202
+    modalMsg.Parent = modalBox
+
+    local btnContainer = Instance.new("Frame")
+    btnContainer.Size = UDim2.new(1, -30, 0, 36)
+    btnContainer.Position = UDim2.new(0, 15, 1, -50)
+    btnContainer.BackgroundTransparency = 1
+    btnContainer.ZIndex = 202
+    btnContainer.Parent = modalBox
+
+    local cancelBtn = Instance.new("TextButton")
+    cancelBtn.Size = UDim2.new(0.48, -5, 1, 0)
+    cancelBtn.Position = UDim2.new(0, 0, 0, 0)
+    cancelBtn.Text = "CANCEL"
+    cancelBtn.Font = Enum.Font.GothamBold
+    cancelBtn.TextSize = 12
+    cancelBtn.TextColor3 = Color3.new(1, 1, 1)
+    cancelBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+    cancelBtn.AutoButtonColor = false
+    cancelBtn.ZIndex = 203
+    cancelBtn.Parent = btnContainer
+
+    local cancelCorner = Instance.new("UICorner")
+    cancelCorner.CornerRadius = UDim.new(0, 6)
+    cancelCorner.Parent = cancelBtn
+
+    local confirmBtn = Instance.new("TextButton")
+    confirmBtn.Size = UDim2.new(0.48, -5, 1, 0)
+    confirmBtn.Position = UDim2.new(0.52, 5, 0, 0)
+    confirmBtn.Text = "TELEPORT NOW"
+    confirmBtn.Font = Enum.Font.GothamBold
+    confirmBtn.TextSize = 12
+    confirmBtn.TextColor3 = Color3.new(1, 1, 1)
+    confirmBtn.BackgroundColor3 = Color3.fromRGB(40, 120, 255)
+    confirmBtn.AutoButtonColor = false
+    confirmBtn.ZIndex = 203
+    confirmBtn.Parent = btnContainer
+
+    local confirmCorner = Instance.new("UICorner")
+    confirmCorner.CornerRadius = UDim.new(0, 6)
+    confirmCorner.Parent = confirmBtn
+
+    CreateTween(modalOverlay, TweenInfo.new(0.2), {BackgroundTransparency = 0.3})
+    CreateTween(modalBox, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = UDim2.new(0, 340, 0, 180)})
+
+    local function CloseModal()
+        local t = CreateTween(modalBox, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Size = UDim2.new(0, 0, 0, 0)})
+        CreateTween(modalOverlay, TweenInfo.new(0.2), {BackgroundTransparency = 1})
+        if t then
+            t.Completed:Once(function()
+                modalOverlay:Destroy()
+            end)
+        else
+            modalOverlay:Destroy()
+        end
+    end
+
+    cancelBtn.MouseEnter:Connect(function() CreateTween(cancelBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(60, 60, 75)}) end)
+    cancelBtn.MouseLeave:Connect(function() CreateTween(cancelBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(45, 45, 55)}) end)
+    cancelBtn.MouseButton1Click:Connect(CloseModal)
+
+    confirmBtn.MouseEnter:Connect(function() CreateTween(confirmBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(60, 140, 255)}) end)
+    confirmBtn.MouseLeave:Connect(function() CreateTween(confirmBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(40, 120, 255)}) end)
+    confirmBtn.MouseButton1Click:Connect(function()
+        CloseModal()
+        Notify("Teleporting...", "Redirecting to " .. gameData.Name, 5)
+        task.wait(0.5)
+        local success, err = pcall(function()
+            TeleportService:Teleport(placeId, LocalPlayer)
+        end)
+        if not success then
+            Notify("Teleport Failed", "Error: " .. tostring(err), 4)
+        end
+    end)
 end
 
 local DragConnection = nil
@@ -316,7 +456,6 @@ local function BuildUI()
     local logo = Instance.new("ImageLabel")
     logo.Size = UDim2.new(0, 42, 0, 42)
     logo.Position = UDim2.new(0, 15, 0, 9)
-    -- ดึงรูปไอคอนเกมปัจจุบันอัตโนมัติ (หากไม่ได้อยู่ในเกมที่รองรับจะใช้ LOGO_ID เดิม)
     if Games[game.PlaceId] then
         logo.Image = "rbxthumb://type=GameIcon&id=" .. game.GameId .. "&w=150&h=150"
     else
@@ -504,8 +643,9 @@ local function BuildUI()
         
         exeBtn.MouseEnter:Connect(function() CreateTween(exeBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(60, 140, 255)}) end)
         exeBtn.MouseLeave:Connect(function() CreateTween(exeBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(40, 120, 255)}) end)
+        
         exeBtn.MouseButton1Click:Connect(function()
-            LoadGame(placeId)
+            PromptTeleport(placeId, data)
         end)
         
         if game.PlaceId == placeId then

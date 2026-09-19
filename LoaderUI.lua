@@ -25,6 +25,7 @@ local Games = {
     [16083051666] = { Name = "Blind Shot", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/BlindShot.lua" },
     [137228775845999] = { Name = "Ghost Driver", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/ghostdriver.lua" },
     [4282985734] = { Name = "Combat Warriors", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/combat-warriors.lua" },
+    [124216119978534] = { Name = "Ride A Pet", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/refs/heads/main/RideAPet.lua" },
 }
 
 local function CreateTween(instance, info, properties)

@@ -4,6 +4,7 @@ local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local CoreGui = game:GetService("CoreGui")
 local TeleportService = game:GetService("TeleportService")
+local MarketplaceService = game:GetService("MarketplaceService")
 local LocalPlayer = Players.LocalPlayer
 
 local IS_DELTA = true
@@ -19,10 +20,10 @@ local Games = {
     [124082555806669] = { Name = "Don't Get Crushed", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/Dont-Get-Crushed.lua" },
     [87365339041375] = { Name = "Dig to Earth", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/DigtoEarth.lua" },
     [6823998518] = { Name = "Cut Trees", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/CutTrees.lua" },
-    [9296463169] = { Name = "Math Murder", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/MathMurder.lua" },
+    [127707120843339] = { Name = "Math Murder", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/MathMurder.lua" },
     [18126510175] = { Name = "Rivals", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/Rivals.lua" },
-    [12506460846] = { Name = "Dig to Escape", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/DigtoEscape.lua" },
-    [16083051666] = { Name = "Blind Shot", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/BlindShot.lua" },
+    [92122513197996] = { Name = "Dig to Escape", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/DigtoEscape.lua" },
+    [118614517739521] = { Name = "Blind Shot", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/BlindShot.lua" },
     [137228775845999] = { Name = "Ghost Driver", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/ghostdriver.lua" },
     [4282985734] = { Name = "Combat Warriors", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/combat-warriors.lua" },
     [124216119978534] = { Name = "Ride A Pet", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/refs/heads/main/RideAPet.lua" },
@@ -410,6 +411,27 @@ local function BuildUI()
     mainFrame.ClipsDescendants = true
     mainFrame.Parent = gui
     
+    -- // เพิ่มระบบ Responsive Auto-Scale ปรับขนาด UI เล็ก/ใหญ่ตามหน้าจออัตโนมัติ //
+    local uiScale = Instance.new("UIScale")
+    uiScale.Parent = mainFrame
+    
+    local function UpdateScale()
+        local camera = workspace.CurrentCamera
+        if camera then
+            local viewportSize = camera.ViewportSize
+            -- ขนาดหน้าจออ้างอิงมาตรฐาน (Reference Resolution: 1136 x 640)
+            local scaleX = viewportSize.X / 1136
+            local scaleY = viewportSize.Y / 640
+            local targetScale = math.min(scaleX, scaleY)
+            -- จำกัดสเกลไม่ให้เล็กหรือใหญ่เกินไป ยิ่งจอเล็ก UI จะยิ่งย่อเล็กลงแบบสมส่วน
+            uiScale.Scale = math.clamp(targetScale, 0.5, 1.2)
+        end
+    end
+    
+    UpdateScale()
+    workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(UpdateScale)
+    -- /////////////////////////////////////////////////////////////////////////
+
     local mainCorner = Instance.new("UICorner")
     mainCorner.CornerRadius = UDim.new(0, 12)
     mainCorner.Parent = mainFrame
@@ -459,13 +481,14 @@ local function BuildUI()
     local logo = Instance.new("ImageLabel")
     logo.Size = UDim2.new(0, 42, 0, 42)
     logo.Position = UDim2.new(0, 15, 0, 9)
+    logo.BackgroundTransparency = 1
+    logo.Parent = topBar
+    
     if Games[game.PlaceId] then
         logo.Image = "rbxthumb://type=GameIcon&id=" .. game.GameId .. "&w=150&h=150"
     else
         logo.Image = LOGO_ID
     end
-    logo.BackgroundTransparency = 1
-    logo.Parent = topBar
 
     local logoCorner = Instance.new("UICorner")
     logoCorner.CornerRadius = UDim.new(0, 8)
@@ -591,6 +614,30 @@ local function BuildUI()
         cardCorner.CornerRadius = UDim.new(0, 10)
         cardCorner.Parent = card
         
+        local cardBg = Instance.new("ImageLabel")
+        cardBg.Size = UDim2.new(1, 0, 1, 0) 
+        cardBg.BackgroundTransparency = 1
+        cardBg.ImageTransparency = 0.65 
+        cardBg.ScaleType = Enum.ScaleType.Crop 
+        cardBg.ZIndex = 1
+        cardBg.Parent = card
+        
+        -- ใช้โลโก้สำรองเป็นค่าเริ่มต้น ป้องกันแมพย่อยที่ไม่มีรูป
+        cardBg.Image = LOGO_ID
+
+        task.spawn(function()
+            local success, info = pcall(function()
+                return MarketplaceService:GetProductInfo(placeId)
+            end)
+            if success and info and info.IconImageAssetId and info.IconImageAssetId > 0 then
+                cardBg.Image = "rbxassetid://" .. tostring(info.IconImageAssetId)
+            end
+        end)
+        
+        local bgCorner = Instance.new("UICorner")
+        bgCorner.CornerRadius = UDim.new(0, 10)
+        bgCorner.Parent = cardBg
+
         local cardStroke = Instance.new("UIStroke")
         cardStroke.Color = Color3.fromRGB(50, 50, 65)
         cardStroke.Thickness = 1.2
@@ -606,6 +653,7 @@ local function BuildUI()
         name.BackgroundTransparency = 1
         name.TextXAlignment = Enum.TextXAlignment.Left
         name.TextTruncate = Enum.TextTruncate.AtEnd
+        name.ZIndex = 2
         name.Parent = card
         
         local idLabel = Instance.new("TextLabel")
@@ -614,9 +662,10 @@ local function BuildUI()
         idLabel.Text = "ID: " .. tostring(placeId)
         idLabel.Font = Enum.Font.Gotham
         idLabel.TextSize = 11
-        idLabel.TextColor3 = Color3.fromRGB(120, 120, 130)
+        idLabel.TextColor3 = Color3.fromRGB(150, 150, 160)
         idLabel.BackgroundTransparency = 1
         idLabel.TextXAlignment = Enum.TextXAlignment.Left
+        idLabel.ZIndex = 2
         idLabel.Parent = card
         
         local exeBtn = Instance.new("TextButton")
@@ -628,6 +677,7 @@ local function BuildUI()
         exeBtn.TextColor3 = Color3.new(1, 1, 1)
         exeBtn.BackgroundColor3 = Color3.fromRGB(40, 120, 255)
         exeBtn.AutoButtonColor = false
+        exeBtn.ZIndex = 2
         exeBtn.Parent = card
         
         local btnCorner = Instance.new("UICorner")
@@ -637,11 +687,13 @@ local function BuildUI()
         card.MouseEnter:Connect(function()
             CreateTween(card, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {BackgroundColor3 = Color3.fromRGB(32, 32, 42)})
             CreateTween(cardStroke, TweenInfo.new(0.3), {Color = Color3.fromRGB(100, 180, 255)})
+            CreateTween(cardBg, TweenInfo.new(0.3), {ImageTransparency = 0.4}) 
         end)
         
         card.MouseLeave:Connect(function()
             CreateTween(card, TweenInfo.new(0.3), {BackgroundColor3 = Color3.fromRGB(24, 24, 32)})
             CreateTween(cardStroke, TweenInfo.new(0.3), {Color = Color3.fromRGB(50, 50, 65)})
+            CreateTween(cardBg, TweenInfo.new(0.3), {ImageTransparency = 0.65})
         end)
         
         exeBtn.MouseEnter:Connect(function() CreateTween(exeBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(60, 140, 255)}) end)

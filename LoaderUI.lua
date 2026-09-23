@@ -411,7 +411,6 @@ local function BuildUI()
     mainFrame.ClipsDescendants = true
     mainFrame.Parent = gui
     
-    -- // เพิ่มระบบ Responsive Auto-Scale ปรับขนาด UI เล็ก/ใหญ่ตามหน้าจออัตโนมัติ //
     local uiScale = Instance.new("UIScale")
     uiScale.Parent = mainFrame
     
@@ -419,18 +418,15 @@ local function BuildUI()
         local camera = workspace.CurrentCamera
         if camera then
             local viewportSize = camera.ViewportSize
-            -- ขนาดหน้าจออ้างอิงมาตรฐาน (Reference Resolution: 1136 x 640)
             local scaleX = viewportSize.X / 1136
             local scaleY = viewportSize.Y / 640
             local targetScale = math.min(scaleX, scaleY)
-            -- จำกัดสเกลไม่ให้เล็กหรือใหญ่เกินไป ยิ่งจอเล็ก UI จะยิ่งย่อเล็กลงแบบสมส่วน
             uiScale.Scale = math.clamp(targetScale, 0.5, 1.2)
         end
     end
     
     UpdateScale()
     workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(UpdateScale)
-    -- /////////////////////////////////////////////////////////////////////////
 
     local mainCorner = Instance.new("UICorner")
     mainCorner.CornerRadius = UDim.new(0, 12)
@@ -485,7 +481,7 @@ local function BuildUI()
     logo.Parent = topBar
     
     if Games[game.PlaceId] then
-        logo.Image = "rbxthumb://type=GameIcon&id=" .. game.GameId .. "&w=150&h=150"
+        logo.Image = "rbxassetid://" .. game.GameId .. "&w=150&h=150"
     else
         logo.Image = LOGO_ID
     end
@@ -512,38 +508,20 @@ local function BuildUI()
     }
     titleGradient.Parent = title
 
-    local discordBtn = Instance.new("TextButton")
-    discordBtn.Size = UDim2.new(0, 150, 0, 34)
-    discordBtn.Position = UDim2.new(1, -195, 0.5, -17)
-    discordBtn.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
-    discordBtn.Text = ""
+    local discordBtn = Instance.new("ImageButton")
+    discordBtn.Size = UDim2.new(0, 32, 0, 32)
+    discordBtn.Position = UDim2.new(1, -80, 0.5, -16)
+    discordBtn.Image = "rbxassetid://89581158158297"
+    discordBtn.BackgroundTransparency = 1
     discordBtn.AutoButtonColor = false
     discordBtn.Parent = topBar
-    
-    local discordCorner = Instance.new("UICorner")
-    discordCorner.CornerRadius = UDim.new(0, 8)
-    discordCorner.Parent = discordBtn
-    
-    local discordIcon = Instance.new("ImageLabel")
-    discordIcon.Size = UDim2.new(0, 22, 0, 22)
-    discordIcon.Position = UDim2.new(0, 12, 0.5, -11)
-    discordIcon.Image = "rbxassetid://14828135898"
-    discordIcon.BackgroundTransparency = 1
-    discordIcon.Parent = discordBtn
 
-    local discordText = Instance.new("TextLabel")
-    discordText.Size = UDim2.new(1, -40, 1, 0)
-    discordText.Position = UDim2.new(0, 40, 0, 0)
-    discordText.Text = "Join Discord"
-    discordText.Font = Enum.Font.GothamBold
-    discordText.TextSize = 13
-    discordText.TextColor3 = Color3.new(1, 1, 1)
-    discordText.BackgroundTransparency = 1
-    discordText.TextXAlignment = Enum.TextXAlignment.Left
-    discordText.Parent = discordBtn
-
-    discordBtn.MouseEnter:Connect(function() CreateTween(discordBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(105, 116, 245)}) end)
-    discordBtn.MouseLeave:Connect(function() CreateTween(discordBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(88, 101, 242)}) end)
+    discordBtn.MouseEnter:Connect(function() 
+        CreateTween(discordBtn, TweenInfo.new(0.2), {ImageTransparency = 0.3}) 
+    end)
+    discordBtn.MouseLeave:Connect(function() 
+        CreateTween(discordBtn, TweenInfo.new(0.2), {ImageTransparency = 0}) 
+    end)
     discordBtn.MouseButton1Click:Connect(function()
         if setclipboard then
             setclipboard("https://discord.gg/mNGeUVcjKB")
@@ -622,7 +600,6 @@ local function BuildUI()
         cardBg.ZIndex = 1
         cardBg.Parent = card
         
-        -- ใช้โลโก้สำรองเป็นค่าเริ่มต้น ป้องกันแมพย่อยที่ไม่มีรูป
         cardBg.Image = LOGO_ID
 
         task.spawn(function()

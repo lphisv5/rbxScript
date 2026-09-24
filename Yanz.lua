@@ -1,3 +1,23 @@
+getgenv().YANZ_KEY_VERIFIED = false
+local KeySystemURL = "https://raw.githubusercontent.com/lphisv5/rbxScript/refs/heads/main/YANZ-HUB-KEY-SYSTEM.lua"
+
+local keySuccess, keyResult = pcall(function()
+    return game:HttpGet(KeySystemURL, true)
+end)
+
+if keySuccess and keyResult then
+    local keyFn, keyErr = loadstring(keyResult)
+    if keyFn then
+        pcall(keyFn)
+    else
+        warn("Key System Compile Error:", keyErr)
+    end
+else
+    warn("Failed to download Key System:", keyResult)
+end
+
+repeat task.wait(1) until getgenv().YANZ_KEY_VERIFIED == true
+
 local Games = {
     [11800876530] = { Name = "+1 Blocks Every Second", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/+1BlocksEverySecond.lua" },
     [537413528] = { Name = "Build A Boat", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/BuildABoat.lua" },
@@ -32,22 +52,10 @@ if currentGame then
     gui.Name = "DeltaPremiumLoader"
     gui.ResetOnSpawn = false
     
-    local success, err = pcall(function()
-        gui.Parent = CoreGui
-    end)
-    
+    local success, err = pcall(function() gui.Parent = CoreGui end)
     if not success then
-        local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
-        if playerGui then
-            gui.Parent = playerGui
-        else
-            playerGui = LocalPlayer:WaitForChild("PlayerGui", 5)
-            if playerGui then
-                gui.Parent = playerGui
-            else
-                return
-            end
-        end
+        local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui", 5)
+        if playerGui then gui.Parent = playerGui else return end
     end
     
     local frame = Instance.new("Frame")
@@ -56,7 +64,6 @@ if currentGame then
     frame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
     frame.BackgroundTransparency = 0.15
     frame.BorderSizePixel = 0
-    frame.ClipsDescendants = false
     frame.Parent = gui
     
     local corner = Instance.new("UICorner")
@@ -77,16 +84,12 @@ if currentGame then
     strokeGradient.Parent = stroke
     
     local rotation = 0
-    local gradientAnim = nil
-    
-    if RunService then
-        gradientAnim = RunService.RenderStepped:Connect(function(dt)
-            if dt and dt > 0 then
-                rotation = (rotation + (dt * 100)) % 360
-                strokeGradient.Rotation = rotation
-            end
-        end)
-    end
+    local gradientAnim = RunService.RenderStepped:Connect(function(dt)
+        if dt and dt > 0 then
+            rotation = (rotation + (dt * 100)) % 360
+            strokeGradient.Rotation = rotation
+        end
+    end)
     
     local logo = Instance.new("ImageLabel")
     logo.Size = UDim2.new(0, 36, 0, 36)
@@ -99,8 +102,7 @@ if currentGame then
     logoCorner.CornerRadius = UDim.new(0, 8)
     logoCorner.Parent = logo
     
-    local tweenInfo = TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
-    local logoTween = TweenService:Create(logo, tweenInfo, {Size = UDim2.new(0, 40, 0, 40), ImageTransparency = 0.2})
+    local logoTween = TweenService:Create(logo, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {Size = UDim2.new(0, 40, 0, 40), ImageTransparency = 0.2})
     logoTween:Play()
     
     local title = Instance.new("TextLabel")
@@ -125,10 +127,9 @@ if currentGame then
     status.TextXAlignment = Enum.TextXAlignment.Left
     status.Parent = frame
     
-    local slideIn = TweenService:Create(frame, TweenInfo.new(0.6, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+    TweenService:Create(frame, TweenInfo.new(0.6, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
         Position = UDim2.new(0.5, -160, 0, 40)
-    })
-    slideIn:Play()
+    }):Play()
     
     task.spawn(function()
         task.wait(0.5)
@@ -147,15 +148,12 @@ if currentGame then
                 status.Text = "Successfully loaded!"
                 status.TextColor3 = Color3.fromRGB(100, 255, 120)
 
-                if strokeGradient then
-                    strokeGradient.Color = ColorSequence.new{
-                        ColorSequenceKeypoint.new(0, Color3.fromRGB(50, 255, 100)), 
-                        ColorSequenceKeypoint.new(1, Color3.fromRGB(50, 255, 100))
-                    }
-                end
+                strokeGradient.Color = ColorSequence.new{
+                    ColorSequenceKeypoint.new(0, Color3.fromRGB(50, 255, 100)), 
+                    ColorSequenceKeypoint.new(1, Color3.fromRGB(50, 255, 100))
+                }
                 
                 task.wait(1.5)
-                
                 local slideOut = TweenService:Create(frame, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
                     Position = UDim2.new(0.5, -160, 0, -80),
                     BackgroundTransparency = 1
@@ -163,64 +161,30 @@ if currentGame then
                 slideOut:Play()
                 slideOut.Completed:Wait()
 
-                if gradientAnim then
-                    gradientAnim:Disconnect()
-                    gradientAnim = nil
-                end
-
-                if gui then
-                    gui:Destroy()
-                    gui = nil
-                end
+                if gradientAnim then gradientAnim:Disconnect() end
+                if gui then gui:Destroy() end
 
                 local execSuccess, execErr = pcall(fn)
-                if not execSuccess then
-                    warn("[Delta Loader] Runtime error:", execErr)
-                end
+                if not execSuccess then warn("[YANZ Loader] Runtime error:", execErr) end
             else
                 status.Text = "Compile error!"
                 status.TextColor3 = Color3.fromRGB(255, 80, 80)
-                
-                if strokeGradient then
-                    strokeGradient.Color = ColorSequence.new{
-                        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 80, 80)), 
-                        ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 80, 80))
-                    }
-                end
-                
                 task.wait(3)
-                if gui then
-                    gui:Destroy()
-                    gui = nil
-                end
+                if gui then gui:Destroy() end
             end
         else
             status.Text = "Download failed!"
             status.TextColor3 = Color3.fromRGB(255, 80, 80)
-            
-            if strokeGradient then
-                strokeGradient.Color = ColorSequence.new{
-                    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 80, 80)), 
-                    ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 80, 80))
-                }
-            end
-            
             task.wait(3)
-            if gui then
-                gui:Destroy()
-                gui = nil
-            end
+            if gui then gui:Destroy() end
         end
     end)
 else
     local success, result = pcall(function()
         return game:HttpGet("https://raw.githubusercontent.com/lphisv5/rbxScript/main/LoaderUI.lua", true)
     end)
-    
     if success and result then
-        local fn, err = loadstring(result)
-        if fn then
-            pcall(fn)
-        end
+        local fn = loadstring(result)
+        if fn then pcall(fn) end
     end
 end

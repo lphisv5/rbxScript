@@ -1,8 +1,12 @@
+--// YANZ HUB | KEY SYSTEM (SEPARATE FILE) --//
+--// Discord: https://discord.gg/mNGeUVcjKB
+
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local HttpService = game:GetService("HttpService")
-local Player = Players.LocalPlayer
+local CoreGui = game:GetService("CoreGui")
+local LocalPlayer = Players.LocalPlayer
 
 --==================================================
 -- EXECUTOR COMPATIBILITY LAYER
@@ -22,18 +26,17 @@ local Config = {
     DiscordInvite = "https://discord.gg/mNGeUVcjKB",
     KeyLink = "https://your-key-website.com/getkey",
     
-    -- Backend API & Main Script URL
-    VerifyURL = "https://generators-uuid.vercel.app/api/verify",
-    MainScriptURL = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/Yanz.lua",
+    -- Backend API Endpoint
+    VerifyURL = "https://pdelta.vercel.app/api/verify",
     
-    -- Owner Security Config
+    -- Owner Config
     OwnerUserId = 3758341002,
     OwnerKey = "sk_kingu_8fK29xLmPq7RtY4nAaBcD9mZp2QwE6",
     
-    -- Auto Login File
+    -- Auto Login Save File
     SaveFileName = "YANZ_HUB_KEY.txt",
     
-    -- UI Colors
+    -- Colors
     Accent = Color3.fromRGB(92, 170, 255),
     AccentLight = Color3.fromRGB(180, 220, 255),
     GlowColor = Color3.fromRGB(140, 200, 255),
@@ -41,32 +44,19 @@ local Config = {
 }
 
 --==================================================
--- AUTO-LOAD MAIN SCRIPT
---==================================================
-local function LoadMainScript()
-    if Config.MainScriptURL ~= "" then
-        pcall(function()
-            loadstring(game:HttpGet(Config.MainScriptURL))()
-        end)
-    end
-end
-
---==================================================
 -- INSTANT OWNER BYPASS CHECK
 --==================================================
-if Player.UserId == Config.OwnerUserId then
-    print("[YANZ HUB] Owner Whitelist detected (" .. tostring(Player.UserId) .. "). Bypassing Key System...")
-    LoadMainScript()
+if LocalPlayer.UserId == Config.OwnerUserId then
+    print("[YANZ HUB] Owner Whitelist detected (" .. tostring(LocalPlayer.UserId) .. "). Bypassing Key System...")
+    getgenv().YANZ_KEY_VERIFIED = true
     return
 end
 
 --==================================================
--- AUTO-SAVE & FILE SYSTEM
+-- FILE SYSTEM
 --==================================================
 local function SaveKeyLocally(key)
-    if writefile then
-        pcall(function() writefile(Config.SaveFileName, key) end)
-    end
+    if writefile then pcall(function() writefile(Config.SaveFileName, key) end) end
 end
 
 local function LoadSavedKey()
@@ -82,7 +72,7 @@ end
 --==================================================
 local function New(class, props)
     local obj = Instance.new(class)
-    for property, value in pairs(props or {}) do obj[property] = value end
+    for k, v in pairs(props or {}) do obj[k] = v end
     return obj
 end
 
@@ -93,23 +83,13 @@ local function Corner(parent, radius)
 end
 
 local function Stroke(parent, color, transparency, thickness)
-    local s = New("UIStroke", {
-        Color = color,
-        Transparency = transparency or 0,
-        Thickness = thickness or 1
-    })
+    local s = New("UIStroke", { Color = color, Transparency = transparency or 0, Thickness = thickness or 1 })
     s.Parent = parent
     return s
 end
 
 local function Gradient(parent, color1, color2, rotation)
-    local g = New("UIGradient", {
-        Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, color1),
-            ColorSequenceKeypoint.new(1, color2)
-        }),
-        Rotation = rotation or 0
-    })
+    local g = New("UIGradient", { Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, color1), ColorSequenceKeypoint.new(1, color2) }), Rotation = rotation or 0 })
     g.Parent = parent
     return g
 end
@@ -121,26 +101,14 @@ end
 --==================================================
 -- GUI INITIALIZATION
 --==================================================
-local Existing = game:GetService("CoreGui"):FindFirstChild("YANZ_KEY_SYSTEM")
+local Existing = CoreGui:FindFirstChild("YANZ_KEY_SYSTEM")
 if Existing then Existing:Destroy() end
 
-local ScreenGui = New("ScreenGui", {
-    Name = "YANZ_KEY_SYSTEM",
-    ResetOnSpawn = false,
-    IgnoreGuiInset = true,
-    ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-})
-ScreenGui.Parent = game:GetService("CoreGui")
+local ScreenGui = New("ScreenGui", { Name = "YANZ_KEY_SYSTEM", ResetOnSpawn = false, IgnoreGuiInset = true, ZIndexBehavior = Enum.ZIndexBehavior.Sibling })
+ScreenGui.Parent = CoreGui
 
---==================================================
--- BACKGROUND & PARTICLES
---==================================================
-local Background = New("Frame", {
-    Size = UDim2.fromScale(1, 1),
-    BackgroundColor3 = Config.Background,
-    BorderSizePixel = 0
-})
-Background.Parent = ScreenGui
+-- Background & Sparkles
+local Background = New("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Config.Background, BorderSizePixel = 0, Parent = ScreenGui })
 Gradient(Background, Color3.fromRGB(205, 232, 255), Color3.fromRGB(242, 249, 255), 135)
 
 for i = 1, 6 do
@@ -149,250 +117,95 @@ for i = 1, 6 do
         Position = UDim2.fromScale(math.random(), math.random()),
         BackgroundColor3 = Config.AccentLight,
         BackgroundTransparency = 0.8,
-        BorderSizePixel = 0
+        BorderSizePixel = 0,
+        Parent = Background
     })
-    Circle.Parent = Background
     Corner(Circle, 999)
-    Tween(Circle, TweenInfo.new(math.random(4, 7), Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
-        BackgroundTransparency = 0.92
-    }):Play()
+    Tween(Circle, TweenInfo.new(math.random(4, 7), Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { BackgroundTransparency = 0.92 }):Play()
 end
 
---==================================================
--- MAIN CARD
---==================================================
-local GlowFrame = New("Frame", {
-    AnchorPoint = Vector2.new(0.5, 0.5),
-    Position = UDim2.fromScale(0.5, 0.5),
-    Size = UDim2.new(0, 482, 0, 602),
-    BackgroundColor3 = Config.GlowColor,
-    BackgroundTransparency = 0.75,
-    BorderSizePixel = 0
-})
-GlowFrame.Parent = ScreenGui
+local ParticleContainer = New("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Parent = Background })
+task.spawn(function()
+    local symbols = {"✦", "✧", "◆", "★"}
+    while ScreenGui and ScreenGui.Parent do
+        task.wait(0.6)
+        local Sparkle = New("TextLabel", {
+            Position = UDim2.fromScale(math.random(0.05, 0.95), math.random(0.8, 0.98)),
+            Size = UDim2.fromOffset(20, 20),
+            BackgroundTransparency = 1,
+            Text = symbols[math.random(1, #symbols)],
+            TextColor3 = Config.AccentLight,
+            TextTransparency = 0.4,
+            TextSize = math.random(10, 18),
+            Font = Enum.Font.GothamBold,
+            Parent = ParticleContainer
+        })
+        
+        local targetY = Sparkle.Position.Y.Scale - math.random(0.2, 0.4)
+        Tween(Sparkle, TweenInfo.new(math.random(3, 5), Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            Position = UDim2.fromScale(Sparkle.Position.X.Scale, targetY),
+            TextTransparency = 1,
+            Rotation = math.random(-90, 90)
+        }):Play()
+        game:GetService("Debris"):AddItem(Sparkle, 5)
+    end
+end)
+
+-- Outer Glow & Main Card
+local GlowFrame = New("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(0, 482, 0, 602), BackgroundColor3 = Config.GlowColor, BackgroundTransparency = 0.75, BorderSizePixel = 0, Parent = ScreenGui })
 Corner(GlowFrame, 32)
 
-local Main = New("Frame", {
-    AnchorPoint = Vector2.new(0.5, 0.5),
-    Position = UDim2.fromScale(0.5, 0.5),
-    Size = UDim2.new(0, 470, 0, 590),
-    BackgroundColor3 = Color3.fromRGB(245, 250, 255),
-    BackgroundTransparency = 0.12,
-    BorderSizePixel = 0
-})
-Main.Parent = ScreenGui
+local Main = New("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(0, 470, 0, 590), BackgroundColor3 = Color3.fromRGB(245, 250, 255), BackgroundTransparency = 0.12, BorderSizePixel = 0, Parent = ScreenGui })
 Corner(Main, 28)
 Stroke(Main, Color3.fromRGB(255, 255, 255), 0.15, 2)
 
---==================================================
--- HEADER
---==================================================
-local Header = New("Frame", {
-    Position = UDim2.new(0, 24, 0, 22),
-    Size = UDim2.new(1, -48, 0, 70),
-    BackgroundTransparency = 1
-})
-Header.Parent = Main
-
-local Logo = New("Frame", {
-    Size = UDim2.fromOffset(58, 58),
-    BackgroundColor3 = Config.Accent
-})
-Logo.Parent = Header
+-- Header
+local Header = New("Frame", { Position = UDim2.new(0, 24, 0, 22), Size = UDim2.new(1, -48, 0, 70), BackgroundTransparency = 1, Parent = Main })
+local Logo = New("Frame", { Size = UDim2.fromOffset(58, 58), BackgroundColor3 = Config.Accent, Parent = Header })
 Corner(Logo, 18)
 Gradient(Logo, Color3.fromRGB(105, 190, 255), Color3.fromRGB(75, 130, 245), 45)
 
-local LogoText = New("TextLabel", {
-    Size = UDim2.fromScale(1, 1),
-    BackgroundTransparency = 1,
-    Text = "Y",
-    TextColor3 = Color3.new(1, 1, 1),
-    TextSize = 30,
-    Font = Enum.Font.GothamBold
-})
-LogoText.Parent = Logo
+local LogoText = New("TextLabel", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "Y", TextColor3 = Color3.new(1, 1, 1), TextSize = 30, Font = Enum.Font.GothamBold, Parent = Logo })
+local Title = New("TextLabel", { Position = UDim2.new(0, 74, 0, 2), Size = UDim2.new(1, -74, 0, 32), BackgroundTransparency = 1, Text = Config.Title, TextColor3 = Color3.fromRGB(35, 80, 135), TextSize = 25, Font = Enum.Font.GothamBold, TextXAlignment = Enum.TextXAlignment.Left, Parent = Header })
+local Subtitle = New("TextLabel", { Position = UDim2.new(0, 74, 0, 34), Size = UDim2.new(1, -74, 0, 25), BackgroundTransparency = 1, Text = Config.Subtitle, TextColor3 = Color3.fromRGB(115, 150, 185), TextSize = 14, Font = Enum.Font.GothamMedium, TextXAlignment = Enum.TextXAlignment.Left, Parent = Header })
 
-local Title = New("TextLabel", {
-    Position = UDim2.new(0, 74, 0, 2),
-    Size = UDim2.new(1, -74, 0, 32),
-    BackgroundTransparency = 1,
-    Text = Config.Title,
-    TextColor3 = Color3.fromRGB(35, 80, 135),
-    TextSize = 25,
-    Font = Enum.Font.GothamBold,
-    TextXAlignment = Enum.TextXAlignment.Left
-})
-Title.Parent = Header
-
-local Subtitle = New("TextLabel", {
-    Position = UDim2.new(0, 74, 0, 34),
-    Size = UDim2.new(1, -74, 0, 25),
-    BackgroundTransparency = 1,
-    Text = Config.Subtitle,
-    TextColor3 = Color3.fromRGB(115, 150, 185),
-    TextSize = 14,
-    Font = Enum.Font.GothamMedium,
-    TextXAlignment = Enum.TextXAlignment.Left
-})
-Subtitle.Parent = Header
-
-local Close = New("TextButton", {
-    AnchorPoint = Vector2.new(1, 0),
-    Position = UDim2.new(1, 0, 0, 4),
-    Size = UDim2.fromOffset(40, 40),
-    BackgroundColor3 = Color3.fromRGB(225, 238, 250),
-    BackgroundTransparency = 0.2,
-    Text = "×",
-    TextColor3 = Color3.fromRGB(75, 105, 135),
-    TextSize = 26,
-    Font = Enum.Font.GothamMedium,
-    AutoButtonColor = false
-})
-Close.Parent = Header
+local Close = New("TextButton", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 4), Size = UDim2.fromOffset(40, 40), BackgroundColor3 = Color3.fromRGB(225, 238, 250), BackgroundTransparency = 0.2, Text = "×", TextColor3 = Color3.fromRGB(75, 105, 135), TextSize = 26, Font = Enum.Font.GothamMedium, AutoButtonColor = false, Parent = Header })
 Corner(Close, 14)
 Close.MouseButton1Click:Connect(function() ScreenGui:Destroy() end)
 
---==================================================
--- CONTENT
---==================================================
-local Content = New("Frame", {
-    Position = UDim2.new(0, 30, 0, 115),
-    Size = UDim2.new(1, -60, 0, 310),
-    BackgroundTransparency = 1
-})
-Content.Parent = Main
+-- Content
+local Content = New("Frame", { Position = UDim2.new(0, 30, 0, 115), Size = UDim2.new(1, -60, 0, 310), BackgroundTransparency = 1, Parent = Main })
+local Welcome = New("TextLabel", { Size = UDim2.new(1, 0, 0, 35), BackgroundTransparency = 1, Text = "Unlock Your Access", TextColor3 = Color3.fromRGB(40, 85, 140), TextSize = 25, Font = Enum.Font.GothamBold, Parent = Content })
+local Description = New("TextLabel", { Position = UDim2.new(0, 0, 0, 42), Size = UDim2.new(1, 0, 0, 45), BackgroundTransparency = 1, Text = "Enter your access key below to continue.", TextColor3 = Color3.fromRGB(120, 150, 180), TextSize = 14, Font = Enum.Font.GothamMedium, TextWrapped = true, Parent = Content })
 
-local Welcome = New("TextLabel", {
-    Size = UDim2.new(1, 0, 0, 35),
-    BackgroundTransparency = 1,
-    Text = "Unlock Your Access",
-    TextColor3 = Color3.fromRGB(40, 85, 140),
-    TextSize = 25,
-    Font = Enum.Font.GothamBold
-})
-Welcome.Parent = Content
-
-local Description = New("TextLabel", {
-    Position = UDim2.new(0, 0, 0, 42),
-    Size = UDim2.new(1, 0, 0, 45),
-    BackgroundTransparency = 1,
-    Text = "Enter your access key below to continue.",
-    TextColor3 = Color3.fromRGB(120, 150, 180),
-    TextSize = 14,
-    Font = Enum.Font.GothamMedium,
-    TextWrapped = true
-})
-Description.Parent = Content
-
--- Key Input Box
-local KeyBox = New("Frame", {
-    Position = UDim2.new(0, 0, 0, 105),
-    Size = UDim2.new(1, 0, 0, 60),
-    BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-    BackgroundTransparency = 0.18,
-    BorderSizePixel = 0
-})
-KeyBox.Parent = Content
+-- Key Box
+local KeyBox = New("Frame", { Position = UDim2.new(0, 0, 0, 105), Size = UDim2.new(1, 0, 0, 60), BackgroundColor3 = Color3.fromRGB(255, 255, 255), BackgroundTransparency = 0.18, BorderSizePixel = 0, Parent = Content })
 Corner(KeyBox, 17)
 Stroke(KeyBox, Color3.fromRGB(175, 215, 250), 0.2, 1.5)
 
-local KeyIcon = New("TextLabel", {
-    Position = UDim2.new(0, 18, 0, 0),
-    Size = UDim2.fromOffset(35, 60),
-    BackgroundTransparency = 1,
-    Text = "◆",
-    TextColor3 = Config.Accent,
-    TextSize = 18,
-    Font = Enum.Font.GothamBold
-})
-KeyIcon.Parent = KeyBox
-
-local KeyInput = New("TextBox", {
-    Position = UDim2.new(0, 55, 0, 0),
-    Size = UDim2.new(1, -70, 1, 0),
-    BackgroundTransparency = 1,
-    PlaceholderText = "Enter your key...",
-    PlaceholderColor3 = Color3.fromRGB(155, 180, 205),
-    Text = "",
-    TextColor3 = Color3.fromRGB(45, 75, 105),
-    TextSize = 15,
-    Font = Enum.Font.GothamMedium,
-    ClearTextOnFocus = false
-})
-KeyInput.Parent = KeyBox
+local KeyIcon = New("TextLabel", { Position = UDim2.new(0, 18, 0, 0), Size = UDim2.fromOffset(35, 60), BackgroundTransparency = 1, Text = "◆", TextColor3 = Config.Accent, TextSize = 18, Font = Enum.Font.GothamBold, Parent = KeyBox })
+local KeyInput = New("TextBox", { Position = UDim2.new(0, 55, 0, 0), Size = UDim2.new(1, -70, 1, 0), BackgroundTransparency = 1, PlaceholderText = "Enter your key...", PlaceholderColor3 = Color3.fromRGB(155, 180, 205), Text = "", TextColor3 = Color3.fromRGB(45, 75, 105), TextSize = 15, Font = Enum.Font.GothamMedium, ClearTextOnFocus = false, Parent = KeyBox })
 
 -- Verify Button
-local Verify = New("TextButton", {
-    Position = UDim2.new(0, 0, 0, 180),
-    Size = UDim2.new(1, 0, 0, 58),
-    BackgroundColor3 = Config.Accent,
-    Text = "VERIFY KEY",
-    TextColor3 = Color3.new(1, 1, 1),
-    TextSize = 16,
-    Font = Enum.Font.GothamBold,
-    AutoButtonColor = false
-})
-Verify.Parent = Content
+local Verify = New("TextButton", { Position = UDim2.new(0, 0, 0, 180), Size = UDim2.new(1, 0, 0, 58), BackgroundColor3 = Config.Accent, Text = "VERIFY KEY", TextColor3 = Color3.new(1, 1, 1), TextSize = 16, Font = Enum.Font.GothamBold, AutoButtonColor = false, Parent = Content })
 Corner(Verify, 17)
 Gradient(Verify, Color3.fromRGB(105, 190, 255), Color3.fromRGB(75, 130, 245), 0)
 
--- Status Text
-local Status = New("TextLabel", {
-    Position = UDim2.new(0, 0, 0, 250),
-    Size = UDim2.new(1, 0, 0, 35),
-    BackgroundTransparency = 1,
-    Text = "● Waiting for verification",
-    TextColor3 = Color3.fromRGB(120, 155, 185),
-    TextSize = 13,
-    Font = Enum.Font.GothamMedium
-})
-Status.Parent = Content
+local Status = New("TextLabel", { Position = UDim2.new(0, 0, 0, 250), Size = UDim2.new(1, 0, 0, 35), BackgroundTransparency = 1, Text = "● Waiting for verification", TextColor3 = Color3.fromRGB(120, 155, 185), TextSize = 13, Font = Enum.Font.GothamMedium, Parent = Content })
 
 -- Action Buttons
-local GetKey = New("TextButton", {
-    Position = UDim2.new(0, 0, 0, 292),
-    Size = UDim2.new(0.48, 0, 0, 52),
-    BackgroundColor3 = Color3.fromRGB(225, 240, 255),
-    BackgroundTransparency = 0.1,
-    Text = "GET KEY",
-    TextColor3 = Color3.fromRGB(55, 110, 165),
-    TextSize = 14,
-    Font = Enum.Font.GothamBold,
-    AutoButtonColor = false
-})
-GetKey.Parent = Content
+local GetKey = New("TextButton", { Position = UDim2.new(0, 0, 0, 292), Size = UDim2.new(0.48, 0, 0, 52), BackgroundColor3 = Color3.fromRGB(225, 240, 255), BackgroundTransparency = 0.1, Text = "GET KEY", TextColor3 = Color3.fromRGB(55, 110, 165), TextSize = 14, Font = Enum.Font.GothamBold, AutoButtonColor = false, Parent = Content })
 Corner(GetKey, 15)
 Stroke(GetKey, Color3.fromRGB(160, 210, 250), 0.3, 1)
 
-local Discord = New("TextButton", {
-    Position = UDim2.new(0.52, 0, 0, 292),
-    Size = UDim2.new(0.48, 0, 0, 52),
-    BackgroundColor3 = Color3.fromRGB(225, 240, 255),
-    BackgroundTransparency = 0.1,
-    Text = "DISCORD",
-    TextColor3 = Color3.fromRGB(55, 110, 165),
-    TextSize = 14,
-    Font = Enum.Font.GothamBold,
-    AutoButtonColor = false
-})
-Discord.Parent = Content
+local Discord = New("TextButton", { Position = UDim2.new(0.52, 0, 0, 292), Size = UDim2.new(0.48, 0, 0, 52), BackgroundColor3 = Color3.fromRGB(225, 240, 255), BackgroundTransparency = 0.1, Text = "DISCORD", TextColor3 = Color3.fromRGB(55, 110, 165), TextSize = 14, Font = Enum.Font.GothamBold, AutoButtonColor = false, Parent = Content })
 Corner(Discord, 15)
 Stroke(Discord, Color3.fromRGB(160, 210, 250), 0.3, 1)
 
-local Footer = New("TextLabel", {
-    AnchorPoint = Vector2.new(0.5, 1),
-    Position = UDim2.new(0.5, 0, 1, -20),
-    Size = UDim2.new(1, -40, 0, 25),
-    BackgroundTransparency = 1,
-    Text = Config.DiscordText,
-    TextColor3 = Color3.fromRGB(130, 160, 190),
-    TextSize = 12,
-    Font = Enum.Font.GothamMedium
-})
-Footer.Parent = Main
+local Footer = New("TextLabel", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -20), Size = UDim2.new(1, -40, 0, 25), BackgroundTransparency = 1, Text = Config.DiscordText, TextColor3 = Color3.fromRGB(130, 160, 190), TextSize = 12, Font = Enum.Font.GothamMedium, Parent = Main })
 
 --==================================================
--- VERIFICATION API LOGIC WITH ANTI-BYPASS
+-- VERIFICATION API LOGIC
 --==================================================
 local function SetStatus(text, color)
     Status.Text = "● " .. text
@@ -404,31 +217,21 @@ local function VerifyKeyWithServer(key)
     if cleanKey == "" then return false, "Please enter your key." end
     if not http_request then return false, "Executor HTTP unsupported." end
 
-    local url = Config.VerifyURL .. "?key=" .. HttpService:UrlEncode(cleanKey) .. "&userId=" .. tostring(Player.UserId)
+    local url = Config.VerifyURL .. "?key=" .. HttpService:UrlEncode(cleanKey) .. "&userId=" .. tostring(LocalPlayer.UserId)
     
     local success, response = pcall(function()
         return http_request({
             Url = url,
             Method = "GET",
-            Headers = {
-                ["User-Agent"] = "YANZ_HUB_EXECUTOR_CLIENT"
-            }
+            Headers = { ["User-Agent"] = "YANZ_HUB_EXECUTOR_CLIENT" }
         })
     end)
 
     if success and response and response.StatusCode == 200 then
-        local decodeOk, data = pcall(function()
-            return HttpService:JSONDecode(response.Body)
-        end)
-
+        local decodeOk, data = pcall(function() return HttpService:JSONDecode(response.Body) end)
         if decodeOk and data and data.success then
-            -- ตรวจสอบ Signature เพื่อป้องกันการทำ Response Spoofing
-            if data.signature and #data.signature > 0 then
-                SaveKeyLocally(cleanKey)
-                return true, data.message or "Key Validated Successfully!"
-            else
-                return false, "Security signature mismatch!"
-            end
+            SaveKeyLocally(cleanKey)
+            return true, data.message or "Key Validated Successfully!"
         else
             return false, (data and data.message) or "Invalid or expired key."
         end
@@ -438,7 +241,6 @@ local function VerifyKeyWithServer(key)
 end
 
 local isVerifying = false
-
 local function ProcessVerification()
     if isVerifying then return end
     isVerifying = true
@@ -456,7 +258,7 @@ local function ProcessVerification()
         
         task.wait(0.7)
         ScreenGui:Destroy()
-        LoadMainScript()
+        getgenv().YANZ_KEY_VERIFIED = true -- ส่งสัญญาณผ่านไปยัง Yanz.lua
     else
         SetStatus(message or "Invalid Key", Color3.fromRGB(230, 85, 100))
         Verify.Text = "VERIFY KEY"
@@ -467,22 +269,14 @@ end
 Verify.MouseButton1Click:Connect(ProcessVerification)
 
 GetKey.MouseButton1Click:Connect(function()
-    if set_clipboard then
-        set_clipboard(Config.KeyLink)
-        SetStatus("Key link copied to clipboard", Color3.fromRGB(70, 150, 220))
-    end
+    if set_clipboard then set_clipboard(Config.KeyLink) SetStatus("Key link copied to clipboard", Color3.fromRGB(70, 150, 220)) end
 end)
 
 Discord.MouseButton1Click:Connect(function()
-    if set_clipboard then
-        set_clipboard(Config.DiscordInvite)
-        SetStatus("Discord invite copied to clipboard", Color3.fromRGB(85, 130, 220))
-    end
+    if set_clipboard then set_clipboard(Config.DiscordInvite) SetStatus("Discord invite copied to clipboard", Color3.fromRGB(85, 130, 220)) end
 end)
 
---==================================================
--- DRAG & RESPONSIVE SUPPORT
---==================================================
+-- Drag & Responsive
 local Dragging = false
 local DragStart, StartPosition
 
@@ -508,10 +302,8 @@ UserInputService.InputChanged:Connect(function(input)
 end)
 
 local Camera = workspace.CurrentCamera
-local UIScale = New("UIScale", { Scale = 1 })
-UIScale.Parent = Main
-local GlowScale = New("UIScale", { Scale = 1 })
-GlowScale.Parent = GlowFrame
+local UIScale = New("UIScale", { Scale = 1, Parent = Main })
+local GlowScale = New("UIScale", { Scale = 1, Parent = GlowFrame })
 
 local function UpdateScale()
     if not Camera then return end
@@ -526,7 +318,7 @@ end
 UpdateScale()
 if Camera then Camera:GetPropertyChangedSignal("ViewportSize"):Connect(UpdateScale) end
 
--- Auto-Login Saved Key
+-- Auto Login Check
 local savedKey = LoadSavedKey()
 if savedKey ~= "" then
     KeyInput.Text = savedKey

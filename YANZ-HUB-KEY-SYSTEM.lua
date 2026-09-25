@@ -1,3 +1,6 @@
+--// YANZ HUB | ULTRA HIGH-END KEY GATEWAY SYSTEM
+--// Discord: https://discord.gg/mNGeUVcjKB
+
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
@@ -6,9 +9,13 @@ local CoreGui = game:GetService("CoreGui")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
+-- Executor Compatibility Layer
 local http_request = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request
 local set_clipboard = setclipboard or toclipboard or set_clipboard or (syn and syn.write_clipboard)
 
+--==================================================
+-- CONFIGURATION & ASSETS
+--==================================================
 local Config = {
     Title = "YANZ HUB",
     Subtitle = "SECURITY KEY GATEWAY",
@@ -23,16 +30,19 @@ local Config = {
     
     -- Custom Asset IDs
     BannerId = "rbxassetid://113423880648914",
-    LogoId = "rbxassetid://134012859226921",
+    LogoId = "rbxassetid://76833458893034",
     DiscordLogoId = "rbxassetid://89581158158297",
     
-    -- Cyber Glassmorphism Palette
+    -- Next-Gen Color Palette
     Accent = Color3.fromRGB(56, 189, 248),
-    GlowColor = Color3.fromRGB(2, 132, 199),
+    AccentGlow = Color3.fromRGB(2, 132, 199),
     Background = Color3.fromRGB(11, 15, 25),
-    CardBg = Color3.fromRGB(16, 23, 42),
+    CardBg = Color3.fromRGB(15, 23, 42),
+    CardBgDark = Color3.fromRGB(10, 16, 30),
     TextMain = Color3.fromRGB(248, 250, 252),
-    TextSub = Color3.fromRGB(148, 163, 184)
+    TextSub = Color3.fromRGB(148, 163, 184),
+    Success = Color3.fromRGB(74, 222, 128),
+    Error = Color3.fromRGB(248, 113, 113)
 }
 
 -- Owner Whitelist Bypass
@@ -56,17 +66,32 @@ local function LoadSavedKey()
 end
 
 --==================================================
--- GUI BUILDER ENGINE
+-- GUI INITIALIZATION
 --==================================================
-local Existing = CoreGui:FindFirstChild("YANZ_ADVANCED_KEY_SYSTEM")
+local Existing = CoreGui:FindFirstChild("YANZ_ULTRA_KEY_SYSTEM")
 if Existing then Existing:Destroy() end
 
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "YANZ_ADVANCED_KEY_SYSTEM"
+ScreenGui.Name = "YANZ_ULTRA_KEY_SYSTEM"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.IgnoreGuiInset = true
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = CoreGui
+
+-- Ambient Outer Glow Shadow
+local ShadowFrame = Instance.new("Frame")
+ShadowFrame.Name = "AmbientShadow"
+ShadowFrame.Size = UDim2.new(0, 456, 0, 536)
+ShadowFrame.Position = UDim2.fromScale(0.5, 0.5)
+ShadowFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+ShadowFrame.BackgroundColor3 = Config.AccentGlow
+ShadowFrame.BackgroundTransparency = 0.82
+ShadowFrame.BorderSizePixel = 0
+ShadowFrame.Parent = ScreenGui
+
+local ShadowCorner = Instance.new("UICorner")
+ShadowCorner.CornerRadius = UDim.new(0, 28)
+ShadowCorner.Parent = ShadowFrame
 
 -- Main Container Frame
 local Main = Instance.new("Frame")
@@ -75,7 +100,7 @@ Main.Size = UDim2.new(0, 440, 0, 520)
 Main.Position = UDim2.fromScale(0.5, 0.5)
 Main.AnchorPoint = Vector2.new(0.5, 0.5)
 Main.BackgroundColor3 = Config.CardBg
-Main.BackgroundTransparency = 0.08
+Main.BackgroundTransparency = 0.05
 Main.BorderSizePixel = 0
 Main.ClipsDescendants = true
 Main.Parent = ScreenGui
@@ -84,10 +109,10 @@ local MainCorner = Instance.new("UICorner")
 MainCorner.CornerRadius = UDim.new(0, 24)
 MainCorner.Parent = Main
 
--- Animated Neon Border (UIStroke)
+-- Animated Neon Cyber Border
 local MainStroke = Instance.new("UIStroke")
 MainStroke.Color = Color3.new(1, 1, 1)
-MainStroke.Thickness = 2
+MainStroke.Thickness = 1.8
 MainStroke.Transparency = 0.1
 MainStroke.Parent = Main
 
@@ -99,28 +124,28 @@ StrokeGradient.Color = ColorSequence.new{
 }
 StrokeGradient.Parent = MainStroke
 
--- Rotating Border Animation
-local rotAngle = 0
 RunService.RenderStepped:Connect(function(dt)
-    rotAngle = (rotAngle + (dt * 60)) % 360
-    StrokeGradient.Rotation = rotAngle
+    StrokeGradient.Rotation = (StrokeGradient.Rotation + (dt * 50)) % 360
 end)
 
 --==================================================
--- AUTO RESPONSIVE SCALING ENGINE (UIScale)
+-- AUTO RESPONSIVE SCALING (UIScale Engine)
 --==================================================
 local Camera = workspace.CurrentCamera
 local UIScale = Instance.new("UIScale")
 UIScale.Parent = Main
 
+local ShadowScale = Instance.new("UIScale")
+ShadowScale.Parent = ShadowFrame
+
 local function UpdateAutoScaling()
     if not Camera then return end
     local viewportSize = Camera.ViewportSize
-    -- Base reference frame size: 480 x 560
     local scaleX = viewportSize.X / 480
     local scaleY = viewportSize.Y / 560
     local finalScale = math.clamp(math.min(scaleX, scaleY), 0.55, 1.15)
     UIScale.Scale = finalScale
+    ShadowScale.Scale = finalScale
 end
 
 UpdateAutoScaling()
@@ -129,30 +154,80 @@ if Camera then
 end
 
 --==================================================
+-- TOAST NOTIFICATION SYSTEM
+--==================================================
+local Toast = Instance.new("Frame")
+Toast.Name = "ToastNotification"
+Toast.Size = UDim2.new(1, -48, 0, 38)
+Toast.Position = UDim2.new(0, 24, 0, -50)
+Toast.BackgroundColor3 = Color3.fromRGB(20, 30, 48)
+Toast.BorderSizePixel = 0
+Toast.ZIndex = 20
+Toast.Parent = Main
+
+local ToastCorner = Instance.new("UICorner")
+ToastCorner.CornerRadius = UDim.new(0, 10)
+ToastCorner.Parent = Toast
+
+local ToastStroke = Instance.new("UIStroke")
+ToastStroke.Color = Config.Accent
+ToastStroke.Thickness = 1
+ToastStroke.Parent = Toast
+
+local ToastText = Instance.new("TextLabel")
+ToastText.Size = UDim2.new(1, -20, 1, 0)
+ToastText.Position = UDim2.new(0, 10, 0, 0)
+ToastText.Text = "Notification Message"
+ToastText.TextColor3 = Config.TextMain
+ToastText.TextSize = 12
+ToastText.Font = Enum.Font.GothamMedium
+ToastText.BackgroundTransparency = 1
+ToastText.ZIndex = 21
+ToastText.Parent = Toast
+
+local toastTweening = false
+local function ShowToast(text, color)
+    ToastText.Text = text
+    ToastStroke.Color = color or Config.Accent
+    
+    if not toastTweening then
+        toastTweening = true
+        TweenService:Create(Toast, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Position = UDim2.new(0, 24, 0, 12)
+        }):Play()
+        
+        task.delay(2.8, function()
+            TweenService:Create(Toast, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+                Position = UDim2.new(0, 24, 0, -50)
+            }):Play()
+            task.wait(0.3)
+            toastTweening = false
+        end)
+    end
+end
+
+--==================================================
 -- HEADER & BANNER SECTION
 --==================================================
 local BannerFrame = Instance.new("Frame")
 BannerFrame.Name = "BannerFrame"
 BannerFrame.Size = UDim2.new(1, 0, 0, 140)
-BannerFrame.Position = UDim2.new(0, 0, 0, 0)
-BannerFrame.BackgroundColor3 = Color3.fromRGB(20, 28, 48)
+BannerFrame.BackgroundColor3 = Color3.fromRGB(18, 24, 38)
 BannerFrame.BorderSizePixel = 0
 BannerFrame.ClipsDescendants = true
 BannerFrame.Parent = Main
 
 local BannerImage = Instance.new("ImageLabel")
-BannerImage.Name = "BannerImage"
 BannerImage.Size = UDim2.new(1, 0, 1, 0)
 BannerImage.Image = Config.BannerId
 BannerImage.ScaleType = Enum.ScaleType.Crop
 BannerImage.BackgroundTransparency = 1
 BannerImage.Parent = BannerFrame
 
--- Dark Overlay Gradient for Banner
 local BannerOverlay = Instance.new("Frame")
 BannerOverlay.Size = UDim2.new(1, 0, 1, 0)
 BannerOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-BannerOverlay.BackgroundTransparency = 0.3
+BannerOverlay.BackgroundTransparency = 0.35
 BannerOverlay.Parent = BannerFrame
 
 local OverlayGradient = Instance.new("UIGradient")
@@ -165,19 +240,20 @@ OverlayGradient.Parent = BannerOverlay
 
 -- Close Button
 local CloseBtn = Instance.new("TextButton")
-CloseBtn.Size = UDim2.fromOffset(32, 32)
-CloseBtn.Position = UDim2.new(1, -42, 0, 12)
+CloseBtn.Size = UDim2.fromOffset(30, 30)
+CloseBtn.Position = UDim2.new(1, -40, 0, 12)
 CloseBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-CloseBtn.BackgroundTransparency = 0.85
-CloseBtn.Text = "×"
+CloseBtn.BackgroundTransparency = 0.88
+CloseBtn.Text = "✕"
 CloseBtn.TextColor3 = Config.TextMain
-CloseBtn.TextSize = 22
-CloseBtn.Font = Enum.Font.GothamMedium
+CloseBtn.TextSize = 14
+CloseBtn.Font = Enum.Font.GothamBold
 CloseBtn.AutoButtonColor = false
+CloseBtn.ZIndex = 10
 CloseBtn.Parent = Main
 
 local CloseCorner = Instance.new("UICorner")
-CloseCorner.CornerRadius = UDim.new(0, 10)
+CloseCorner.CornerRadius = UDim.new(0, 8)
 CloseCorner.Parent = CloseBtn
 
 CloseBtn.MouseButton1Click:Connect(function()
@@ -185,14 +261,15 @@ CloseBtn.MouseButton1Click:Connect(function()
         Size = UDim2.new(0, 0, 0, 0),
         BackgroundTransparency = 1
     }):Play()
+    TweenService:Create(ShadowFrame, TweenInfo.new(0.3), { Size = UDim2.new(0, 0, 0, 0), BackgroundTransparency = 1 }):Play()
     task.wait(0.3)
     ScreenGui:Destroy()
 end)
 
--- Main Logo Icon (Animated Float)
+-- Main Logo Icon
 local LogoImage = Instance.new("ImageLabel")
 LogoImage.Name = "LogoImage"
-LogoImage.Size = UDim2.fromOffset(64, 64)
+LogoImage.Size = UDim2.fromOffset(62, 62)
 LogoImage.Position = UDim2.new(0, 24, 0, 105)
 LogoImage.Image = Config.LogoId
 LogoImage.BackgroundTransparency = 1
@@ -209,17 +286,17 @@ LogoStroke.Thickness = 2
 LogoStroke.Parent = LogoImage
 
 -- Logo Float Animation
-TweenService:Create(LogoImage, TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
-    Position = UDim2.new(0, 24, 0, 99)
+TweenService:Create(LogoImage, TweenInfo.new(2.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+    Position = UDim2.new(0, 24, 0, 98)
 }):Play()
 
--- Title Texts
+-- Title Texts & Status Dot
 local Title = Instance.new("TextLabel")
-Title.Position = UDim2.new(0, 102, 0, 108)
-Title.Size = UDim2.new(1, -120, 0, 28)
+Title.Position = UDim2.new(0, 98, 0, 108)
+Title.Size = UDim2.new(1, -150, 0, 26)
 Title.Text = Config.Title
 Title.TextColor3 = Config.TextMain
-Title.TextSize = 22
+Title.TextSize = 21
 Title.Font = Enum.Font.GothamBold
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.BackgroundTransparency = 1
@@ -227,19 +304,36 @@ Title.ZIndex = 5
 Title.Parent = Main
 
 local Subtitle = Instance.new("TextLabel")
-Subtitle.Position = UDim2.new(0, 102, 0, 134)
-Subtitle.Size = UDim2.new(1, -120, 0, 20)
+Subtitle.Position = UDim2.new(0, 98, 0, 132)
+Subtitle.Size = UDim2.new(1, -150, 0, 18)
 Subtitle.Text = Config.Subtitle
 Subtitle.TextColor3 = Config.Accent
-Subtitle.TextSize = 12
+Subtitle.TextSize = 11
 Subtitle.Font = Enum.Font.GothamBold
 Subtitle.TextXAlignment = Enum.TextXAlignment.Left
 Subtitle.BackgroundTransparency = 1
 Subtitle.ZIndex = 5
 Subtitle.Parent = Main
 
+-- API Online Indicator Dot
+local StatusDot = Instance.new("Frame")
+StatusDot.Size = UDim2.fromOffset(8, 8)
+StatusDot.Position = UDim2.new(1, -32, 0, 117)
+StatusDot.BackgroundColor3 = Config.Success
+StatusDot.BorderSizePixel = 0
+StatusDot.ZIndex = 5
+StatusDot.Parent = Main
+
+local DotCorner = Instance.new("UICorner")
+DotCorner.CornerRadius = UDim.new(1, 0)
+DotCorner.Parent = StatusDot
+
+TweenService:Create(StatusDot, TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+    BackgroundTransparency = 0.6
+}):Play()
+
 --==================================================
--- CONTENT BODY (KEY INPUT & BUTTONS)
+-- CONTENT BODY (INPUT & BUTTONS)
 --==================================================
 local Content = Instance.new("Frame")
 Content.Name = "ContentFrame"
@@ -248,12 +342,11 @@ Content.Position = UDim2.new(0, 24, 0, 180)
 Content.BackgroundTransparency = 1
 Content.Parent = Main
 
--- Key Input Container (Glassmorphism Box)
+-- Key Input Container
 local KeyInputBox = Instance.new("Frame")
-KeyInputBox.Size = UDim2.new(1, 0, 0, 56)
+KeyInputBox.Size = UDim2.new(1, 0, 0, 54)
 KeyInputBox.Position = UDim2.new(0, 0, 0, 10)
-KeyInputBox.BackgroundColor3 = Color3.fromRGB(24, 34, 56)
-KeyInputBox.BackgroundTransparency = 0.2
+KeyInputBox.BackgroundColor3 = Config.CardBgDark
 KeyInputBox.Parent = Content
 
 local KeyInputCorner = Instance.new("UICorner")
@@ -261,26 +354,26 @@ KeyInputCorner.CornerRadius = UDim.new(0, 14)
 KeyInputCorner.Parent = KeyInputBox
 
 local KeyInputStroke = Instance.new("UIStroke")
-KeyInputStroke.Color = Color3.fromRGB(51, 65, 85)
+KeyInputStroke.Color = Color3.fromRGB(38, 52, 78)
 KeyInputStroke.Thickness = 1.5
 KeyInputStroke.Parent = KeyInputBox
 
 local KeyIconLabel = Instance.new("TextLabel")
-KeyIconLabel.Size = UDim2.fromOffset(40, 56)
-KeyIconLabel.Position = UDim2.new(0, 10, 0, 0)
+KeyIconLabel.Size = UDim2.fromOffset(40, 54)
+KeyIconLabel.Position = UDim2.new(0, 8, 0, 0)
 KeyIconLabel.Text = "🔑"
-KeyIconLabel.TextSize = 18
+KeyIconLabel.TextSize = 16
 KeyIconLabel.BackgroundTransparency = 1
 KeyIconLabel.Parent = KeyInputBox
 
 local KeyBox = Instance.new("TextBox")
-KeyBox.Size = UDim2.new(1, -60, 1, 0)
-KeyBox.Position = UDim2.new(0, 48, 0, 0)
+KeyBox.Size = UDim2.new(1, -56, 1, 0)
+KeyBox.Position = UDim2.new(0, 44, 0, 0)
 KeyBox.PlaceholderText = "Paste your 24-Hour Key here..."
 KeyBox.PlaceholderColor3 = Color3.fromRGB(100, 116, 139)
 KeyBox.Text = ""
 KeyBox.TextColor3 = Config.TextMain
-KeyBox.TextSize = 14
+KeyBox.TextSize = 13
 KeyBox.Font = Enum.Font.GothamMedium
 KeyBox.TextXAlignment = Enum.TextXAlignment.Left
 KeyBox.ClearTextOnFocus = false
@@ -291,18 +384,18 @@ KeyBox.Focused:Connect(function()
     TweenService:Create(KeyInputStroke, TweenInfo.new(0.2), { Color = Config.Accent }):Play()
 end)
 KeyBox.FocusLost:Connect(function()
-    TweenService:Create(KeyInputStroke, TweenInfo.new(0.2), { Color = Color3.fromRGB(51, 65, 85) }):Play()
+    TweenService:Create(KeyInputStroke, TweenInfo.new(0.2), { Color = Color3.fromRGB(38, 52, 78) }):Play()
 end)
 
 -- Verify Button
 local VerifyBtn = Instance.new("TextButton")
-VerifyBtn.Size = UDim2.new(1, 0, 0, 52)
-VerifyBtn.Position = UDim2.new(0, 0, 0, 82)
+VerifyBtn.Size = UDim2.new(1, 0, 0, 50)
+VerifyBtn.Position = UDim2.new(0, 0, 0, 78)
 VerifyBtn.Text = "VERIFY KEY"
 VerifyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-VerifyBtn.TextSize = 15
+VerifyBtn.TextSize = 14
 VerifyBtn.Font = Enum.Font.GothamBold
-VerifyBtn.BackgroundColor3 = Config.GlowColor
+VerifyBtn.BackgroundColor3 = Config.AccentGlow
 VerifyBtn.AutoButtonColor = false
 VerifyBtn.Parent = Content
 
@@ -319,14 +412,13 @@ VerifyGradient.Parent = VerifyBtn
 
 -- Action Row (Get Key & Discord Buttons)
 local GetKeyBtn = Instance.new("TextButton")
-GetKeyBtn.Size = UDim2.new(0.48, 0, 0, 48)
-GetKeyBtn.Position = UDim2.new(0, 0, 0, 148)
-GetKeyBtn.Text = "  GET KEY"
+GetKeyBtn.Size = UDim2.new(0.48, 0, 0, 46)
+GetKeyBtn.Position = UDim2.new(0, 0, 0, 142)
+GetKeyBtn.Text = "   GET KEY"
 GetKeyBtn.TextColor3 = Config.Accent
 GetKeyBtn.TextSize = 13
 GetKeyBtn.Font = Enum.Font.GothamBold
-GetKeyBtn.BackgroundColor3 = Color3.fromRGB(24, 34, 56)
-GetKeyBtn.BackgroundTransparency = 0.3
+GetKeyBtn.BackgroundColor3 = Config.CardBgDark
 GetKeyBtn.AutoButtonColor = false
 GetKeyBtn.Parent = Content
 
@@ -335,20 +427,19 @@ GetKeyCorner.CornerRadius = UDim.new(0, 12)
 GetKeyCorner.Parent = GetKeyBtn
 
 local GetKeyStroke = Instance.new("UIStroke")
-GetKeyStroke.Color = Color3.fromRGB(51, 65, 85)
+GetKeyStroke.Color = Color3.fromRGB(38, 52, 78)
 GetKeyStroke.Thickness = 1
 GetKeyStroke.Parent = GetKeyBtn
 
 -- Discord Button With Discord Asset Icon
 local DiscordBtn = Instance.new("TextButton")
-DiscordBtn.Size = UDim2.new(0.48, 0, 0, 48)
-DiscordBtn.Position = UDim2.new(0.52, 0, 0, 148)
+DiscordBtn.Size = UDim2.new(0.48, 0, 0, 46)
+DiscordBtn.Position = UDim2.new(0.52, 0, 0, 142)
 DiscordBtn.Text = "      DISCORD"
 DiscordBtn.TextColor3 = Color3.fromRGB(129, 140, 248)
 DiscordBtn.TextSize = 13
 DiscordBtn.Font = Enum.Font.GothamBold
-DiscordBtn.BackgroundColor3 = Color3.fromRGB(24, 34, 56)
-DiscordBtn.BackgroundTransparency = 0.3
+DiscordBtn.BackgroundColor3 = Config.CardBgDark
 DiscordBtn.AutoButtonColor = false
 DiscordBtn.Parent = Content
 
@@ -357,29 +448,18 @@ DiscordCorner.CornerRadius = UDim.new(0, 12)
 DiscordCorner.Parent = DiscordBtn
 
 local DiscordStroke = Instance.new("UIStroke")
-DiscordStroke.Color = Color3.fromRGB(51, 65, 85)
+DiscordStroke.Color = Color3.fromRGB(38, 52, 78)
 DiscordStroke.Thickness = 1
 DiscordStroke.Parent = DiscordBtn
 
 local DiscordIcon = Instance.new("ImageLabel")
-DiscordIcon.Size = UDim2.fromOffset(22, 22)
-DiscordIcon.Position = UDim2.new(0, 14, 0.5, -11)
+DiscordIcon.Size = UDim2.fromOffset(20, 20)
+DiscordIcon.Position = UDim2.new(0, 14, 0.5, -10)
 DiscordIcon.Image = Config.DiscordLogoId
 DiscordIcon.BackgroundTransparency = 1
 DiscordIcon.Parent = DiscordBtn
 
--- Status Text Indicator
-local Status = Instance.new("TextLabel")
-Status.Size = UDim2.new(1, 0, 0, 30)
-Status.Position = UDim2.new(0, 0, 0, 212)
-Status.Text = "● Ready to verify"
-Status.TextColor3 = Config.TextSub
-Status.TextSize = 13
-Status.Font = Enum.Font.GothamMedium
-Status.BackgroundTransparency = 1
-Status.Parent = Content
-
--- Footer
+-- Footer Text
 local Footer = Instance.new("TextLabel")
 Footer.AnchorPoint = Vector2.new(0.5, 1)
 Footer.Position = UDim2.new(0.5, 0, 1, -12)
@@ -392,20 +472,20 @@ Footer.BackgroundTransparency = 1
 Footer.Parent = Main
 
 --==================================================
--- HOVER & CLICK ANIMATIONS
+-- BUTTON HOVER & CLICK FEEDBACK
 --==================================================
-local function AddHoverEffect(btn, hoverColor)
+local function RegisterHover(btn)
     btn.MouseEnter:Connect(function()
-        TweenService:Create(btn, TweenInfo.new(0.2), { Size = btn.Size + UDim2.fromOffset(0, 2) }):Play()
+        TweenService:Create(btn, TweenInfo.new(0.18), { Size = btn.Size + UDim2.fromOffset(0, 2) }):Play()
     end)
     btn.MouseLeave:Connect(function()
-        TweenService:Create(btn, TweenInfo.new(0.2), { Size = btn.Size - UDim2.fromOffset(0, 2) }):Play()
+        TweenService:Create(btn, TweenInfo.new(0.18), { Size = btn.Size - UDim2.fromOffset(0, 2) }):Play()
     end)
 end
 
-AddHoverEffect(VerifyBtn)
-AddHoverEffect(GetKeyBtn)
-AddHoverEffect(DiscordBtn)
+RegisterHover(VerifyBtn)
+RegisterHover(GetKeyBtn)
+RegisterHover(DiscordBtn)
 
 --==================================================
 -- VERIFICATION API LOGIC
@@ -417,14 +497,12 @@ local function ProcessVerify()
     local key = KeyBox.Text:match("^%s*(.-)%s*$")
     
     if key == "" then
-        Status.Text = "● Please enter your key!"
-        Status.TextColor3 = Color3.fromRGB(239, 68, 68)
+        ShowToast("Please enter your key!", Config.Error)
         return
     end
 
     isVerifying = true
-    Status.Text = "● Validating with Gateway..."
-    Status.TextColor3 = Config.Accent
+    ShowToast("Connecting to verification server...", Config.Accent)
     VerifyBtn.Text = "VERIFYING..."
 
     task.spawn(function()
@@ -438,8 +516,7 @@ local function ProcessVerify()
             local decodeOk, data = pcall(function() return HttpService:JSONDecode(response.Body) end)
             if decodeOk and data and data.success then
                 SaveKeyLocally(key)
-                Status.Text = "● " .. (data.message or "Access Granted!")
-                Status.TextColor3 = Color3.fromRGB(74, 222, 128)
+                ShowToast(data.message or "Access Granted!", Config.Success)
                 VerifyBtn.Text = "VERIFIED ✓"
                 
                 task.wait(1)
@@ -447,18 +524,17 @@ local function ProcessVerify()
                     Size = UDim2.new(0, 0, 0, 0),
                     BackgroundTransparency = 1
                 }):Play()
+                TweenService:Create(ShadowFrame, TweenInfo.new(0.4), { Size = UDim2.new(0, 0, 0, 0), BackgroundTransparency = 1 }):Play()
                 task.wait(0.4)
                 ScreenGui:Destroy()
                 getgenv().YANZ_KEY_VERIFIED = true
             else
-                Status.Text = "● " .. ((data and data.message) or "Invalid Key!")
-                Status.TextColor3 = Color3.fromRGB(239, 68, 68)
+                ShowToast((data and data.message) or "Invalid Key!", Config.Error)
                 VerifyBtn.Text = "VERIFY KEY"
                 isVerifying = false
             end
         else
-            Status.Text = "● Gateway Connection Failed!"
-            Status.TextColor3 = Color3.fromRGB(239, 68, 68)
+            ShowToast("Server connection failed!", Config.Error)
             VerifyBtn.Text = "VERIFY KEY"
             isVerifying = false
         end
@@ -469,44 +545,45 @@ VerifyBtn.MouseButton1Click:Connect(ProcessVerify)
 
 GetKeyBtn.MouseButton1Click:Connect(function()
     if set_clipboard then set_clipboard(Config.KeyLink) end
-    Status.Text = "● Key Gateway link copied!"
-    Status.TextColor3 = Config.Accent
+    ShowToast("Key Link copied to clipboard!", Config.Accent)
 end)
 
 DiscordBtn.MouseButton1Click:Connect(function()
     if set_clipboard then set_clipboard(Config.DiscordInvite) end
-    Status.Text = "● Discord invite copied!"
-    Status.TextColor3 = Color3.fromRGB(129, 140, 248)
+    ShowToast("Discord invite copied to clipboard!", Color3.fromRGB(129, 140, 248))
 end)
 
 --==================================================
--- DRAGGING MECHANISM (MOUSE & TOUCH)
+-- SMOOTH PHYSICS DRAGGING SYSTEM
 --==================================================
-local Dragging = false
-local DragStart, StartPosition
+local dragging, dragInput, dragStart, startPos, shadowStartPos
+
+local function updateDrag(input)
+    local delta = input.Position - dragStart
+    local newPos = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    
+    TweenService:Create(Main, TweenInfo.new(0.08, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), { Position = newPos }):Play()
+    TweenService:Create(ShadowFrame, TweenInfo.new(0.08, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), { Position = newPos }):Play()
+end
 
 BannerFrame.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        Dragging = true
-        DragStart = input.Position
-        StartPosition = Main.Position
+        dragging = true
+        dragStart = input.Position
+        startPos = Main.Position
+        shadowStartPos = ShadowFrame.Position
 
         input.Changed:Connect(function()
             if input.UserInputState == Enum.UserInputState.End then
-                Dragging = false
+                dragging = false
             end
         end)
     end
 end)
 
 UserInputService.InputChanged:Connect(function(input)
-    if not Dragging then return end
-    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-        local delta = input.Position - DragStart
-        Main.Position = UDim2.new(
-            StartPosition.X.Scale, StartPosition.X.Offset + delta.X,
-            StartPosition.Y.Scale, StartPosition.Y.Offset + delta.Y
-        )
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        updateDrag(input)
     end
 end)
 
@@ -516,7 +593,7 @@ end)
 local savedKey = LoadSavedKey()
 if savedKey ~= "" then
     KeyBox.Text = savedKey
-    Status.Text = "● Saved Key found. Auto-verifying..."
+    ShowToast("Saved key found. Auto-verifying...", Config.Accent)
     task.spawn(function()
         task.wait(0.5)
         ProcessVerify()

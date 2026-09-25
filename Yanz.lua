@@ -17,7 +17,6 @@ else
 end
 
 repeat task.wait(1) until getgenv().YANZ_KEY_VERIFIED == true
-
 local Games = {
     [11800876530] = { Name = "+1 Blocks Every Second", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/+1BlocksEverySecond.lua" },
     [537413528] = { Name = "Build A Boat", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/BuildABoat.lua" },

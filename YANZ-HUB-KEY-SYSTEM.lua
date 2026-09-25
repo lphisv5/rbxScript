@@ -1,6 +1,3 @@
---// YANZ HUB | ULTRA HIGH-END KEY GATEWAY SYSTEM
---// Discord: https://discord.gg/mNGeUVcjKB
-
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
@@ -9,21 +6,18 @@ local CoreGui = game:GetService("CoreGui")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
--- Executor Compatibility Layer
 local http_request = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request
 local set_clipboard = setclipboard or toclipboard or set_clipboard or (syn and syn.write_clipboard)
 
---==================================================
--- CONFIGURATION & ASSETS
---==================================================
+
 local Config = {
     Title = "YANZ HUB",
     Subtitle = "SECURITY KEY GATEWAY",
     DiscordText = "YANZ | Community 2026",
     
     DiscordInvite = "https://discord.gg/mNGeUVcjKB",
-    KeyLink = "https://generators-uuid.vercel.app/",
-    VerifyURL = "https://generators-uuid.vercel.app/api/verify",
+    KeyLink = "https://system-key.vercel.app/",
+    VerifyURL = "https://system-key.vercel.app/api/verify",
     
     OwnerUserId = 3758341002,
     SaveFileName = "YANZ_HUB_KEY.txt",

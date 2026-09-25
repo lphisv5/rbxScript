@@ -8,7 +8,7 @@ local MarketplaceService = game:GetService("MarketplaceService")
 local LocalPlayer = Players.LocalPlayer
 
 local IS_DELTA = true
-local LOGO_ID = "rbxassetid://134012859226921"
+local LOGO_ID = "rbxassetid://76833458893034"
 
 local Games = {
     [11800876530] = { Name = "+1 Blocks Every Second", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/main/+1BlocksEverySecond.lua" },

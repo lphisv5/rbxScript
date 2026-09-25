@@ -1,6 +1,3 @@
---// YANZ HUB | ADVANCED HIGH-END KEY SYSTEM
---// Discord: https://discord.gg/mNGeUVcjKB
-
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
@@ -25,7 +22,7 @@ local Config = {
     SaveFileName = "YANZ_HUB_KEY.txt",
     
     -- Custom Asset IDs
-    BannerId = "rbxassetid://101564018918973",
+    BannerId = "rbxassetid://113423880648914",
     LogoId = "rbxassetid://134012859226921",
     DiscordLogoId = "rbxassetid://89581158158297",
     

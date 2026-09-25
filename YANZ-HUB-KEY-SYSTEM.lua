@@ -13,12 +13,11 @@ local set_clipboard = setclipboard or toclipboard or set_clipboard or (syn and s
 
 local Config = {
     Title = "YANZ HUB",
-    Subtitle = "KEY SYSTEM GATEWAY",
-    DiscordText = "YANZ HUB | Security System 2026",
+    Subtitle = "KEY SYSTEM",
+    DiscordText = "YANZ | Community",
     
     DiscordInvite = "https://discord.gg/mNGeUVcjKB",
-    KeyLink = "https://generators-uuid.vercel.app/", -- ลิงก์หน้าเว็บคีย์
-    
+    KeyLink = "https://generators-uuid.vercel.app/",
     VerifyURL = "https://generators-uuid.vercel.app/api/verify",
     
     OwnerUserId = 3758341002,
@@ -31,7 +30,7 @@ local Config = {
 
 -- Owner Whitelist Bypass
 if LocalPlayer.UserId == Config.OwnerUserId then
-    print("[YANZ HUB] Owner Whitelist detected. Bypassing Key System...")
+    print("Owner Whitelist detected. Bypassing Key System...")
     getgenv().YANZ_KEY_VERIFIED = true
     return
 end
@@ -113,7 +112,7 @@ KeyBoxCorner.Parent = KeyBox
 local VerifyBtn = Instance.new("TextButton")
 VerifyBtn.Size = UDim2.new(0.85, 0, 0, 50)
 VerifyBtn.Position = UDim2.new(0.075, 0, 0, 190)
-VerifyBtn.Text = "VERIFY KEY"
+VerifyBtn.Text = "VERIFY"
 VerifyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 VerifyBtn.BackgroundColor3 = Config.GlowColor
 VerifyBtn.Font = Enum.Font.GothamBold

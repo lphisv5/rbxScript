@@ -29,6 +29,7 @@ local Games = {
     [124216119978534] = { Name = "Ride A Pet", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/refs/heads/main/RideAPet.lua" },
     [109203247742910] = { Name = "Swing For Eggs", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/refs/heads/main/SwingForEggs.lua" },
     [76377501906469] = { Name = "Steal an Anime Egg!", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/refs/heads/main/StealanAnimeEgg.lua" },
+    [99183404085821] = { Name = "Steal Fish Eggs", Url = "https://raw.githubusercontent.com/lphisv5/rbxScript/refs/heads/main/StealFishEggs.lua" },
 }
 
 local function CreateTween(instance, info, properties)

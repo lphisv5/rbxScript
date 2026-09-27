@@ -9,21 +9,13 @@ local LocalPlayer = Players.LocalPlayer
 local http_request = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request
 local set_clipboard = setclipboard or toclipboard or set_clipboard or (syn and syn.write_clipboard)
 
-local function Base64Encode(data)
-    local b = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-    return ((data:gsub('.', function(x) 
-        local r, b_val = '', x:byte()
-        for i = 8, 1, -1 do r = r .. (b_val % 2^i >= 2^(i-1) and '1' or '0') end
-        return r
-    end) .. '0000'):gsub('%d%d%d%d%d%d', function(x)
-        if (#x < 6) then return '' end
-        local c = 0
-        for i = 1, 6 do c = c + (x:sub(i, i) == '1' and 2^(6-i) or 0) end
-        return b:sub(c + 1, c + 1)
-    end) .. ({ '', '==', '=' })[#data % 3 + 1])
+local function HexEncode(data)
+    return (data:gsub('.', function(c)
+        return string.format('%02x', string.byte(c))
+    end))
 end
 
-local userToken = Base64Encode("YANZ_USER_" .. tostring(LocalPlayer.UserId))
+local userToken = HexEncode("YANZ_" .. tostring(LocalPlayer.UserId))
 
 local Config = {
     Title = "YANZ HUB",
@@ -73,7 +65,7 @@ local function LoadSavedKey()
 end
 
 if LocalPlayer.UserId == Config.OwnerUserId then
-    print("[YANZ HUB] Owner Whitelist detected.")
+    print("[YANZ HUB] Owner Whitelist detected. Bypassing Key System...")
     getgenv().YANZ_KEY_VERIFIED = true
     return
 end

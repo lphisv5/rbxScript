@@ -9,7 +9,6 @@ local LocalPlayer = Players.LocalPlayer
 local http_request = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request
 local set_clipboard = setclipboard or toclipboard or set_clipboard or (syn and syn.write_clipboard)
 
-
 local Config = {
     Title = "YANZ HUB",
     Subtitle = "SECURITY KEY GATEWAY",
@@ -22,12 +21,10 @@ local Config = {
     OwnerUserId = 3758341002,
     SaveFileName = "YANZ_HUB_KEY.txt",
     
-    -- Custom Asset IDs
     BannerId = "rbxassetid://113423880648914",
     LogoId = "rbxassetid://76833458893034",
     DiscordLogoId = "rbxassetid://89581158158297",
     
-    -- Next-Gen Color Palette
     Accent = Color3.fromRGB(56, 189, 248),
     AccentGlow = Color3.fromRGB(2, 132, 199),
     Background = Color3.fromRGB(11, 15, 25),
@@ -39,14 +36,6 @@ local Config = {
     Error = Color3.fromRGB(248, 113, 113)
 }
 
--- Owner Whitelist Bypass
-if LocalPlayer.UserId == Config.OwnerUserId then
-    print("[YANZ HUB] Owner Whitelist detected (" .. tostring(LocalPlayer.UserId) .. "). Bypassing Key System...")
-    getgenv().YANZ_KEY_VERIFIED = true
-    return
-end
-
--- Save / Load Functions
 local function SaveKeyLocally(key)
     if writefile then pcall(function() writefile(Config.SaveFileName, key) end) end
 end
@@ -59,9 +48,34 @@ local function LoadSavedKey()
     return ""
 end
 
---==================================================
--- GUI INITIALIZATION
---==================================================
+if LocalPlayer.UserId == Config.OwnerUserId then
+    print("[YANZ HUB] Owner Whitelist detected (" .. tostring(LocalPlayer.UserId) .. "). Bypassing Key System...")
+    getgenv().YANZ_KEY_VERIFIED = true
+    return
+end
+
+local savedKey = LoadSavedKey()
+local testKey = (savedKey ~= "") and savedKey or "PRECHECK_KEY"
+
+local checkSuccess, checkResponse = pcall(function()
+    return http_request({
+        Url = Config.VerifyURL .. "?key=" .. HttpService:UrlEncode(testKey) .. "&userId=" .. tostring(LocalPlayer.UserId),
+        Method = "GET"
+    })
+end)
+
+if checkSuccess and checkResponse and checkResponse.StatusCode == 200 then
+    local decodeOk, data = pcall(function() return HttpService:JSONDecode(checkResponse.Body) end)
+    if decodeOk and data and data.success then
+        if savedKey == "" and testKey ~= "PRECHECK_KEY" then
+            SaveKeyLocally(testKey)
+        end
+        print("[YANZ HUB] Server Verified: " .. tostring(data.message or "Access Granted!"))
+        getgenv().YANZ_KEY_VERIFIED = true
+        return
+    end
+end
+
 local Existing = CoreGui:FindFirstChild("YANZ_ULTRA_KEY_SYSTEM")
 if Existing then Existing:Destroy() end
 
@@ -72,7 +86,6 @@ ScreenGui.IgnoreGuiInset = true
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = CoreGui
 
--- Ambient Outer Glow Shadow
 local ShadowFrame = Instance.new("Frame")
 ShadowFrame.Name = "AmbientShadow"
 ShadowFrame.Size = UDim2.new(0, 456, 0, 536)
@@ -87,7 +100,6 @@ local ShadowCorner = Instance.new("UICorner")
 ShadowCorner.CornerRadius = UDim.new(0, 28)
 ShadowCorner.Parent = ShadowFrame
 
--- Main Container Frame
 local Main = Instance.new("Frame")
 Main.Name = "MainFrame"
 Main.Size = UDim2.new(0, 440, 0, 520)
@@ -103,7 +115,6 @@ local MainCorner = Instance.new("UICorner")
 MainCorner.CornerRadius = UDim.new(0, 24)
 MainCorner.Parent = Main
 
--- Animated Neon Cyber Border
 local MainStroke = Instance.new("UIStroke")
 MainStroke.Color = Color3.new(1, 1, 1)
 MainStroke.Thickness = 1.8
@@ -119,12 +130,11 @@ StrokeGradient.Color = ColorSequence.new{
 StrokeGradient.Parent = MainStroke
 
 RunService.RenderStepped:Connect(function(dt)
-    StrokeGradient.Rotation = (StrokeGradient.Rotation + (dt * 50)) % 360
+    if dt and dt > 0 then
+        StrokeGradient.Rotation = (StrokeGradient.Rotation + (dt * 50)) % 360
+    end
 end)
 
---==================================================
--- AUTO RESPONSIVE SCALING (UIScale Engine)
---==================================================
 local Camera = workspace.CurrentCamera
 local UIScale = Instance.new("UIScale")
 UIScale.Parent = Main
@@ -143,13 +153,8 @@ local function UpdateAutoScaling()
 end
 
 UpdateAutoScaling()
-if Camera then
-    Camera:GetPropertyChangedSignal("ViewportSize"):Connect(UpdateAutoScaling)
-end
+if Camera then Camera:GetPropertyChangedSignal("ViewportSize"):Connect(UpdateAutoScaling) end
 
---==================================================
--- TOAST NOTIFICATION SYSTEM
---==================================================
 local Toast = Instance.new("Frame")
 Toast.Name = "ToastNotification"
 Toast.Size = UDim2.new(1, -48, 0, 38)
@@ -200,9 +205,6 @@ local function ShowToast(text, color)
     end
 end
 
---==================================================
--- HEADER & BANNER SECTION
---==================================================
 local BannerFrame = Instance.new("Frame")
 BannerFrame.Name = "BannerFrame"
 BannerFrame.Size = UDim2.new(1, 0, 0, 140)
@@ -232,7 +234,6 @@ OverlayGradient.Color = ColorSequence.new({
 OverlayGradient.Rotation = 90
 OverlayGradient.Parent = BannerOverlay
 
--- Close Button
 local CloseBtn = Instance.new("TextButton")
 CloseBtn.Size = UDim2.fromOffset(30, 30)
 CloseBtn.Position = UDim2.new(1, -40, 0, 12)
@@ -260,7 +261,6 @@ CloseBtn.MouseButton1Click:Connect(function()
     ScreenGui:Destroy()
 end)
 
--- Main Logo Icon
 local LogoImage = Instance.new("ImageLabel")
 LogoImage.Name = "LogoImage"
 LogoImage.Size = UDim2.fromOffset(62, 62)
@@ -279,12 +279,10 @@ LogoStroke.Color = Config.Accent
 LogoStroke.Thickness = 2
 LogoStroke.Parent = LogoImage
 
--- Logo Float Animation
 TweenService:Create(LogoImage, TweenInfo.new(2.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
     Position = UDim2.new(0, 24, 0, 98)
 }):Play()
 
--- Title Texts & Status Dot
 local Title = Instance.new("TextLabel")
 Title.Position = UDim2.new(0, 98, 0, 108)
 Title.Size = UDim2.new(1, -150, 0, 26)
@@ -309,7 +307,6 @@ Subtitle.BackgroundTransparency = 1
 Subtitle.ZIndex = 5
 Subtitle.Parent = Main
 
--- API Online Indicator Dot
 local StatusDot = Instance.new("Frame")
 StatusDot.Size = UDim2.fromOffset(8, 8)
 StatusDot.Position = UDim2.new(1, -32, 0, 117)
@@ -326,9 +323,6 @@ TweenService:Create(StatusDot, TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.Easi
     BackgroundTransparency = 0.6
 }):Play()
 
---==================================================
--- CONTENT BODY (INPUT & BUTTONS)
---==================================================
 local Content = Instance.new("Frame")
 Content.Name = "ContentFrame"
 Content.Size = UDim2.new(1, -48, 0, 310)
@@ -336,7 +330,6 @@ Content.Position = UDim2.new(0, 24, 0, 180)
 Content.BackgroundTransparency = 1
 Content.Parent = Main
 
--- Key Input Container
 local KeyInputBox = Instance.new("Frame")
 KeyInputBox.Size = UDim2.new(1, 0, 0, 54)
 KeyInputBox.Position = UDim2.new(0, 0, 0, 10)
@@ -381,7 +374,6 @@ KeyBox.FocusLost:Connect(function()
     TweenService:Create(KeyInputStroke, TweenInfo.new(0.2), { Color = Color3.fromRGB(38, 52, 78) }):Play()
 end)
 
--- Verify Button
 local VerifyBtn = Instance.new("TextButton")
 VerifyBtn.Size = UDim2.new(1, 0, 0, 50)
 VerifyBtn.Position = UDim2.new(0, 0, 0, 78)
@@ -404,7 +396,6 @@ VerifyGradient.Color = ColorSequence.new({
 })
 VerifyGradient.Parent = VerifyBtn
 
--- Action Row (Get Key & Discord Buttons)
 local GetKeyBtn = Instance.new("TextButton")
 GetKeyBtn.Size = UDim2.new(0.48, 0, 0, 46)
 GetKeyBtn.Position = UDim2.new(0, 0, 0, 142)
@@ -425,7 +416,6 @@ GetKeyStroke.Color = Color3.fromRGB(38, 52, 78)
 GetKeyStroke.Thickness = 1
 GetKeyStroke.Parent = GetKeyBtn
 
--- Discord Button With Discord Asset Icon
 local DiscordBtn = Instance.new("TextButton")
 DiscordBtn.Size = UDim2.new(0.48, 0, 0, 46)
 DiscordBtn.Position = UDim2.new(0.52, 0, 0, 142)
@@ -453,7 +443,6 @@ DiscordIcon.Image = Config.DiscordLogoId
 DiscordIcon.BackgroundTransparency = 1
 DiscordIcon.Parent = DiscordBtn
 
--- Footer Text
 local Footer = Instance.new("TextLabel")
 Footer.AnchorPoint = Vector2.new(0.5, 1)
 Footer.Position = UDim2.new(0.5, 0, 1, -12)
@@ -465,9 +454,6 @@ Footer.Font = Enum.Font.GothamMedium
 Footer.BackgroundTransparency = 1
 Footer.Parent = Main
 
---==================================================
--- BUTTON HOVER & CLICK FEEDBACK
---==================================================
 local function RegisterHover(btn)
     btn.MouseEnter:Connect(function()
         TweenService:Create(btn, TweenInfo.new(0.18), { Size = btn.Size + UDim2.fromOffset(0, 2) }):Play()
@@ -481,20 +467,12 @@ RegisterHover(VerifyBtn)
 RegisterHover(GetKeyBtn)
 RegisterHover(DiscordBtn)
 
---==================================================
--- VERIFICATION API LOGIC
---==================================================
 local isVerifying = false
 
 local function ProcessVerify()
     if isVerifying then return end
     local key = KeyBox.Text:match("^%s*(.-)%s*$")
     
-    if key == "" then
-        ShowToast("Please enter your key!", Config.Error)
-        return
-    end
-
     isVerifying = true
     ShowToast("Connecting to verification server...", Config.Accent)
     VerifyBtn.Text = "VERIFYING..."
@@ -509,11 +487,11 @@ local function ProcessVerify()
         if success and response and response.StatusCode == 200 then
             local decodeOk, data = pcall(function() return HttpService:JSONDecode(response.Body) end)
             if decodeOk and data and data.success then
-                SaveKeyLocally(key)
+                if key ~= "" then SaveKeyLocally(key) end
                 ShowToast(data.message or "Access Granted!", Config.Success)
                 VerifyBtn.Text = "VERIFIED ✓"
                 
-                task.wait(1)
+                task.wait(0.8)
                 TweenService:Create(Main, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
                     Size = UDim2.new(0, 0, 0, 0),
                     BackgroundTransparency = 1
@@ -547,9 +525,6 @@ DiscordBtn.MouseButton1Click:Connect(function()
     ShowToast("Discord invite copied to clipboard!", Color3.fromRGB(129, 140, 248))
 end)
 
---==================================================
--- SMOOTH PHYSICS DRAGGING SYSTEM
---==================================================
 local dragging, dragInput, dragStart, startPos, shadowStartPos
 
 local function updateDrag(input)
@@ -580,16 +555,3 @@ UserInputService.InputChanged:Connect(function(input)
         updateDrag(input)
     end
 end)
-
---==================================================
--- AUTO LOGIN CHECK ON STARTUP
---==================================================
-local savedKey = LoadSavedKey()
-if savedKey ~= "" then
-    KeyBox.Text = savedKey
-    ShowToast("Saved key found. Auto-verifying...", Config.Accent)
-    task.spawn(function()
-        task.wait(0.5)
-        ProcessVerify()
-    end)
-end

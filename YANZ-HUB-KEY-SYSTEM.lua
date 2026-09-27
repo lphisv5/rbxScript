@@ -36,6 +36,12 @@ local Config = {
     Error = Color3.fromRGB(248, 113, 113)
 }
 
+if LocalPlayer.UserId == Config.OwnerUserId then
+    print("[YANZ HUB] Owner Whitelist")
+    getgenv().YANZ_KEY_VERIFIED = true
+    return
+end
+
 local function SaveKeyLocally(key)
     if writefile then pcall(function() writefile(Config.SaveFileName, key) end) end
 end
@@ -46,34 +52,6 @@ local function LoadSavedKey()
         if success and content and #content > 0 then return content end
     end
     return ""
-end
-
-if LocalPlayer.UserId == Config.OwnerUserId then
-    print("[YANZ HUB] Owner Whitelist detected (" .. tostring(LocalPlayer.UserId) .. "). Bypassing Key System...")
-    getgenv().YANZ_KEY_VERIFIED = true
-    return
-end
-
-local savedKey = LoadSavedKey()
-local testKey = (savedKey ~= "") and savedKey or "PRECHECK_KEY"
-
-local checkSuccess, checkResponse = pcall(function()
-    return http_request({
-        Url = Config.VerifyURL .. "?key=" .. HttpService:UrlEncode(testKey) .. "&userId=" .. tostring(LocalPlayer.UserId),
-        Method = "GET"
-    })
-end)
-
-if checkSuccess and checkResponse and checkResponse.StatusCode == 200 then
-    local decodeOk, data = pcall(function() return HttpService:JSONDecode(checkResponse.Body) end)
-    if decodeOk and data and data.success then
-        if savedKey == "" and testKey ~= "PRECHECK_KEY" then
-            SaveKeyLocally(testKey)
-        end
-        print("[YANZ HUB] Server Verified: " .. tostring(data.message or "Access Granted!"))
-        getgenv().YANZ_KEY_VERIFIED = true
-        return
-    end
 end
 
 local Existing = CoreGui:FindFirstChild("YANZ_ULTRA_KEY_SYSTEM")
@@ -88,7 +66,7 @@ ScreenGui.Parent = CoreGui
 
 local ShadowFrame = Instance.new("Frame")
 ShadowFrame.Name = "AmbientShadow"
-ShadowFrame.Size = UDim2.new(0, 456, 0, 536)
+ShadowFrame.Size = UDim2.new(0, 456, 0, 496)
 ShadowFrame.Position = UDim2.fromScale(0.5, 0.5)
 ShadowFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 ShadowFrame.BackgroundColor3 = Config.AccentGlow
@@ -102,7 +80,7 @@ ShadowCorner.Parent = ShadowFrame
 
 local Main = Instance.new("Frame")
 Main.Name = "MainFrame"
-Main.Size = UDim2.new(0, 440, 0, 520)
+Main.Size = UDim2.new(0, 440, 0, 460)
 Main.Position = UDim2.fromScale(0.5, 0.5)
 Main.AnchorPoint = Vector2.new(0.5, 0.5)
 Main.BackgroundColor3 = Config.CardBg
@@ -130,9 +108,7 @@ StrokeGradient.Color = ColorSequence.new{
 StrokeGradient.Parent = MainStroke
 
 RunService.RenderStepped:Connect(function(dt)
-    if dt and dt > 0 then
-        StrokeGradient.Rotation = (StrokeGradient.Rotation + (dt * 50)) % 360
-    end
+    StrokeGradient.Rotation = (StrokeGradient.Rotation + (dt * 50)) % 360
 end)
 
 local Camera = workspace.CurrentCamera
@@ -146,14 +122,16 @@ local function UpdateAutoScaling()
     if not Camera then return end
     local viewportSize = Camera.ViewportSize
     local scaleX = viewportSize.X / 480
-    local scaleY = viewportSize.Y / 560
+    local scaleY = viewportSize.Y / 520
     local finalScale = math.clamp(math.min(scaleX, scaleY), 0.55, 1.15)
     UIScale.Scale = finalScale
     ShadowScale.Scale = finalScale
 end
 
 UpdateAutoScaling()
-if Camera then Camera:GetPropertyChangedSignal("ViewportSize"):Connect(UpdateAutoScaling) end
+if Camera then
+    Camera:GetPropertyChangedSignal("ViewportSize"):Connect(UpdateAutoScaling)
+end
 
 local Toast = Instance.new("Frame")
 Toast.Name = "ToastNotification"
@@ -207,7 +185,7 @@ end
 
 local BannerFrame = Instance.new("Frame")
 BannerFrame.Name = "BannerFrame"
-BannerFrame.Size = UDim2.new(1, 0, 0, 140)
+BannerFrame.Size = UDim2.new(1, 0, 0, 130)
 BannerFrame.BackgroundColor3 = Color3.fromRGB(18, 24, 38)
 BannerFrame.BorderSizePixel = 0
 BannerFrame.ClipsDescendants = true
@@ -261,17 +239,24 @@ CloseBtn.MouseButton1Click:Connect(function()
     ScreenGui:Destroy()
 end)
 
+local HeaderFrame = Instance.new("Frame")
+HeaderFrame.Name = "HeaderFrame"
+HeaderFrame.Size = UDim2.new(1, -48, 0, 60)
+HeaderFrame.Position = UDim2.new(0, 24, 0, 145)
+HeaderFrame.BackgroundTransparency = 1
+HeaderFrame.Parent = Main
+
 local LogoImage = Instance.new("ImageLabel")
 LogoImage.Name = "LogoImage"
-LogoImage.Size = UDim2.fromOffset(62, 62)
-LogoImage.Position = UDim2.new(0, 24, 0, 105)
+LogoImage.Size = UDim2.fromOffset(56, 56)
+LogoImage.Position = UDim2.new(0, 0, 0, 0)
 LogoImage.Image = Config.LogoId
 LogoImage.BackgroundTransparency = 1
 LogoImage.ZIndex = 5
-LogoImage.Parent = Main
+LogoImage.Parent = HeaderFrame
 
 local LogoCorner = Instance.new("UICorner")
-LogoCorner.CornerRadius = UDim.new(0, 16)
+LogoCorner.CornerRadius = UDim.new(0, 14)
 LogoCorner.Parent = LogoImage
 
 local LogoStroke = Instance.new("UIStroke")
@@ -279,25 +264,21 @@ LogoStroke.Color = Config.Accent
 LogoStroke.Thickness = 2
 LogoStroke.Parent = LogoImage
 
-TweenService:Create(LogoImage, TweenInfo.new(2.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
-    Position = UDim2.new(0, 24, 0, 98)
-}):Play()
-
 local Title = Instance.new("TextLabel")
-Title.Position = UDim2.new(0, 98, 0, 108)
-Title.Size = UDim2.new(1, -150, 0, 26)
+Title.Position = UDim2.new(0, 70, 0, 4)
+Title.Size = UDim2.new(1, -70, 0, 24)
 Title.Text = Config.Title
 Title.TextColor3 = Config.TextMain
-Title.TextSize = 21
+Title.TextSize = 20
 Title.Font = Enum.Font.GothamBold
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.BackgroundTransparency = 1
 Title.ZIndex = 5
-Title.Parent = Main
+Title.Parent = HeaderFrame
 
 local Subtitle = Instance.new("TextLabel")
-Subtitle.Position = UDim2.new(0, 98, 0, 132)
-Subtitle.Size = UDim2.new(1, -150, 0, 18)
+Subtitle.Position = UDim2.new(0, 70, 0, 26)
+Subtitle.Size = UDim2.new(1, -70, 0, 18)
 Subtitle.Text = Config.Subtitle
 Subtitle.TextColor3 = Config.Accent
 Subtitle.TextSize = 11
@@ -305,15 +286,15 @@ Subtitle.Font = Enum.Font.GothamBold
 Subtitle.TextXAlignment = Enum.TextXAlignment.Left
 Subtitle.BackgroundTransparency = 1
 Subtitle.ZIndex = 5
-Subtitle.Parent = Main
+Subtitle.Parent = HeaderFrame
 
 local StatusDot = Instance.new("Frame")
 StatusDot.Size = UDim2.fromOffset(8, 8)
-StatusDot.Position = UDim2.new(1, -32, 0, 117)
+StatusDot.Position = UDim2.new(1, -8, 0, 12)
 StatusDot.BackgroundColor3 = Config.Success
 StatusDot.BorderSizePixel = 0
 StatusDot.ZIndex = 5
-StatusDot.Parent = Main
+StatusDot.Parent = HeaderFrame
 
 local DotCorner = Instance.new("UICorner")
 DotCorner.CornerRadius = UDim.new(1, 0)
@@ -325,14 +306,19 @@ TweenService:Create(StatusDot, TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.Easi
 
 local Content = Instance.new("Frame")
 Content.Name = "ContentFrame"
-Content.Size = UDim2.new(1, -48, 0, 310)
-Content.Position = UDim2.new(0, 24, 0, 180)
+Content.Size = UDim2.new(1, -48, 0, 188)
+Content.Position = UDim2.new(0, 24, 0, 215)
 Content.BackgroundTransparency = 1
 Content.Parent = Main
 
+local ContentLayout = Instance.new("UIListLayout")
+ContentLayout.Padding = UDim.new(0, 16)
+ContentLayout.SortOrder = Enum.SortOrder.LayoutOrder
+ContentLayout.Parent = Content
+
 local KeyInputBox = Instance.new("Frame")
-KeyInputBox.Size = UDim2.new(1, 0, 0, 54)
-KeyInputBox.Position = UDim2.new(0, 0, 0, 10)
+KeyInputBox.Size = UDim2.new(1, 0, 0, 56)
+KeyInputBox.LayoutOrder = 1
 KeyInputBox.BackgroundColor3 = Config.CardBgDark
 KeyInputBox.Parent = Content
 
@@ -346,7 +332,7 @@ KeyInputStroke.Thickness = 1.5
 KeyInputStroke.Parent = KeyInputBox
 
 local KeyIconLabel = Instance.new("TextLabel")
-KeyIconLabel.Size = UDim2.fromOffset(40, 54)
+KeyIconLabel.Size = UDim2.fromOffset(40, 56)
 KeyIconLabel.Position = UDim2.new(0, 8, 0, 0)
 KeyIconLabel.Text = "🔑"
 KeyIconLabel.TextSize = 16
@@ -375,8 +361,8 @@ KeyBox.FocusLost:Connect(function()
 end)
 
 local VerifyBtn = Instance.new("TextButton")
-VerifyBtn.Size = UDim2.new(1, 0, 0, 50)
-VerifyBtn.Position = UDim2.new(0, 0, 0, 78)
+VerifyBtn.Size = UDim2.new(1, 0, 0, 52)
+VerifyBtn.LayoutOrder = 2
 VerifyBtn.Text = "VERIFY KEY"
 VerifyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 VerifyBtn.TextSize = 14
@@ -396,16 +382,28 @@ VerifyGradient.Color = ColorSequence.new({
 })
 VerifyGradient.Parent = VerifyBtn
 
+local ActionRow = Instance.new("Frame")
+ActionRow.Size = UDim2.new(1, 0, 0, 48)
+ActionRow.LayoutOrder = 3
+ActionRow.BackgroundTransparency = 1
+ActionRow.Parent = Content
+
+local ActionLayout = Instance.new("UIListLayout")
+ActionLayout.FillDirection = Enum.FillDirection.Horizontal
+ActionLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+ActionLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+ActionLayout.Padding = UDim.new(0, 12)
+ActionLayout.Parent = ActionRow
+
 local GetKeyBtn = Instance.new("TextButton")
-GetKeyBtn.Size = UDim2.new(0.48, 0, 0, 46)
-GetKeyBtn.Position = UDim2.new(0, 0, 0, 142)
+GetKeyBtn.Size = UDim2.new(0.5, -6, 1, 0)
 GetKeyBtn.Text = "   GET KEY"
 GetKeyBtn.TextColor3 = Config.Accent
 GetKeyBtn.TextSize = 13
 GetKeyBtn.Font = Enum.Font.GothamBold
 GetKeyBtn.BackgroundColor3 = Config.CardBgDark
 GetKeyBtn.AutoButtonColor = false
-GetKeyBtn.Parent = Content
+GetKeyBtn.Parent = ActionRow
 
 local GetKeyCorner = Instance.new("UICorner")
 GetKeyCorner.CornerRadius = UDim.new(0, 12)
@@ -417,15 +415,14 @@ GetKeyStroke.Thickness = 1
 GetKeyStroke.Parent = GetKeyBtn
 
 local DiscordBtn = Instance.new("TextButton")
-DiscordBtn.Size = UDim2.new(0.48, 0, 0, 46)
-DiscordBtn.Position = UDim2.new(0.52, 0, 0, 142)
+DiscordBtn.Size = UDim2.new(0.5, -6, 1, 0)
 DiscordBtn.Text = "      DISCORD"
 DiscordBtn.TextColor3 = Color3.fromRGB(129, 140, 248)
 DiscordBtn.TextSize = 13
 DiscordBtn.Font = Enum.Font.GothamBold
 DiscordBtn.BackgroundColor3 = Config.CardBgDark
 DiscordBtn.AutoButtonColor = false
-DiscordBtn.Parent = Content
+DiscordBtn.Parent = ActionRow
 
 local DiscordCorner = Instance.new("UICorner")
 DiscordCorner.CornerRadius = UDim.new(0, 12)
@@ -445,7 +442,7 @@ DiscordIcon.Parent = DiscordBtn
 
 local Footer = Instance.new("TextLabel")
 Footer.AnchorPoint = Vector2.new(0.5, 1)
-Footer.Position = UDim2.new(0.5, 0, 1, -12)
+Footer.Position = UDim2.new(0.5, 0, 1, -15)
 Footer.Size = UDim2.new(1, 0, 0, 20)
 Footer.Text = Config.DiscordText
 Footer.TextColor3 = Color3.fromRGB(100, 116, 139)
@@ -473,6 +470,11 @@ local function ProcessVerify()
     if isVerifying then return end
     local key = KeyBox.Text:match("^%s*(.-)%s*$")
     
+    if key == "" then
+        ShowToast("Please enter your key!", Config.Error)
+        return
+    end
+
     isVerifying = true
     ShowToast("Connecting to verification server...", Config.Accent)
     VerifyBtn.Text = "VERIFYING..."
@@ -487,11 +489,11 @@ local function ProcessVerify()
         if success and response and response.StatusCode == 200 then
             local decodeOk, data = pcall(function() return HttpService:JSONDecode(response.Body) end)
             if decodeOk and data and data.success then
-                if key ~= "" then SaveKeyLocally(key) end
+                SaveKeyLocally(key)
                 ShowToast(data.message or "Access Granted!", Config.Success)
                 VerifyBtn.Text = "VERIFIED ✓"
                 
-                task.wait(0.8)
+                task.wait(1)
                 TweenService:Create(Main, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
                     Size = UDim2.new(0, 0, 0, 0),
                     BackgroundTransparency = 1
@@ -555,3 +557,13 @@ UserInputService.InputChanged:Connect(function(input)
         updateDrag(input)
     end
 end)
+
+local savedKey = LoadSavedKey()
+if savedKey ~= "" then
+    KeyBox.Text = savedKey
+    ShowToast("Saved key found. Auto-verifying...", Config.Accent)
+    task.spawn(function()
+        task.wait(0.5)
+        ProcessVerify()
+    end)
+end

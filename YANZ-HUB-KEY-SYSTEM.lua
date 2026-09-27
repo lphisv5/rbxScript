@@ -9,13 +9,29 @@ local LocalPlayer = Players.LocalPlayer
 local http_request = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request
 local set_clipboard = setclipboard or toclipboard or set_clipboard or (syn and syn.write_clipboard)
 
+local function Base64Encode(data)
+    local b = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+    return ((data:gsub('.', function(x) 
+        local r, b_val = '', x:byte()
+        for i = 8, 1, -1 do r = r .. (b_val % 2^i >= 2^(i-1) and '1' or '0') end
+        return r
+    end) .. '0000'):gsub('%d%d%d%d%d%d', function(x)
+        if (#x < 6) then return '' end
+        local c = 0
+        for i = 1, 6 do c = c + (x:sub(i, i) == '1' and 2^(6-i) or 0) end
+        return b:sub(c + 1, c + 1)
+    end) .. ({ '', '==', '=' })[#data % 3 + 1])
+end
+
+local userToken = Base64Encode("YANZ_USER_" .. tostring(LocalPlayer.UserId))
+
 local Config = {
     Title = "YANZ HUB",
     Subtitle = "SECURITY KEY GATEWAY",
     DiscordText = "YANZ | Community 2026",
     
     DiscordInvite = "https://discord.gg/mNGeUVcjKB",
-    KeyLink = "https://system-key.vercel.app/",
+    KeyLink = "https://system-key.vercel.app/?token=" .. userToken,
     VerifyURL = "https://system-key.vercel.app/api/verify",
     
     OwnerUserId = 3758341002,
@@ -36,22 +52,51 @@ local Config = {
     Error = Color3.fromRGB(248, 113, 113)
 }
 
+local function SaveKeyLocally(key)
+    if writefile then
+        pcall(function()
+            writefile(Config.SaveFileName, tostring(key):match("^%s*(.-)%s*$"))
+        end)
+    end
+end
+
+local function LoadSavedKey()
+    local saved = ""
+    if readfile and isfile then
+        pcall(function()
+            if isfile(Config.SaveFileName) then
+                saved = readfile(Config.SaveFileName)
+            end
+        end)
+    end
+    return saved and saved:match("^%s*(.-)%s*$") or ""
+end
+
 if LocalPlayer.UserId == Config.OwnerUserId then
-    print("[YANZ HUB] Owner Whitelist")
+    print("[YANZ HUB] Owner Whitelist detected.")
     getgenv().YANZ_KEY_VERIFIED = true
     return
 end
 
-local function SaveKeyLocally(key)
-    if writefile then pcall(function() writefile(Config.SaveFileName, key) end) end
-end
+local savedKey = LoadSavedKey()
+if savedKey ~= "" then
+    local checkSuccess, checkResponse = pcall(function()
+        return http_request({
+            Url = Config.VerifyURL .. "?key=" .. HttpService:UrlEncode(savedKey) .. "&userId=" .. tostring(LocalPlayer.UserId),
+            Method = "GET"
+        })
+    end)
 
-local function LoadSavedKey()
-    if readfile and isfile and isfile(Config.SaveFileName) then
-        local success, content = pcall(function() return readfile(Config.SaveFileName) end)
-        if success and content and #content > 0 then return content end
+    if checkSuccess and checkResponse then
+        local rawBody = checkResponse.Body or checkResponse.body or ""
+        local decodeOk, data = pcall(function() return HttpService:JSONDecode(rawBody) end)
+        
+        if decodeOk and data and data.success then
+            print("[YANZ HUB] Valid User-Bound Key Found! Bypassing Key UI...")
+            getgenv().YANZ_KEY_VERIFIED = true
+            return
+        end
     end
-    return ""
 end
 
 local Existing = CoreGui:FindFirstChild("YANZ_ULTRA_KEY_SYSTEM")
@@ -108,7 +153,9 @@ StrokeGradient.Color = ColorSequence.new{
 StrokeGradient.Parent = MainStroke
 
 RunService.RenderStepped:Connect(function(dt)
-    StrokeGradient.Rotation = (StrokeGradient.Rotation + (dt * 50)) % 360
+    if dt and dt > 0 then
+        StrokeGradient.Rotation = (StrokeGradient.Rotation + (dt * 50)) % 360
+    end
 end)
 
 local Camera = workspace.CurrentCamera
@@ -129,9 +176,7 @@ local function UpdateAutoScaling()
 end
 
 UpdateAutoScaling()
-if Camera then
-    Camera:GetPropertyChangedSignal("ViewportSize"):Connect(UpdateAutoScaling)
-end
+if Camera then Camera:GetPropertyChangedSignal("ViewportSize"):Connect(UpdateAutoScaling) end
 
 local Toast = Instance.new("Frame")
 Toast.Name = "ToastNotification"
@@ -344,7 +389,7 @@ KeyBox.Size = UDim2.new(1, -56, 1, 0)
 KeyBox.Position = UDim2.new(0, 44, 0, 0)
 KeyBox.PlaceholderText = "Paste your 24-Hour Key here..."
 KeyBox.PlaceholderColor3 = Color3.fromRGB(100, 116, 139)
-KeyBox.Text = ""
+KeyBox.Text = savedKey
 KeyBox.TextColor3 = Config.TextMain
 KeyBox.TextSize = 13
 KeyBox.Font = Enum.Font.GothamMedium
@@ -486,24 +531,32 @@ local function ProcessVerify()
             return http_request({ Url = url, Method = "GET" })
         end)
 
-        if success and response and response.StatusCode == 200 then
-            local decodeOk, data = pcall(function() return HttpService:JSONDecode(response.Body) end)
-            if decodeOk and data and data.success then
-                SaveKeyLocally(key)
-                ShowToast(data.message or "Access Granted!", Config.Success)
-                VerifyBtn.Text = "VERIFIED ✓"
-                
-                task.wait(1)
-                TweenService:Create(Main, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
-                    Size = UDim2.new(0, 0, 0, 0),
-                    BackgroundTransparency = 1
-                }):Play()
-                TweenService:Create(ShadowFrame, TweenInfo.new(0.4), { Size = UDim2.new(0, 0, 0, 0), BackgroundTransparency = 1 }):Play()
-                task.wait(0.4)
-                ScreenGui:Destroy()
-                getgenv().YANZ_KEY_VERIFIED = true
+        if success and response then
+            local rawBody = response.Body or response.body or ""
+            local decodeOk, data = pcall(function() return HttpService:JSONDecode(rawBody) end)
+            
+            if decodeOk and data then
+                if data.success then
+                    SaveKeyLocally(key)
+                    ShowToast(data.message or "Access Granted!", Config.Success)
+                    VerifyBtn.Text = "VERIFIED ✓"
+                    
+                    task.wait(0.8)
+                    TweenService:Create(Main, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+                        Size = UDim2.new(0, 0, 0, 0),
+                        BackgroundTransparency = 1
+                    }):Play()
+                    TweenService:Create(ShadowFrame, TweenInfo.new(0.4), { Size = UDim2.new(0, 0, 0, 0), BackgroundTransparency = 1 }):Play()
+                    task.wait(0.4)
+                    ScreenGui:Destroy()
+                    getgenv().YANZ_KEY_VERIFIED = true
+                else
+                    ShowToast(data.message or "Invalid Key!", Config.Error)
+                    VerifyBtn.Text = "VERIFY KEY"
+                    isVerifying = false
+                end
             else
-                ShowToast((data and data.message) or "Invalid Key!", Config.Error)
+                ShowToast("Server Error: Invalid Response", Config.Error)
                 VerifyBtn.Text = "VERIFY KEY"
                 isVerifying = false
             end
@@ -527,7 +580,7 @@ DiscordBtn.MouseButton1Click:Connect(function()
     ShowToast("Discord invite copied to clipboard!", Color3.fromRGB(129, 140, 248))
 end)
 
-local dragging, dragInput, dragStart, startPos, shadowStartPos
+local dragging, dragInput, dragStart, startPos
 
 local function updateDrag(input)
     local delta = input.Position - dragStart
@@ -542,7 +595,6 @@ BannerFrame.InputBegan:Connect(function(input)
         dragging = true
         dragStart = input.Position
         startPos = Main.Position
-        shadowStartPos = ShadowFrame.Position
 
         input.Changed:Connect(function()
             if input.UserInputState == Enum.UserInputState.End then
@@ -557,13 +609,3 @@ UserInputService.InputChanged:Connect(function(input)
         updateDrag(input)
     end
 end)
-
-local savedKey = LoadSavedKey()
-if savedKey ~= "" then
-    KeyBox.Text = savedKey
-    ShowToast("Saved key found. Auto-verifying...", Config.Accent)
-    task.spawn(function()
-        task.wait(0.5)
-        ProcessVerify()
-    end)
-end

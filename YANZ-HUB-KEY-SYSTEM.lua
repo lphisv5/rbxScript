@@ -19,8 +19,8 @@ local userToken = HexEncode("YANZ_" .. tostring(LocalPlayer.UserId))
 
 local Config = {
     Title = "YANZ HUB",
-    Subtitle = "SECURITY KEY GATEWAY",
-    DiscordText = "YANZ | Community 2026",
+    Subtitle = "Key System",
+    DiscordText = "YANZ | Community TH",
     
     DiscordInvite = "https://discord.gg/mNGeUVcjKB",
     KeyLink = "https://system-key.vercel.app/?token=" .. userToken,
@@ -65,7 +65,7 @@ local function LoadSavedKey()
 end
 
 if LocalPlayer.UserId == Config.OwnerUserId then
-    print("[YANZ HUB] Owner Whitelist detected. Bypassing Key System...")
+    print("Owner Whitelist")
     getgenv().YANZ_KEY_VERIFIED = true
     return
 end
@@ -84,7 +84,6 @@ if savedKey ~= "" then
         local decodeOk, data = pcall(function() return HttpService:JSONDecode(rawBody) end)
         
         if decodeOk and data and data.success then
-            print("[YANZ HUB] Valid User-Bound Key Found! Bypassing Key UI...")
             getgenv().YANZ_KEY_VERIFIED = true
             return
         end
@@ -254,7 +253,7 @@ CloseBtn.Size = UDim2.fromOffset(30, 30)
 CloseBtn.Position = UDim2.new(1, -40, 0, 12)
 CloseBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 CloseBtn.BackgroundTransparency = 0.88
-CloseBtn.Text = "✕"
+CloseBtn.Text = "X"
 CloseBtn.TextColor3 = Config.TextMain
 CloseBtn.TextSize = 14
 CloseBtn.Font = Enum.Font.GothamBold
@@ -400,7 +399,7 @@ end)
 local VerifyBtn = Instance.new("TextButton")
 VerifyBtn.Size = UDim2.new(1, 0, 0, 52)
 VerifyBtn.LayoutOrder = 2
-VerifyBtn.Text = "VERIFY KEY"
+VerifyBtn.Text = "VERIFY"
 VerifyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 VerifyBtn.TextSize = 14
 VerifyBtn.Font = Enum.Font.GothamBold

@@ -25,7 +25,7 @@ local function GenerateUltraUserToken(userId)
         end
         table.insert(hexTable, string.format("%02X", bxorVal))
     end
-    return "YTK_SECURE_AUTH_V3_" .. table.concat(hexTable)
+    return "YANZSECURE_" .. table.concat(hexTable)
 end
 
 local userToken = GenerateUltraUserToken(LocalPlayer.UserId)

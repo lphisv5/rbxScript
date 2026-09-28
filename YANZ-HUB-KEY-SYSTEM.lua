@@ -17,7 +17,12 @@ local function GenerateUltraUserToken(userId)
     for i = 1, #raw do
         local byte = string.byte(raw, i)
         local kByte = string.byte(key, ((i - 1) % #key) + 1)
-        local bxorVal = (bit32 and bit32.bxor(byte, kByte)) or (byte ~ kByte)
+        local bxorVal = 0
+        if bit32 and bit32.bxor then
+            bxorVal = bit32.bxor(byte, kByte)
+        else
+            bxorVal = byte
+        end
         table.insert(hexTable, string.format("%02X", bxorVal))
     end
     return "YTK_SECURE_AUTH_V3_" .. table.concat(hexTable)
@@ -29,18 +34,14 @@ local Config = {
     Title = "YANZ HUB",
     Subtitle = "SECURITY KEY GATEWAY",
     DiscordText = "YANZ | Community 2026",
-    
     DiscordInvite = "https://discord.gg/mNGeUVcjKB",
     KeyLink = "https://system-key.vercel.app/checkpoint-1?token=" .. userToken,
     VerifyURL = "https://system-key.vercel.app/api/verify",
-    
     OwnerUserId = 3758341002,
     SaveFileName = "YANZ_HUB_KEY.txt",
-    
     BannerId = "rbxassetid://113423880648914",
     LogoId = "rbxassetid://76833458893034",
     DiscordLogoId = "rbxassetid://89581158158297",
-    
     Accent = Color3.fromRGB(56, 189, 248),
     AccentGlow = Color3.fromRGB(2, 132, 199),
     Background = Color3.fromRGB(11, 15, 25),
@@ -142,11 +143,11 @@ MainStroke.Transparency = 0.1
 MainStroke.Parent = Main
 
 local StrokeGradient = Instance.new("UIGradient")
-StrokeGradient.Color = ColorSequence.new{
+StrokeGradient.Color = ColorSequence.new({
     ColorSequenceKeypoint.new(0, Config.Accent),
     ColorSequenceKeypoint.new(0.5, Color3.fromRGB(168, 85, 247)),
     ColorSequenceKeypoint.new(1, Config.Accent)
-}
+})
 StrokeGradient.Parent = MainStroke
 
 RunService.RenderStepped:Connect(function(dt)
@@ -259,7 +260,7 @@ CloseBtn.Size = UDim2.fromOffset(30, 30)
 CloseBtn.Position = UDim2.new(1, -40, 0, 12)
 CloseBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 CloseBtn.BackgroundTransparency = 0.88
-CloseBtn.Text = "✕"
+CloseBtn.Text = "X"
 CloseBtn.TextColor3 = Config.TextMain
 CloseBtn.TextSize = 14
 CloseBtn.Font = Enum.Font.GothamBold
@@ -384,7 +385,7 @@ KeyIconLabel.Parent = KeyInputBox
 local KeyBox = Instance.new("TextBox")
 KeyBox.Size = UDim2.new(1, -56, 1, 0)
 KeyBox.Position = UDim2.new(0, 44, 0, 0)
-KeyBox.PlaceholderText = "Paste your 10-Block Key here..."
+KeyBox.PlaceholderText = "Paste your Key here..."
 KeyBox.PlaceholderColor3 = Color3.fromRGB(100, 116, 139)
 KeyBox.Text = savedKey
 KeyBox.TextColor3 = Config.TextMain

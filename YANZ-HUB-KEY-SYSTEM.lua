@@ -34,14 +34,18 @@ local Config = {
     Title = "YANZ HUB",
     Subtitle = "SECURITY KEY GATEWAY",
     DiscordText = "YANZ | Community 2026",
+    
     DiscordInvite = "https://discord.gg/mNGeUVcjKB",
-    KeyLink = "https://system-key.vercel.app/checkpoint-1?token=" .. userToken,
+    KeyLink = "https://system-key.vercel.app/Checkpoint-1?token=" .. userToken,
     VerifyURL = "https://system-key.vercel.app/api/verify",
+    
     OwnerUserId = 3758341002,
     SaveFileName = "YANZ_HUB_KEY.txt",
+    
     BannerId = "rbxassetid://113423880648914",
     LogoId = "rbxassetid://76833458893034",
     DiscordLogoId = "rbxassetid://89581158158297",
+    
     Accent = Color3.fromRGB(56, 189, 248),
     AccentGlow = Color3.fromRGB(2, 132, 199),
     Background = Color3.fromRGB(11, 15, 25),

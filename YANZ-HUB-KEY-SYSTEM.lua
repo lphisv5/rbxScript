@@ -9,21 +9,29 @@ local LocalPlayer = Players.LocalPlayer
 local http_request = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request
 local set_clipboard = setclipboard or toclipboard or set_clipboard or (syn and syn.write_clipboard)
 
-local function HexEncode(data)
-    return (data:gsub('.', function(c)
-        return string.format('%02x', string.byte(c))
-    end))
+local function GenerateUltraUserToken(userId)
+    local randNonce = tostring(math.random(10000000, 99999999))
+    local raw = "YANZ_V3_AUTH_PAYLOAD_IDENTITY:" .. tostring(userId) .. ":" .. tostring(os.time()) .. ":" .. randNonce
+    local key = "YANZ_ENTERPRISE_SALT_2026_SECURE_32B_CRYPT_SECRET"
+    local hexTable = {}
+    for i = 1, #raw do
+        local byte = string.byte(raw, i)
+        local kByte = string.byte(key, ((i - 1) % #key) + 1)
+        local bxorVal = (bit32 and bit32.bxor(byte, kByte)) or (byte ~ kByte)
+        table.insert(hexTable, string.format("%02X", bxorVal))
+    end
+    return "YTK_SECURE_AUTH_V3_" .. table.concat(hexTable)
 end
 
-local userToken = HexEncode("YANZ_" .. tostring(LocalPlayer.UserId))
+local userToken = GenerateUltraUserToken(LocalPlayer.UserId)
 
 local Config = {
     Title = "YANZ HUB",
-    Subtitle = "Key System",
-    DiscordText = "YANZ | Community TH",
+    Subtitle = "SECURITY KEY GATEWAY",
+    DiscordText = "YANZ | Community 2026",
     
     DiscordInvite = "https://discord.gg/mNGeUVcjKB",
-    KeyLink = "https://system-key.vercel.app/?token=" .. userToken,
+    KeyLink = "https://system-key.vercel.app/checkpoint-1?token=" .. userToken,
     VerifyURL = "https://system-key.vercel.app/api/verify",
     
     OwnerUserId = 3758341002,
@@ -71,22 +79,20 @@ if LocalPlayer.UserId == Config.OwnerUserId then
 end
 
 local savedKey = LoadSavedKey()
-if savedKey ~= "" then
-    local checkSuccess, checkResponse = pcall(function()
-        return http_request({
-            Url = Config.VerifyURL .. "?key=" .. HttpService:UrlEncode(savedKey) .. "&userId=" .. tostring(LocalPlayer.UserId),
-            Method = "GET"
-        })
-    end)
+local checkSuccess, checkResponse = pcall(function()
+    return http_request({
+        Url = Config.VerifyURL .. "?key=" .. HttpService:UrlEncode(savedKey) .. "&userId=" .. tostring(LocalPlayer.UserId),
+        Method = "GET"
+    })
+end)
 
-    if checkSuccess and checkResponse then
-        local rawBody = checkResponse.Body or checkResponse.body or ""
-        local decodeOk, data = pcall(function() return HttpService:JSONDecode(rawBody) end)
-        
-        if decodeOk and data and data.success then
-            getgenv().YANZ_KEY_VERIFIED = true
-            return
-        end
+if checkSuccess and checkResponse then
+    local rawBody = checkResponse.Body or checkResponse.body or ""
+    local decodeOk, data = pcall(function() return HttpService:JSONDecode(rawBody) end)
+    
+    if decodeOk and data and data.success then
+        getgenv().YANZ_KEY_VERIFIED = true
+        return
     end
 end
 
@@ -253,7 +259,7 @@ CloseBtn.Size = UDim2.fromOffset(30, 30)
 CloseBtn.Position = UDim2.new(1, -40, 0, 12)
 CloseBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 CloseBtn.BackgroundTransparency = 0.88
-CloseBtn.Text = "X"
+CloseBtn.Text = "✕"
 CloseBtn.TextColor3 = Config.TextMain
 CloseBtn.TextSize = 14
 CloseBtn.Font = Enum.Font.GothamBold
@@ -378,11 +384,11 @@ KeyIconLabel.Parent = KeyInputBox
 local KeyBox = Instance.new("TextBox")
 KeyBox.Size = UDim2.new(1, -56, 1, 0)
 KeyBox.Position = UDim2.new(0, 44, 0, 0)
-KeyBox.PlaceholderText = "Paste your 24-Hour Key here..."
+KeyBox.PlaceholderText = "Paste your 10-Block Key here..."
 KeyBox.PlaceholderColor3 = Color3.fromRGB(100, 116, 139)
 KeyBox.Text = savedKey
 KeyBox.TextColor3 = Config.TextMain
-KeyBox.TextSize = 13
+KeyBox.TextSize = 12
 KeyBox.Font = Enum.Font.GothamMedium
 KeyBox.TextXAlignment = Enum.TextXAlignment.Left
 KeyBox.ClearTextOnFocus = false
@@ -399,7 +405,7 @@ end)
 local VerifyBtn = Instance.new("TextButton")
 VerifyBtn.Size = UDim2.new(1, 0, 0, 52)
 VerifyBtn.LayoutOrder = 2
-VerifyBtn.Text = "VERIFY"
+VerifyBtn.Text = "VERIFY KEY"
 VerifyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 VerifyBtn.TextSize = 14
 VerifyBtn.Font = Enum.Font.GothamBold
@@ -571,14 +577,16 @@ DiscordBtn.MouseButton1Click:Connect(function()
     ShowToast("Discord invite copied to clipboard!", Color3.fromRGB(129, 140, 248))
 end)
 
-local dragging, dragInput, dragStart, startPos
+local dragging = false
+local dragStart = Vector3.new()
+local startPos = UDim2.new()
 
 local function updateDrag(input)
     local delta = input.Position - dragStart
     local newPos = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
     
-    TweenService:Create(Main, TweenInfo.new(0.08, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), { Position = newPos }):Play()
-    TweenService:Create(ShadowFrame, TweenInfo.new(0.08, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), { Position = newPos }):Play()
+    TweenService:Create(Main, TweenInfo.new(0.05, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), { Position = newPos }):Play()
+    TweenService:Create(ShadowFrame, TweenInfo.new(0.05, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), { Position = newPos }):Play()
 end
 
 BannerFrame.InputBegan:Connect(function(input)

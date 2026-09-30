@@ -1,5 +1,3 @@
--- [[ YANZ HUB GUI - NEXT-GEN HYPER-REALISTIC FLAME & 3D CRATE ENGINE ]] --
-
 local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
@@ -19,14 +17,12 @@ else
     ParentGui = Players.LocalPlayer:WaitForChild("PlayerGui")
 end
 
--- 1. Clear existing UI instances safely
 pcall(function()
     if ParentGui:FindFirstChild("YanzHubUI") then
         ParentGui.YanzHubUI:Destroy()
     end
 end)
 
--- 2. Create Main ScreenGui
 local YanzHubUI = Instance.new("ScreenGui")
 YanzHubUI.Name = "YanzHubUI"
 YanzHubUI.Parent = ParentGui

@@ -1,4 +1,5 @@
--- [[ YANZ HUB GUI - NEXT-GEN HYPER-REALISTIC FLAME & 3D CRATE ENGINE (v4 E-HOLD) ]] --
+-- [[ YANZ HUB GUI - NEXT-GEN HYPER-REALISTIC FLAME & 3D CRATE ENGINE (v5) ]] --
+-- [ CANCEL TOKEN + SAFE E-HOLD + SMART PICKUP DETECTION ]
 
 local CoreGui              = game:GetService("CoreGui")
 local TweenService         = game:GetService("TweenService")
@@ -57,14 +58,17 @@ local SAFE_ZONE_CFRAME   = CFrame.new(2435.00024, -12.4999971, -940,
                                       0, 1, 0,
                                       0, 0, 1)
 
+-- ★ Global state
 local activeNoclipConnection = nil
 local loopChecked = false
 local toggled     = false
 
--- E-Hold states
-local E_HOLD_ACTIVE = false            -- E ถูกกดค้างอยู่หรือไม่
-local E_HOLD_CONNECTION = nil          -- watchdog connection
-local E_HOLD_SAFETY_TIME = 0           -- เวลาเผื่อปล่อย E กรณีค้าง
+-- ★ Cancel token — ตัวนับการยกเลิก
+local cancelToken = 0
+
+-- ★ E-Hold state
+local eHoldActive      = false
+local eSafetyDeadline  = 0
 
 -- -------------------------------------------------------------
 -- [ MAIN FRAME ]
@@ -513,7 +517,7 @@ DiscordButton.MouseButton1Click:Connect(function()
 end)
 
 -- -------------------------------------------------------------
--- [ CLOSE BUTTON ]
+-- [ CLOSE BUTTON — ★ หยุดบอทก่อนปิด ]
 -- -------------------------------------------------------------
 local CloseButton = Instance.new("TextButton")
 CloseButton.Name             = "CloseButton"
@@ -561,9 +565,7 @@ CloseButton.MouseLeave:Connect(function()
     }):Play()
 end)
 
-CloseButton.MouseButton1Click:Connect(function()
-    ToggleGuiState()
-end)
+-- ★ CloseButton handler จะถูก set หลังจาก StopEverything ถูก define (ด้านล่าง)
 
 -- -------------------------------------------------------------
 -- [ EGG CARD ]
@@ -1335,17 +1337,29 @@ end)
 local isStealingInProcess = false
 local currentTriggerSource = nil
 
--- ★ CANCEL TOKEN — ทุกครั้งที่ปิด จะ +1 ทำให้ loop เก่ายกเลิกทันที
-local cancelToken = 0
+local function GetSafeZoneCFrame()
+    local result = SAFE_ZONE_CFRAME
+    pcall(function()
+        local spawnLocation = workspace:FindFirstChild("SpawnLocation")
+        if spawnLocation and spawnLocation:IsA("BasePart") then
+            result = spawnLocation.CFrame
+        end
+    end)
+    return result
+end
 
--- ★ กด E ค้าง / ปล่อย (pcall ครอบทั้งหมด)
-local eHoldActive = false
-local eSafetyDeadline = 0
+local function GetCharacterHRP()
+    local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    return char:FindFirstChild("HumanoidRootPart") or char:WaitForChild("HumanoidRootPart", 2)
+end
 
+-- ═════════════════════════════════════════════════════════════
+-- [ E-HOLD CORE ]
+-- ═════════════════════════════════════════════════════════════
 local function StartHoldE()
     if eHoldActive then return end
     eHoldActive = true
-    eSafetyDeadline = os.clock() + 8   -- safety 8 วิ
+    eSafetyDeadline = os.clock() + 8
     pcall(function()
         VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
     end)
@@ -1360,7 +1374,7 @@ local function StopHoldE()
     end)
 end
 
--- ★ ปุ่มหยุดทุกอย่าง — ใช้ทุกที่ (X, toggle off, loop off)
+-- ★ หยุดทุกอย่างทันที (เรียกได้จากทุกที่)
 local function StopEverything(reason)
     cancelToken = cancelToken + 1
     StopHoldE()
@@ -1375,22 +1389,19 @@ local function StopEverything(reason)
     end
 end
 
--- ★ ตรวจว่าถือหีบผ่านตัวละคร (ตรวจแบบกระชับ)
+-- ★ ตรวจว่าถือหีบผ่านตัวละคร
 local function IsCarryingCrate(crateModel)
     local char = LocalPlayer.Character
     if not char or not char.Parent then return false end
 
-    -- 1) หีบไม่อยู่ใน workspace แล้ว
     if crateModel and (not crateModel.Parent or not crateModel:IsDescendantOf(workspace)) then
         return true
     end
 
-    -- 2) หีบอยู่ในตัวละคร
     if crateModel and crateModel:IsDescendantOf(char) then
         return true
     end
 
-    -- 3) Weld/Joint ระหว่าง char กับหีบ
     if crateModel then
         for _, item in ipairs(char:GetDescendants()) do
             if item:IsA("Weld") or item:IsA("WeldConstraint") or item:IsA("Motor6D") then
@@ -1408,7 +1419,6 @@ local function IsCarryingCrate(crateModel)
         end
     end
 
-    -- 4) Tool/Model ใน char ที่ชื่อตรงกับหีบ
     for _, item in ipairs(char:GetChildren()) do
         if item:IsA("Tool") or item:IsA("Model") then
             if crateModel and item.Name == crateModel.Name then return true end
@@ -1418,7 +1428,6 @@ local function IsCarryingCrate(crateModel)
         end
     end
 
-    -- 5) Backpack
     local backpack = LocalPlayer:FindFirstChild("Backpack")
     if backpack and crateModel then
         for _, tool in ipairs(backpack:GetChildren()) do
@@ -1429,7 +1438,7 @@ local function IsCarryingCrate(crateModel)
     return false
 end
 
--- ★ ตรวจว่ากำลังถูกไล่ (เฉพาะ attribute ที่ชัดเจนเท่านั้น)
+-- ★ ตรวจว่ากำลังถูกไล่ (เฉพาะ attribute ที่ชัดเจน)
 local function IsBeingChased()
     local char = LocalPlayer.Character
     local attrList = {
@@ -1441,7 +1450,6 @@ local function IsBeingChased()
         if char and char:GetAttribute(name) == true then return true end
     end
 
-    -- ScreenGui ที่ชื่อสื่อถึงการถูกไล่ (เข้มงวดกว่าเดิม)
     local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
     if playerGui then
         for _, gui in ipairs(playerGui:GetChildren()) do
@@ -1458,8 +1466,8 @@ local function IsBeingChased()
     return false
 end
 
--- ★ ตรวจว่าหีบ "ตาม" ตัวละครอยู่หรือไม่ (positional tracking)
-local function IsCrateFollowing(crateModel, minFollowTime)
+-- ★ ตรวจว่าหีบ "ตาม" ตัวละคร (positional)
+local function IsCrateFollowing(crateModel)
     if not crateModel or not crateModel.Parent then return false end
 
     local char = LocalPlayer.Character
@@ -1467,57 +1475,50 @@ local function IsCrateFollowing(crateModel, minFollowTime)
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return false end
 
-    local function getPos(model)
-        if model:IsA("Model") then
-            local ok, cf = pcall(function() return model:GetBoundingBox() end)
-            if ok then return cf.Position end
-        elseif model:IsA("BasePart") then
-            return model.Position
-        end
-        return nil
+    local cratePos
+    if crateModel:IsA("Model") then
+        local ok, cf = pcall(function() return crateModel:GetBoundingBox() end)
+        if ok then cratePos = cf.Position end
+    elseif crateModel:IsA("BasePart") then
+        cratePos = crateModel.Position
     end
 
-    local cratePos = getPos(crateModel)
     if not cratePos then return false end
 
     local dist = (cratePos - hrp.Position).Magnitude
-    return dist < 12  -- อยู่ในระยะถือ
+    return dist < 12
 end
 
 -- ═════════════════════════════════════════════════════════════
--- [ SAFE PICKUP — E-HOLD + Position Track + Auto Abort ]
+-- [ SAFE PICKUP — E-HOLD + TOKEN ]
 -- ═════════════════════════════════════════════════════════════
 local function AttemptStealInteraction(crateModel, myToken)
     if not crateModel then return false end
 
     local prompt = crateModel:FindFirstChildOfClass("ProximityPrompt", true)
+
     local ok, result = pcall(function()
-        -- Fire prompt ครั้งแรก
         if prompt then
             pcall(function() fireproximityprompt(prompt) end)
         end
 
-        -- ★ เริ่มกด E ค้าง
         StartHoldE()
 
-        local startTime       = os.clock()
-        local TIMEOUT         = 4.5
-        local followStart     = nil
-        local lastPromptTime  = 0
+        local startTime      = os.clock()
+        local TIMEOUT        = 4.5
+        local followStart    = nil
+        local lastPromptTime = 0
 
         while (os.clock() - startTime) < TIMEOUT do
-            -- ★ ตรวจ token ทุกเฟรม — ถ้า token เปลี่ยน = ถูกยกเลิก
             if myToken ~= cancelToken then
                 return false
             end
 
-            -- ★ ตรวจ state ถือหีบ
             if IsCarryingCrate(crateModel) then
                 task.wait(0.1)
                 return true
             end
 
-            -- ★ ตรวจ "หีบตามตัว" ต่อเนื่อง 0.4 วิ
             if IsCrateFollowing(crateModel) then
                 followStart = followStart or os.clock()
                 if (os.clock() - followStart) > 0.4 then
@@ -1527,13 +1528,11 @@ local function AttemptStealInteraction(crateModel, myToken)
                 followStart = nil
             end
 
-            -- ★ ตรวจ "ถูกไล่" (แต่ต้องผ่านไปแล้ว 0.6 วิ)
             if (os.clock() - startTime) > 0.6 and IsBeingChased() then
                 task.wait(0.15)
                 return true
             end
 
-            -- ★ Fire prompt ทุก 300ms เป็น backup
             if prompt and (os.clock() - lastPromptTime) > 0.3 then
                 lastPromptTime = os.clock()
                 pcall(function() fireproximityprompt(prompt) end)
@@ -1545,17 +1544,14 @@ local function AttemptStealInteraction(crateModel, myToken)
         return IsCarryingCrate(crateModel)
     end)
 
-    -- ★ ปล่อย E เสมอ ไม่ว่า pcall สำเร็จหรือไม่
     StopHoldE()
 
-    if not ok then
-        return false
-    end
+    if not ok then return false end
     return result
 end
 
 -- ═════════════════════════════════════════════════════════════
--- [ FLY — ตรวจ token ทุกเฟรม ]
+-- [ FLY — token check ]
 -- ═════════════════════════════════════════════════════════════
 local function FlyToTarget(targetCF, myToken, canAbort)
     local hrp = GetCharacterHRP()
@@ -1589,7 +1585,6 @@ local function FlyToTarget(targetCF, myToken, canAbort)
 
     local completed = true
     while (os.clock() - startTime) < travelTime do
-        -- ★ Cancel token check
         if canAbort and myToken ~= cancelToken then
             completed = false
             break
@@ -1639,7 +1634,7 @@ local function ExecuteStealSequence(triggerSource)
 
     isStealingInProcess = true
     currentTriggerSource = triggerSource
-    local myToken = cancelToken  -- ★ capture token ตอนเริ่ม
+    local myToken = cancelToken
 
     local targetModel = currentTargetCrate
     local targetCF
@@ -1658,7 +1653,6 @@ local function ExecuteStealSequence(triggerSource)
 
     local flySuccess = FlyToTarget(targetCF, myToken, true)
 
-    -- ★ ตรวจ token หลัง fly
     if myToken ~= cancelToken then
         StopEverything()
         return
@@ -1672,7 +1666,6 @@ local function ExecuteStealSequence(triggerSource)
 
     StopHoldE()
 
-    -- ★ ตรวจ token อีกครั้ง
     if myToken ~= cancelToken then
         StopEverything()
         return
@@ -1685,9 +1678,8 @@ local function ExecuteStealSequence(triggerSource)
     end
 
     local safeZoneCF = GetSafeZoneCFrame()
-    FlyToTarget(safeZoneCF, myToken, false)  -- กลับ safe zone ไม่ต้อง abort
+    FlyToTarget(safeZoneCF, myToken, false)
 
-    -- ★ Final token check
     if myToken == cancelToken then
         ShowNotification(pickupSuccess and "Steal Complete!" or "Returned")
         isStealingInProcess = false
@@ -1695,24 +1687,11 @@ local function ExecuteStealSequence(triggerSource)
     end
 end
 
--- ═════════════════════════════════════════════════════════════
--- [ SAFE ZONE ]
--- ═════════════════════════════════════════════════════════════
-local function GetSafeZoneCFrame()
-    local result = SAFE_ZONE_CFRAME
-    pcall(function()
-        local spawnLocation = workspace:FindFirstChild("SpawnLocation")
-        if spawnLocation and spawnLocation:IsA("BasePart") then
-            result = spawnLocation.CFrame
-        end
-    end)
-    return result
-end
-
-local function GetCharacterHRP()
-    local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-    return char:FindFirstChild("HumanoidRootPart") or char:WaitForChild("HumanoidRootPart", 2)
-end
+-- ★ CloseButton handler — set หลังจาก StopEverything พร้อมแล้ว
+CloseButton.MouseButton1Click:Connect(function()
+    StopEverything("Bot Stopped (GUI Closed)")
+    ToggleGuiState()
+end)
 
 -- -------------------------------------------------------------
 -- [ CONTROL PANEL DETAILS ]
@@ -1779,7 +1758,7 @@ SwapButton.MouseLeave:Connect(function()
 end)
 
 -- -------------------------------------------------------------
--- [ LOOP CHECKBOX ]
+-- [ LOOP CHECKBOX — ★ OFF → StopEverything ]
 -- -------------------------------------------------------------
 local LoopBox = Instance.new("TextButton")
 LoopBox.Name             = "LoopBox"
@@ -1827,8 +1806,10 @@ local function ToggleLoopFunc()
             Color = Color3.fromRGB(140, 145, 155),
             Transparency = 0.3
         }):Play()
-        -- ถ้าปิด loop ให้หยุด hold E ด้วย
-        if not toggled then StopHoldE() end
+        -- ★ ถ้า toggle ปิดด้วย → หยุดทุกอย่างทันที
+        if not toggled then
+            StopEverything("Loop OFF — Stopped")
+        end
     end
 end
 
@@ -1849,7 +1830,7 @@ LoopLabel.TextXAlignment         = Enum.TextXAlignment.Left
 LoopLabel.MouseButton1Click:Connect(ToggleLoopFunc)
 
 -- -------------------------------------------------------------
--- [ TOGGLE SWITCH ]
+-- [ TOGGLE SWITCH — ★ OFF → StopEverything ]
 -- -------------------------------------------------------------
 local ToggleFrame = Instance.new("TextButton")
 ToggleFrame.Name             = "ToggleFrame"
@@ -1891,8 +1872,10 @@ ToggleFrame.MouseButton1Click:Connect(function()
             AnchorPoint = Vector2.new(0, 0.5),
             BackgroundColor3 = Color3.fromRGB(150, 155, 165)
         }):Play()
-        -- ถ้าปิด toggle และ loop ก็ปิดด้วย ให้หยุด hold E
-        if not loopChecked then StopHoldE() end
+        -- ★ ถ้า loop ปิดด้วย → หยุดทุกอย่างทันที
+        if not loopChecked then
+            StopEverything("Toggle OFF — Stopped")
+        end
     end
 end)
 
@@ -1923,12 +1906,12 @@ task.spawn(function()
 end)
 
 -- -------------------------------------------------------------
--- [ E-HOLD SAFETY WATCHDOG — กันกด E ค้างเกิน 10 วิ ]
+-- [ E-HOLD SAFETY WATCHDOG ]
 -- -------------------------------------------------------------
 task.spawn(function()
     while true do
         task.wait(0.5)
-        if E_HOLD_ACTIVE and E_HOLD_SAFETY_TIME > 0 and os.clock() > E_HOLD_SAFETY_TIME then
+        if eHoldActive and eSafetyDeadline > 0 and os.clock() > eSafetyDeadline then
             StopHoldE()
         end
     end
@@ -2128,6 +2111,7 @@ end)
 -- -------------------------------------------------------------
 LocalPlayer.CharacterRemoving:Connect(function()
     pcall(function()
+        cancelToken = cancelToken + 1
         StopHoldE()
         if activeNoclipConnection then
             activeNoclipConnection:Disconnect()
@@ -2136,9 +2120,9 @@ LocalPlayer.CharacterRemoving:Connect(function()
     end)
 end)
 
--- Cleanup เมื่อ script ถูก unload
 YanzHubUI.Destroying:Connect(function()
     pcall(function()
+        cancelToken = cancelToken + 1
         StopHoldE()
         if activeNoclipConnection then
             activeNoclipConnection:Disconnect()
@@ -2146,3 +2130,7 @@ YanzHubUI.Destroying:Connect(function()
         end
     end)
 end)
+
+-- ═════════════════════════════════════════════════════════════
+-- [ END OF SCRIPT — v5 ]
+-- ═════════════════════════════════════════════════════════════

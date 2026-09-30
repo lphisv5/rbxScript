@@ -45,6 +45,9 @@ local TWEEN_FAST = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirectio
 local FLY_SPEED = 275
 local SAFE_ZONE_CFRAME = CFrame.new(2435.00024, -12.4999971, -940, 1, 0, 0, 0, 1, 0, 0, 0, 1)
 
+local loopChecked = false
+local toggled = false
+
 -- -------------------------------------------------------------
 -- [ MAIN CONTAINER & SMART AUTO-SCALE ]
 -- -------------------------------------------------------------
@@ -1322,13 +1325,13 @@ local function GetCharacterHRP()
 end
 
 -- Fly at exact 275 speed with smooth linear interpolation and active Noclip Engine
-local function FlyToTarget(targetCF)
+local function FlyToTarget(targetCF, isLoopMode)
     local hrp = GetCharacterHRP()
-    if not hrp or not targetCF then return end
+    if not hrp or not targetCF then return false end
 
     local startCF = hrp.CFrame
     local distance = (targetCF.Position - startCF.Position).Magnitude
-    if distance < 1 then return end
+    if distance < 1 then return true end
 
     local travelTime = distance / FLY_SPEED
     local startTime = os.clock()
@@ -1352,7 +1355,14 @@ local function FlyToTarget(targetCF)
         end
     end)
 
+    local completed = true
     while (os.clock() - startTime) < travelTime do
+        -- Check Interrupt if Toggle/Loop turned off mid-flight
+        if isLoopMode and not loopChecked and not toggled then
+            completed = false
+            break
+        end
+
         local elapsed = os.clock() - startTime
         local alpha = math.clamp(elapsed / travelTime, 0, 1)
         hrp.CFrame = startCF:Lerp(targetCF, alpha)
@@ -1365,7 +1375,10 @@ local function FlyToTarget(targetCF)
         task.wait()
     end
 
-    hrp.CFrame = targetCF
+    if completed then
+        hrp.CFrame = targetCF
+    end
+
     if noclipConnection then
         noclipConnection:Disconnect()
     end
@@ -1381,6 +1394,8 @@ local function FlyToTarget(targetCF)
             end
         end
     end)
+
+    return completed
 end
 
 -- Check character inventory/hand/body/workspace to verify if crate is secured
@@ -1398,10 +1413,22 @@ local function IsCrateSecured(crateModel)
         return true
     end
 
-    -- 3. Check for any held tools or welded parts inside Character
+    -- 3. Advanced Weld/Joint Inspection on Character
+    for _, item in ipairs(char:GetDescendants()) do
+        if item:IsA("Weld") or item:IsA("WeldConstraint") or item:IsA("Motor6D") then
+            if item.Part0 and (item.Part0:IsDescendantOf(crateModel) or item.Part0 == crateModel) then
+                return true
+            end
+            if item.Part1 and (item.Part1:IsDescendantOf(crateModel) or item.Part1 == crateModel) then
+                return true
+            end
+        end
+    end
+
+    -- 4. Check Tools & Backpack
     for _, item in ipairs(char:GetChildren()) do
-        if item:IsA("Tool") or item:IsA("Model") or item:IsA("BasePart") then
-            if item.Name == crateModel.Name or item:FindFirstChild("Weld") or item:FindFirstChild("WeldConstraint") then
+        if item:IsA("Tool") or item:IsA("Model") then
+            if item.Name == crateModel.Name or item:FindFirstChild("CrateName") or item:FindFirstChild("CrateKg") then
                 return true
             end
         end
@@ -1419,52 +1446,43 @@ local function IsCrateSecured(crateModel)
     return false
 end
 
--- Smart Pickup Mechanism: Double Press + Hold E fallback
-local function AttemptStealInteraction(crateModel)
+-- Smart Pickup Mechanism: Rapid Prompt + Key Event Simulation
+local function AttemptStealInteraction(crateModel, isLoopMode)
     if not crateModel then return false end
 
     local prompt = crateModel:FindFirstChildOfClass("ProximityPrompt", true)
 
-    -- Step 1: Double Press Attempt (กดย้ำ 2 รอบ)
-    for i = 1, 2 do
-        if prompt then
-            pcall(function() fireproximityprompt(prompt) end)
-        else
-            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
-            task.wait(0.05)
-            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+    -- Multi-Fire ProximityPrompt & Hardware Simulation
+    local startTime = os.clock()
+    while (os.clock() - startTime) < 2.5 do
+        if isLoopMode and not loopChecked and not toggled then
+            break
         end
-        task.wait(0.12)
+
         if IsCrateSecured(crateModel) then
             return true
         end
-    end
 
-    -- Step 2: Hold 'E' Simulated Key & Prompt Hold until secured or timeout
-    if prompt then
-        pcall(function() prompt:InputHoldBegin() end)
-    end
-    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
-
-    local holdStartTime = os.clock()
-    while (os.clock() - holdStartTime) < 4 do -- 4 seconds max threshold
-        if IsCrateSecured(crateModel) then break end
         if prompt then
-            pcall(function() fireproximityprompt(prompt) end)
+            pcall(function() 
+                fireproximityprompt(prompt) 
+            end)
         end
-        task.wait(0.08)
-    end
 
-    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
-    if prompt then
-        pcall(function() prompt:InputHoldEnd() end)
+        pcall(function()
+            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+            task.wait(0.03)
+            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+        end)
+
+        task.wait(0.05)
     end
 
     return IsCrateSecured(crateModel)
 end
 
 -- Full Steal & Return Routine
-local function ExecuteStealSequence()
+local function ExecuteStealSequence(isLoopTrigger)
     if isStealingInProcess or not currentTargetCrate or not currentTargetCrate.Parent then return end
     isStealingInProcess = true
 
@@ -1484,23 +1502,27 @@ local function ExecuteStealSequence()
     ShowNotification("Flying to Crate (Speed 275)...")
 
     -- 1. Fly to Target Crate
-    FlyToTarget(targetCF)
+    local flySuccess = FlyToTarget(targetCF, isLoopTrigger)
+
+    -- If interrupt requested, abort routine immediately
+    if isLoopTrigger and not loopChecked and not toggled then
+        ShowNotification("Steal Cancelled!")
+        isStealingInProcess = false
+        return
+    end
 
     -- 2. Attempt Pickup
-    ShowNotification("Stealing Crate...")
-    local success = AttemptStealInteraction(targetModel)
+    if flySuccess then
+        ShowNotification("Stealing Crate...")
+        AttemptStealInteraction(targetModel, isLoopTrigger)
+    end
 
     -- 3. Fly back immediately to Safe Zone
     ShowNotification("Returning to Safe Zone...")
     local safeZoneCF = GetSafeZoneCFrame()
-    FlyToTarget(safeZoneCF)
+    FlyToTarget(safeZoneCF, false)
 
-    if success then
-        ShowNotification("Crate Steal Successful!")
-    else
-        ShowNotification("Returned to Safe Zone!")
-    end
-
+    ShowNotification("Returned to Safe Zone!")
     isStealingInProcess = false
 end
 
@@ -1567,7 +1589,9 @@ end)
 SwapButton.MouseButton1Click:Connect(function()
     swapRotation = swapRotation + 180
     TweenService:Create(SwapButton, TWEEN_ELASTIC, {Rotation = swapRotation}):Play()
-    task.spawn(ExecuteStealSequence)
+    task.spawn(function()
+        ExecuteStealSequence(false)
+    end)
 end)
 
 -- LOOP CHECKBOX & LOOP PROCESSOR
@@ -1592,8 +1616,6 @@ LoopBoxStroke.Parent = LoopBox
 LoopBoxStroke.Color = Color3.fromRGB(140, 145, 155)
 LoopBoxStroke.Thickness = 1.2
 LoopBoxStroke.Transparency = 0.3
-
-local loopChecked = false
 
 local function ToggleLoopFunc()
     loopChecked = not loopChecked
@@ -1651,7 +1673,6 @@ local CircleCorner = Instance.new("UICorner")
 CircleCorner.CornerRadius = UDim.new(1, 0)
 CircleCorner.Parent = ToggleCircle
 
-local toggled = false
 ToggleFrame.MouseButton1Click:Connect(function()
     toggled = not toggled
     if toggled then
@@ -1674,12 +1695,12 @@ end)
 -- Continuous Auto Steal Background Thread
 task.spawn(function()
     while true do
-        task.wait(0.5)
+        task.wait(0.3)
         if (loopChecked or toggled) and not isStealingInProcess then
             pcall(function()
                 RequestSystemRefresh()
                 if currentTargetCrate and currentTargetCrate.Parent then
-                    ExecuteStealSequence()
+                    ExecuteStealSequence(true)
                 end
             end)
         end

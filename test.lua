@@ -1,23 +1,52 @@
--- [[ YANZ HUB GUI - NEXT-GEN HYPER-REALISTIC FLAME & PHYSICS ENGINE ]] --
--- [ V2.2 : AUTO STEAL + PROTECTION + FLY/TWEEN ENGINE + ANTI-TRAP ] --
+local CoreGui = game:GetService("CoreGui")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Camera = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
 
-local CoreGui            = game:GetService("CoreGui")
-local TweenService       = game:GetService("TweenService")
-local UserInputService   = game:GetService("UserInputService")
-local RunService         = game:GetService("RunService")
-local Players            = game:GetService("Players")
-local ReplicatedStorage  = game:GetService("ReplicatedStorage")
-local Camera             = workspace.CurrentCamera
+-- Delta Executor compatibility layer
+local ParentGui = (type(gethui) == "function" and gethui()) or CoreGui
+
+-- =============================================================
+-- [ CONSTANTS : FLY / STEAL / PROTECTION ]
+-- =============================================================
+local FLY_SPEED = 300
+
+local PROTECT_NPC_NAMES = {
+    "Jeweler",
+    "Grandpa",
+    "Archeologist",
+    "Astronaut",
+    "Mafia Boss",
+    "Bodyguard 1",
+    "Bodyguard 2",
+    "Fan 1",
+    "Fan 2",
+    "Fan 3",
+    "Fan 4",
+    "Fan 5",
+    "Gold Tycoon",
+    "Museum Worker",
+    "Pirate",
+    "Angel Beast (chaser)",
+    "Angel Queen",
+    "Demon Dragon",
+    "demon king",
+    "dinosaur (active)",
+}
 
 -- 1. Clear existing UI instances
-if CoreGui:FindFirstChild("YanzHubUI") then
-    CoreGui.YanzHubUI:Destroy()
+if ParentGui:FindFirstChild("YanzHubUI") then
+    ParentGui.YanzHubUI:Destroy()
 end
 
 -- 2. Create Main ScreenGui
 local YanzHubUI = Instance.new("ScreenGui")
 YanzHubUI.Name = "YanzHubUI"
-YanzHubUI.Parent = CoreGui
+YanzHubUI.Parent = ParentGui
 YanzHubUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 YanzHubUI.ResetOnSpawn = false
 
@@ -28,78 +57,14 @@ local TWEEN_SPRING  = TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirec
 local TWEEN_ELASTIC = TweenInfo.new(0.5, Enum.EasingStyle.Elastic, Enum.EasingDirection.Out)
 local TWEEN_FAST    = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
--- Layout constants
-local MAIN_WIDTH            = 345
-local LIST_HEIGHT           = 170
-local LIST_TOP              = 140
+local MAIN_WIDTH           = 345
+local COLLAPSED_HEIGHT     = 242
+local LIST_HEIGHT          = 170
+local LIST_TOP             = 140
+local EXPANDED_HEIGHT      = COLLAPSED_HEIGHT + LIST_HEIGHT + 8
 local CONTROL_TOP_COLLAPSED = 144
-local FEATURES_HEIGHT       = 186
-local FEATURES_TOP_COLLAPSED= 236
-local COLLAPSED_HEIGHT      = FEATURES_TOP_COLLAPSED + FEATURES_HEIGHT + 14 -- 436
-local EXPANDED_HEIGHT       = COLLAPSED_HEIGHT + LIST_HEIGHT + 8            -- 614
-local CONTROL_TOP_EXPANDED  = 144 + LIST_HEIGHT + 8                         -- 322
-local FEATURES_TOP_EXPANDED = FEATURES_TOP_COLLAPSED + LIST_HEIGHT + 8      -- 414
-
--- -------------------------------------------------------------
--- [ FEATURE STATE & SPEED CONFIG ]
--- -------------------------------------------------------------
-local FLY_SPEED = 300
-local STEAL_SPEED = 300
-
-local stealEnabled      = false
-local protectionEnabled = false
-local antiTrapEnabled   = false
-local arenaResetRunning = false
-local stealLoopRunning  = false
-
--- -------------------------------------------------------------
--- [ SAFE REMOTE / SIGNAL HELPERS (executor-safe) ]
--- -------------------------------------------------------------
-local function GetRemote(name)
-    local ok, res = pcall(function()
-        return ReplicatedStorage.Shared.Packages.Network[name]
-    end)
-    if ok then return res end
-    return nil
-end
-
-local function SignalFire(signal, ...)
-    if not signal then return false end
-    local args = {...}
-    local ok = pcall(function()
-        if typeof(firesignal) == "function" then
-            firesignal(signal, table.unpack(args))
-        end
-    end)
-    return ok
-end
-
-local function FireClientRemote(name, ...)
-    local remote = GetRemote(name)
-    if not remote then return false end
-    return SignalFire(remote.OnClientEvent, ...)
-end
-
--- -------------------------------------------------------------
--- [ CHARACTER / WORLD HELPERS ]
--- -------------------------------------------------------------
-local function GetCharacter()
-    local plr = Players.LocalPlayer
-    if plr then return plr.Character end
-    return nil
-end
-
-local function GetHumanoid()
-    local char = GetCharacter()
-    if char then return char:FindFirstChildOfClass("Humanoid") end
-    return nil
-end
-
-local function GetRoot()
-    local char = GetCharacter()
-    if char then return char:FindFirstChild("HumanoidRootPart") end
-    return nil
-end
+local CONTROL_TOP_EXPANDED  = 144 + LIST_HEIGHT + 8
+local SCREEN_PADDING        = 12
 
 -- -------------------------------------------------------------
 -- [ CRATE DATA HELPERS ]
@@ -136,6 +101,45 @@ local function FormatWeight(kg)
     else
         return string.format("%d", kg)
     end
+end
+
+-- Scan crate/model descendants for property or attribute named `Areald`
+local function GetArealdName(crate)
+    if not crate then return "Unknown" end
+    
+    -- Check attribute on crate root
+    local directAttr = crate:GetAttribute("Areald")
+    if directAttr and tostring(directAttr) ~= "" then
+        return tostring(directAttr)
+    end
+    
+    -- Check property on crate root
+    local okProp, propVal = pcall(function() return crate.Areald end)
+    if okProp and propVal then
+        if type(propVal) == "userdata" and propVal:IsA("ValueBase") then
+            return tostring(propVal.Value)
+        elseif type(propVal) == "string" or type(propVal) == "number" then
+            return tostring(propVal)
+        end
+    end
+
+    -- Check descendants
+    for _, d in ipairs(crate:GetDescendants()) do
+        local attr = d:GetAttribute("Areald")
+        if attr and tostring(attr) ~= "" then
+            return tostring(attr)
+        end
+        local okD, dVal = pcall(function() return d.Areald end)
+        if okD and dVal then
+            if type(dVal) == "userdata" and dVal:IsA("ValueBase") then
+                return tostring(dVal.Value)
+            elseif type(dVal) == "string" or type(dVal) == "number" then
+                return tostring(dVal)
+            end
+        end
+    end
+
+    return crate.Name
 end
 
 local function GetAllCrates()
@@ -223,7 +227,9 @@ local function SetupViewport(viewport, crate)
         return c
     end)
 
-    if not ok or not clone then return end
+    if not ok or not clone then
+        return
+    end
 
     local cf, size = SafeBoundingBox(clone)
     local center = cf.Position
@@ -236,320 +242,6 @@ local function SetupViewport(viewport, crate)
 end
 
 -- -------------------------------------------------------------
--- [ STEAL / FLY / PROTECTION / ANTI-TRAP CORE LOGIC ]
--- -------------------------------------------------------------
-
--- Fly/Tween movement helper (default 300)
-local function FlyToPosition(targetPos, speed, cancelFn)
-    speed = tonumber(speed) or FLY_SPEED
-    if speed <= 0 then speed = FLY_SPEED end
-
-    local root = GetRoot()
-    if not root then return false end
-
-    local startPos = root.Position
-    local distance = (targetPos - startPos).Magnitude
-    if distance < 0.5 then return true end
-
-    local duration = distance / speed
-    local elapsed  = 0
-
-    local wasAnchored = root.Anchored
-    pcall(function() root.Anchored = true end)
-
-    while elapsed < duration do
-        if cancelFn and cancelFn() then
-            pcall(function() root.Anchored = wasAnchored end)
-            return false
-        end
-        if not root or not root.Parent then return false end
-
-        local dt = RunService.RenderStepped:Wait()
-        elapsed = elapsed + dt
-        local alpha = math.min(elapsed / duration, 1)
-        pcall(function()
-            root.CFrame = CFrame.new(startPos:Lerp(targetPos, alpha))
-        end)
-    end
-
-    if root and root.Parent then
-        pcall(function() root.Anchored = wasAnchored end)
-    end
-    return true
-end
-
--- Safe zone lookup
-local function GetSafeZonePosition()
-    local stealMap = workspace:FindFirstChild("Steal Map")
-    if not stealMap then return nil end
-    local lobby = stealMap:FindFirstChild("Lobby")
-    if not lobby then return nil end
-    local safeZone = lobby:FindFirstChild("safe zone")
-    if not safeZone then return nil end
-
-    local ok, cf, size = pcall(function()
-        return SafeBoundingBox(safeZone)
-    end)
-    if ok and cf then
-        return cf.Position + Vector3.new(0, (size and size.Y or 4) / 2 + 3, 0)
-    end
-    return nil
-end
-
--- Find closest crate within range
-local function FindStealTarget(maxRange)
-    maxRange = maxRange or 5000
-    local root = GetRoot()
-    if not root then return nil end
-
-    local cratesFolder = workspace:FindFirstChild("Crates")
-    if not cratesFolder then return nil end
-
-    local closest, closestDist = nil, math.huge
-    for _, crate in ipairs(cratesFolder:GetChildren()) do
-        local ok, cf = pcall(function() return SafeBoundingBox(crate) end)
-        if ok and cf then
-            local dist = (cf.Position - root.Position).Magnitude
-            if dist < closestDist and dist <= maxRange then
-                closestDist = dist
-                closest = crate
-            end
-        end
-    end
-    return closest
-end
-
--- Find a ProximityPrompt inside crate
-local function FindProximityPrompt(obj)
-    if not obj then return nil end
-    if obj:IsA("ProximityPrompt") then return obj end
-    for _, d in ipairs(obj:GetDescendants()) do
-        if d:IsA("ProximityPrompt") then
-            return d
-        end
-    end
-    return nil
-end
-
-local function FirePrompt(prompt)
-    if not prompt then return false end
-    local ok = pcall(function()
-        if typeof(fireproximityprompt) == "function" then
-            fireproximityprompt(prompt)
-        else
-            prompt:InputHoldBegin()
-            task.wait(prompt.HoldDuration or 0.1)
-            prompt:InputHoldEnd()
-        end
-    end)
-    return ok
-end
-
--- Detect crate held by player
-local function IsHoldingCrate()
-    local char = GetCharacter()
-    if not char then return false end
-
-    for _, d in ipairs(char:GetChildren()) do
-        if d:IsA("Tool") then
-            if d:GetAttribute("CrateKg") or d.Name:lower():find("crate") then
-                return true
-            end
-        end
-    end
-    for _, d in ipairs(char:GetDescendants()) do
-        if d:IsA("BasePart") and d:GetAttribute("CrateKg") then
-            return true
-        end
-    end
-    return false
-end
-
--- Full steal cycle
-local function PerformStealCycle()
-    if not stealEnabled then return false end
-
-    -- 1. Find nearest crate
-    local crate = FindStealTarget(5000)
-    if not crate then return false end
-
-    local crateName = crate:GetAttribute("Areald") or crate.Name
-
-    -- 2. Fly to crate
-    local ok, cf = pcall(function() return SafeBoundingBox(crate) end)
-    if not ok or not cf then return false end
-
-    local root = GetRoot()
-    if not root then return false end
-    local offset = (root.Position - cf.Position)
-    if offset.Magnitude < 0.01 then offset = Vector3.new(0,0,1) end
-    local approachPos = cf.Position + offset.Unit * 4
-
-    FlyToPosition(approachPos, FLY_SPEED, function() return not stealEnabled end)
-    if not stealEnabled then return false end
-    task.wait(0.15)
-
-    -- 3. Fire proximity prompt
-    local prompt = FindProximityPrompt(crate)
-    if prompt then
-        FirePrompt(prompt)
-    else
-        -- Some games use ClickDetector
-        local cd
-        for _, d in ipairs(crate:GetDescendants()) do
-            if d:IsA("ClickDetector") then cd = d; break end
-        end
-        if cd and typeof(fireclickdetector) == "function" then
-            pcall(function() fireclickdetector(cd) end)
-        end
-    end
-
-    -- 4. Wait & verify holding
-    local deadline = tick() + 3
-    while tick() < deadline do
-        if not stealEnabled then return false end
-        if IsHoldingCrate() then break end
-        task.wait(0.1)
-    end
-
-    if not IsHoldingCrate() then
-        return false
-    end
-
-    -- 5. Fly to safe zone
-    local safePos = GetSafeZonePosition()
-    if not safePos then
-        -- fallback: just stay put
-        task.wait(0.3)
-    else
-        FlyToPosition(safePos, FLY_SPEED, function() return not stealEnabled end)
-        if not stealEnabled then return false end
-        task.wait(0.35)
-    end
-
-    -- 6. Fire confirmation remotes
-    FireClientRemote("rev_STEAL_ESCAPED")
-    task.wait(0.1)
-    FireClientRemote("rev_STEAL_SUCCESS", crateName)
-
-    return true
-end
-
-local function StartStealLoop()
-    if stealLoopRunning then return end
-    stealLoopRunning = true
-
-    task.spawn(function()
-        while stealEnabled and YanzHubUI and YanzHubUI.Parent do
-            local ok, err = pcall(PerformStealCycle)
-            if not ok then
-                -- silent fail; small cooldown
-                task.wait(0.5)
-            end
-            task.wait(0.25)
-        end
-        stealLoopRunning = false
-    end)
-end
-
--- Protection system
-local PROTECTED_NPC_NAMES = {
-    "Jeweler", "Archeologist", "Astronaut", "Mafia Boss",
-    "Bodyguard 1", "Bodyguard 2",
-    "Fan 1", "Fan 2", "Fan 3", "Fan 4", "Fan 5",
-    "Gold Tycoon", "Museum Worker", "Pirate",
-    "Angel Beast (chaser)", "Angel Queen",
-    "Demon Dragon", "demon king", "dinosaur (active)",
-}
-
-local function GatherProtectedNPCs()
-    local list = {}
-    for _, name in ipairs(PROTECTED_NPC_NAMES) do
-        local npc = workspace:FindFirstChild(name)
-        if npc then table.insert(list, { name = name, obj = npc }) end
-    end
-    local areaNPCs = workspace:FindFirstChild("AreaNPCs")
-    if areaNPCs then
-        local grandpa = areaNPCs:FindFirstChild("Grandpa")
-        if grandpa then
-            table.insert(list, { name = "Grandpa", obj = grandpa })
-        end
-    end
-    return list
-end
-
-local lastProtectionFire = {}
-
-local function ProtectionTick()
-    if not protectionEnabled then return end
-    local root = GetRoot()
-    if not root then return end
-
-    local npcs = GatherProtectedNPCs()
-    for _, entry in ipairs(npcs) do
-        local ok, cf = pcall(function() return SafeBoundingBox(entry.obj) end)
-        if ok and cf then
-            local dist = (cf.Position - root.Position).Magnitude
-            if dist < 20 then
-                local now = tick()
-                if not lastProtectionFire[entry.name] or (now - lastProtectionFire[entry.name]) > 1.5 then
-                    lastProtectionFire[entry.name] = now
-                    FireClientRemote("rev_ChaseCaught", entry.name)
-                end
-            end
-        end
-    end
-end
-
--- Arena reset
-local function DoArenaReset()
-    if arenaResetRunning then return end
-    arenaResetRunning = true
-
-    task.spawn(function()
-        -- Reset ON
-        FireClientRemote("rev_ARENA_RESET", true, 10)
-        task.wait(10)
-
-        -- Reset OFF (unlock access)
-        FireClientRemote("rev_ARENA_RESET", false, 0)
-        arenaResetRunning = false
-    end)
-end
-
--- Anti-Trap
-local TRAP_KEYWORDS = {"trap", "kill", "damage", "lava", "spike", "poison", "death", "hazard"}
-
-local function IsTrapPart(part)
-    local n = part.Name:lower()
-    for _, kw in ipairs(TRAP_KEYWORDS) do
-        if n:find(kw) then return true end
-    end
-    return false
-end
-
-local antiTrapTouched = {}
-
-local function AntiTrapTick()
-    if not antiTrapEnabled then return end
-    local root = GetRoot()
-    if not root then return end
-
-    -- limit scan radius to keep perf
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("BasePart") and not antiTrapTouched[obj] then
-            if IsTrapPart(obj) then
-                antiTrapTouched[obj] = true
-                pcall(function()
-                    obj.CanTouch = false
-                    obj.CanQuery = false
-                end)
-            end
-        end
-    end
-end
-
--- -------------------------------------------------------------
 -- [ MAIN CONTAINER & SMART AUTO-SCALE ]
 -- -------------------------------------------------------------
 local MainFrame = Instance.new("Frame")
@@ -558,9 +250,9 @@ MainFrame.Parent = YanzHubUI
 MainFrame.BackgroundColor3 = Color3.fromRGB(11, 12, 15)
 MainFrame.BackgroundTransparency = 0.05
 MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-MainFrame.Position = UDim2.new(0.5, 0, 0.45, 0)
+MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 MainFrame.Size = UDim2.new(0, MAIN_WIDTH, 0, COLLAPSED_HEIGHT)
-MainFrame.ClipsDescendants = false
+MainFrame.ClipsDescendants = false -- Set to false so tilted GUI displays overflowing parts seamlessly
 
 local MainCorner = Instance.new("UICorner")
 MainCorner.CornerRadius = UDim.new(0, 14)
@@ -577,19 +269,31 @@ local UIScale = Instance.new("UIScale")
 UIScale.Parent = MainFrame
 
 local targetScaleValue = 1.0
+local viewportConnection
+
 local function UpdateAutoScaler()
-    local isMobileOrTablet = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
-    if isMobileOrTablet then
-        local ViewportY = Camera.ViewportSize.Y
-        targetScaleValue = math.clamp(ViewportY / 720, 0.55, 1.05)
-    else
-        targetScaleValue = 1.0
-    end
+    if not Camera then return end
+    local viewport = Camera.ViewportSize
+    local rotationAllowance = EXPANDED_HEIGHT * 0.12
+    local widthScale = (viewport.X - SCREEN_PADDING * 2) / (MAIN_WIDTH + rotationAllowance)
+    local heightScale = (viewport.Y - SCREEN_PADDING * 2) / (EXPANDED_HEIGHT + rotationAllowance)
+    targetScaleValue = math.max(0.01, math.min(1, widthScale, heightScale))
     UIScale.Scale = targetScaleValue
 end
 
-Camera:GetPropertyChangedSignal("ViewportSize"):Connect(UpdateAutoScaler)
-UpdateAutoScaler()
+local function BindCurrentCamera()
+    if viewportConnection then
+        viewportConnection:Disconnect()
+        viewportConnection = nil
+    end
+    Camera = workspace.CurrentCamera
+    if not Camera then return end
+    viewportConnection = Camera:GetPropertyChangedSignal("ViewportSize"):Connect(UpdateAutoScaler)
+    UpdateAutoScaler()
+end
+
+workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(BindCurrentCamera)
+BindCurrentCamera()
 
 UIScale.Scale = 0
 TweenService:Create(UIScale, TWEEN_SPRING, {Scale = targetScaleValue}):Play()
@@ -602,10 +306,10 @@ NotifFrame.Name = "NotifFrame"
 NotifFrame.Parent = MainFrame
 NotifFrame.BackgroundColor3 = Color3.fromRGB(16, 18, 22)
 NotifFrame.BackgroundTransparency = 1
-NotifFrame.Position = UDim2.new(0, 12, 0, 10)
+NotifFrame.Position = UDim2.new(0, 12, 0, 9)
 NotifFrame.Size = UDim2.new(1, -24, 0, 34)
 NotifFrame.Visible = false
-NotifFrame.ZIndex = 0
+NotifFrame.ZIndex = 6
 
 local NotifCorner = Instance.new("UICorner")
 NotifCorner.CornerRadius = UDim.new(0, 9)
@@ -628,7 +332,7 @@ NotifIcon.Size = UDim2.new(0, 18, 0, 18)
 NotifIcon.Image = "rbxassetid://89581158158297"
 NotifIcon.ScaleType = Enum.ScaleType.Fit
 NotifIcon.ImageTransparency = 1
-NotifIcon.ZIndex = 1
+NotifIcon.ZIndex = 7
 
 local NotifText = Instance.new("TextLabel")
 NotifText.Name = "NotifText"
@@ -642,7 +346,7 @@ NotifText.TextColor3 = Color3.fromRGB(255, 255, 255)
 NotifText.TextSize = 10
 NotifText.TextXAlignment = Enum.TextXAlignment.Left
 NotifText.TextTransparency = 1
-NotifText.ZIndex = 1
+NotifText.ZIndex = 7
 
 local notifDebounce = false
 
@@ -651,7 +355,7 @@ local function ShowNotification(text)
     notifDebounce = true
 
     NotifText.Text = text or "Discord Link Copied to Clipboard!"
-    NotifFrame.Position = UDim2.new(0, 12, 0, 10)
+    NotifFrame.Position = UDim2.new(0, 12, 0, 9)
     NotifFrame.BackgroundTransparency = 1
     NotifStroke.Transparency = 1
     NotifText.TextTransparency = 1
@@ -659,7 +363,6 @@ local function ShowNotification(text)
     NotifFrame.Visible = true
 
     TweenService:Create(NotifFrame, TWEEN_SPRING, {
-        Position = UDim2.new(0, 12, 0, -38),
         BackgroundTransparency = 0.05
     }):Play()
     TweenService:Create(NotifStroke, TWEEN_FAST, {Transparency = 0.25}):Play()
@@ -668,7 +371,6 @@ local function ShowNotification(text)
 
     task.delay(3, function()
         local slideDown = TweenService:Create(NotifFrame, TWEEN_SPRING, {
-            Position = UDim2.new(0, 12, 0, 10),
             BackgroundTransparency = 1
         })
         TweenService:Create(NotifStroke, TWEEN_FAST, {Transparency = 1}):Play()
@@ -1086,7 +788,7 @@ ItemName.Name = "ItemName"
 ItemName.Parent = EggCard
 ItemName.BackgroundTransparency = 1
 ItemName.Position = UDim2.new(0, 80, 0, 26)
-ItemName.Size = UDim2.new(1, -150, 0, 18)
+ItemName.Size = UDim2.new(1, -170, 0, 18)
 ItemName.Font = Enum.Font.GothamBold
 ItemName.Text = "Loading..."
 ItemName.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -1130,7 +832,7 @@ ArrowBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 ArrowBtn.TextSize = 11
 
 -- -------------------------------------------------------------
--- [ CRATES LIST SCROLL ]
+-- [ CRATES LIST SCROLL (Expanded by ArrowBtn) ]
 -- -------------------------------------------------------------
 local CratesScroll = Instance.new("ScrollingFrame")
 CratesScroll.Name = "CratesScroll"
@@ -1170,6 +872,7 @@ CratesListPad.PaddingRight = UDim.new(0, 6)
 CratesListPad.PaddingBottom = UDim.new(0, 6)
 
 local RefreshCratesUI
+local SelectCrateByRow
 
 -- -------------------------------------------------------------
 -- [ CARD 2 : CONTROL PANEL / TELEGUIADO ]
@@ -1198,13 +901,11 @@ local function ApplyLayout()
         CratesScroll.Visible = true
         TweenService:Create(CratesScroll, TWEEN_SPRING, {Size = UDim2.new(1, -20, 0, LIST_HEIGHT)}):Play()
         TweenService:Create(ControlPanel, TWEEN_SPRING, {Position = UDim2.new(0, 10, 0, CONTROL_TOP_EXPANDED)}):Play()
-        TweenService:Create(FeaturesPanel, TWEEN_SPRING, {Position = UDim2.new(0, 10, 0, FEATURES_TOP_EXPANDED)}):Play()
         TweenService:Create(MainFrame, TWEEN_SPRING, {Size = UDim2.new(0, MAIN_WIDTH, 0, EXPANDED_HEIGHT)}):Play()
         TweenService:Create(ArrowBtn, TWEEN_ELASTIC, {Rotation = 180}):Play()
     else
         TweenService:Create(CratesScroll, TWEEN_SPRING, {Size = UDim2.new(1, -20, 0, 0)}):Play()
         TweenService:Create(ControlPanel, TWEEN_SPRING, {Position = UDim2.new(0, 10, 0, CONTROL_TOP_COLLAPSED)}):Play()
-        TweenService:Create(FeaturesPanel, TWEEN_SPRING, {Position = UDim2.new(0, 10, 0, FEATURES_TOP_COLLAPSED)}):Play()
         TweenService:Create(MainFrame, TWEEN_SPRING, {Size = UDim2.new(0, MAIN_WIDTH, 0, COLLAPSED_HEIGHT)}):Play()
         TweenService:Create(ArrowBtn, TWEEN_ELASTIC, {Rotation = 0}):Play()
         task.delay(0.3, function()
@@ -1223,6 +924,7 @@ ArrowBtn.MouseButton1Click:Connect(function()
     ApplyLayout()
 end)
 
+-- Title "TELEGUIADO"
 local ModeTitle = Instance.new("TextLabel")
 ModeTitle.Name = "ModeTitle"
 ModeTitle.Parent = ControlPanel
@@ -1242,7 +944,7 @@ ModeSub.BackgroundTransparency = 1
 ModeSub.Position = UDim2.new(0, 12, 0, 48)
 ModeSub.Size = UDim2.new(0, 80, 0, 12)
 ModeSub.Font = Enum.Font.GothamMedium
-ModeSub.Text = "ONE SHOT"
+ModeSub.Text = "FLY • 300"
 ModeSub.TextColor3 = Color3.fromRGB(110, 115, 125)
 ModeSub.TextSize = 9
 ModeSub.TextXAlignment = Enum.TextXAlignment.Left
@@ -1279,9 +981,47 @@ SwapButton.MouseLeave:Connect(function()
     TweenService:Create(SwapStroke, TWEEN_FAST, {Transparency = 0.5}):Play()
 end)
 
+-- -------------------------------------------------------------
+-- [ NETWORK / FIRESIGNAL HELPERS ]
+-- -------------------------------------------------------------
+local function GetNetworkFolder()
+    local shared = ReplicatedStorage:FindFirstChild("Shared")
+    if not shared then return nil end
+    local packages = shared:FindFirstChild("Packages")
+    if not packages then return nil end
+    return packages:FindFirstChild("Network")
+end
+
+local function SafeFireSignal(eventObj, ...)
+    if not eventObj then return end
+    pcall(function()
+        if type(firesignal) == "function" then
+            firesignal(eventObj.OnClientEvent, ...)
+        elseif type(getconnections) == "function" then
+            for _, c in ipairs(getconnections(eventObj.OnClientEvent)) do
+                if c.Fire then pcall(c.Fire, c, ...) end
+            end
+        end
+    end)
+end
+
+local function ResetArena(active, timeVal)
+    local net = GetNetworkFolder()
+    if not net then return false end
+    local ev = net:FindFirstChild("rev_ARENA_RESET")
+    if not ev then return false end
+    SafeFireSignal(ev, active == true, tonumber(timeVal) or 0)
+    return true
+end
+
 SwapButton.MouseButton1Click:Connect(function()
     swapRotation = swapRotation + 180
     TweenService:Create(SwapButton, TWEEN_ELASTIC, {Rotation = swapRotation}):Play()
+    -- Manual arena reset trigger
+    ResetArena(true, 10)
+    task.wait(0.2)
+    ResetArena(false, 0)
+    ShowNotification("ARENA_RESET fired!")
 end)
 
 -- -------------------------------------------------------------
@@ -1341,8 +1081,21 @@ LoopLabel.TextXAlignment = Enum.TextXAlignment.Left
 
 LoopLabel.MouseButton1Click:Connect(ToggleLoopFunc)
 
+-- Label for steal toggle
+local StealLabel = Instance.new("TextLabel")
+StealLabel.Name = "StealLabel"
+StealLabel.Parent = ControlPanel
+StealLabel.BackgroundTransparency = 1
+StealLabel.Position = UDim2.new(1, -110, 0, 33)
+StealLabel.Size = UDim2.new(0, 52, 0, 18)
+StealLabel.Font = Enum.Font.GothamBold
+StealLabel.Text = "STEAL"
+StealLabel.TextColor3 = Color3.fromRGB(210, 215, 225)
+StealLabel.TextSize = 11
+StealLabel.TextXAlignment = Enum.TextXAlignment.Right
+
 -- -------------------------------------------------------------
--- [ NEON TOGGLE SWITCH (in ControlPanel) ]
+-- [ NEON TOGGLE SWITCH -> AUTO STEAL TOGGLE ]
 -- -------------------------------------------------------------
 local ToggleFrame = Instance.new("TextButton")
 ToggleFrame.Name = "ToggleFrame"
@@ -1369,6 +1122,337 @@ CircleCorner.CornerRadius = UDim.new(1, 0)
 CircleCorner.Parent = ToggleCircle
 
 local toggled = false
+
+-- =============================================================
+-- =============== AUTOMATION / GAMEPLAY MODULES ===============
+-- =============================================================
+
+-- Forward declarations
+local StartStealLoop, StopStealLoop
+
+local function FireStealEscaped()
+    local net = GetNetworkFolder()
+    if not net then return false end
+    local ev = net:FindFirstChild("rev_STEAL_ESCAPED")
+    if not ev then return false end
+    SafeFireSignal(ev)
+    return true
+end
+
+local function FireStealSuccess(name)
+    local net = GetNetworkFolder()
+    if not net then return false end
+    local ev = net:FindFirstChild("rev_STEAL_SUCCESS")
+    if not ev then return false end
+    SafeFireSignal(ev, tostring(name or "Unknown"))
+    return true
+end
+
+local function FireChaseCaught(name)
+    local net = GetNetworkFolder()
+    if not net then return false end
+    local ev = net:FindFirstChild("rev_ChaseCaught")
+    if not ev then return false end
+    SafeFireSignal(ev, tostring(name or "Unknown"))
+    return true
+end
+
+-- -------------------------------------------------------------
+-- [ PROXIMITYPROMPT : HOLD DURATION = 0 SCANNER ]
+-- -------------------------------------------------------------
+local function ZeroAllPrompts()
+    for _, v in ipairs(workspace:GetDescendants()) do
+        if v:IsA("ProximityPrompt") then
+            pcall(function() v.HoldDuration = 0 end)
+        end
+    end
+end
+
+-- -------------------------------------------------------------
+-- [ FLY SYSTEM : 300 STUDS/SEC ]
+-- -------------------------------------------------------------
+local FlyState = {
+    Active = false,
+    TargetPos = nil,
+}
+
+local function GetHRP()
+    local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    if not char then return nil end
+    return char:FindFirstChild("HumanoidRootPart"), char:FindFirstChildOfClass("Humanoid")
+end
+
+local function FlyToPosition(targetPos, speed)
+    speed = speed or FLY_SPEED
+    return task.spawn(function()
+        local hrp, hum = GetHRP()
+        if not hrp or not hum then return end
+        hum.PlatformStand = true
+
+        local lastTime = os.clock()
+        while FlyState.Active do
+            local now = os.clock()
+            local dt = now - lastTime
+            lastTime = now
+
+            hrp = GetHRP()
+            if not hrp then return end
+            if not FlyState.TargetPos then return end
+
+            local diff = FlyState.TargetPos - hrp.Position
+            local dist = diff.Magnitude
+            if dist < 2 then
+                hrp.CFrame = CFrame.new(FlyState.TargetPos)
+                break
+            end
+            local dir = diff.Unit
+            local step = math.min(speed * dt, dist)
+            hrp.CFrame = CFrame.new(hrp.Position + dir * step)
+            RunService.Heartbeat:Wait()
+        end
+
+        if hum then hum.PlatformStand = false end
+    end)
+end
+
+local function FlyToAndWait(targetPos, speed, timeout)
+    timeout = timeout or 8
+    FlyState.Active = true
+    FlyState.TargetPos = targetPos
+    local thread = FlyToPosition(targetPos, speed)
+
+    local startT = os.clock()
+    local hrp = GetHRP()
+    while FlyState.Active do
+        if os.clock() - startT > timeout then break end
+        hrp = GetHRP()
+        if hrp and (hrp.Position - targetPos).Magnitude < 3 then
+            break
+        end
+        RunService.Heartbeat:Wait()
+    end
+    FlyState.Active = false
+    FlyState.TargetPos = nil
+    task.wait(0.05)
+    return true
+end
+
+-- -------------------------------------------------------------
+-- [ SAFE ZONE HELPER ]
+-- -------------------------------------------------------------
+local function GetSafeZonePosition()
+    local map = workspace:FindFirstChild("Steal Map")
+    if not map then return nil end
+    local lobby = map:FindFirstChild("Lobby")
+    if not lobby then return nil end
+    local zone = lobby:FindFirstChild("safe zone")
+    if not zone then return nil end
+
+    if zone:IsA("BasePart") then return zone.Position end
+
+    local ok, cf = pcall(function() return zone:GetPivot() end)
+    if ok and cf then return cf.Position end
+
+    for _, d in ipairs(zone:GetDescendants()) do
+        if d:IsA("BasePart") then return d.Position end
+    end
+    return nil
+end
+
+-- -------------------------------------------------------------
+-- [ CRATE HOLDING CHECK ]
+-- -------------------------------------------------------------
+local function IsHoldingCrate()
+    local char = LocalPlayer.Character
+    if not char then return false end
+    for _, v in ipairs(char:GetDescendants()) do
+        if v:GetAttribute("Areald") then return true end
+        if v:GetAttribute("CrateKg") then return true end
+        if v:IsA("Model") and (v.Name:lower():find("crate") or v.Name:lower():find("chest")) then
+            return true
+        end
+        if v:IsA("Tool") and (v.Name:lower():find("crate") or v.Name:lower():find("chest")) then
+            return true
+        end
+    end
+    return false
+end
+
+-- -------------------------------------------------------------
+-- [ CRATE POSITION (works with Model, Folder, BasePart) ]
+-- -------------------------------------------------------------
+local function GetCratePosition(crate)
+    if crate:IsA("BasePart") then return crate.Position end
+    local ok, cf = pcall(function() return crate:GetPivot() end)
+    if ok and cf then return cf.Position end
+    local cf2 = SafeBoundingBox(crate)
+    if cf2 then return cf2.Position end
+    return nil
+end
+
+-- -------------------------------------------------------------
+-- [ TRIGGER PROXIMITY PROMPT ON CRATE ]
+-- -------------------------------------------------------------
+local function TriggerCratePrompts(crate)
+    ZeroAllPrompts()
+    local triggered = false
+    for _, d in ipairs(crate:GetDescendants()) do
+        if d:IsA("ProximityPrompt") then
+            pcall(function() d.HoldDuration = 0 end)
+            pcall(function()
+                if type(fireproximityprompt) == "function" then
+                    fireproximityprompt(d, 0, true)
+                end
+            end)
+            pcall(function()
+                if type(firesignal) == "function" then
+                    firesignal(d.PromptButtonHoldBegan)
+                    firesignal(d.Triggered)
+                end
+            end)
+            triggered = true
+        end
+    end
+    return triggered
+end
+
+-- -------------------------------------------------------------
+-- [ PROTECTION LOOP : fires rev_ChaseCaught for nearby NPCs ]
+-- -------------------------------------------------------------
+local protectionActive = false
+local function StartProtection()
+    if protectionActive then return end
+    protectionActive = true
+    task.spawn(function()
+        while protectionActive and YanzHubUI and YanzHubUI.Parent do
+            for _, name in ipairs(PROTECT_NPC_NAMES) do
+                local npc = workspace:FindFirstChild(name)
+                if npc then
+                    FireChaseCaught(name)
+                end
+            end
+            task.wait(0.5)
+        end
+    end)
+end
+
+local function StopProtection()
+    protectionActive = false
+end
+
+-- -------------------------------------------------------------
+-- [ STEAL LOOP CONTROLLER ]
+-- -------------------------------------------------------------
+local stealRunning = false
+
+local function RunSingleStealCycle()
+    -- 0) Ensure prompts are zeroed
+    ZeroAllPrompts()
+
+    -- 1) Verify and reset arena state prior to attempt
+    ResetArena(true, 10)
+    task.wait(0.15)
+    ResetArena(false, 0)
+    task.wait(0.1)
+
+    -- 2) Get targeted crate/chest
+    local crates = GetAllCrates()
+    if #crates == 0 then
+        return false, "No crates found"
+    end
+    local target = crates[1]
+    local crateName = GetArealdName(target)
+
+    -- 3) Fly to crate using 300 speed
+    local cratePos = GetCratePosition(target)
+    if not cratePos then
+        return false, "Crate position unavailable"
+    end
+    ShowNotification("Flying to: " .. crateName)
+    FlyToAndWait(cratePos, FLY_SPEED, 8)
+
+    -- 4) Trigger ProximityPrompt (HoldDuration = 0)
+    TriggerCratePrompts(target)
+    task.wait(0.35)
+
+    -- Check if character is holding crate, retry once if needed
+    if not IsHoldingCrate() then
+        TriggerCratePrompts(target)
+        task.wait(0.4)
+    end
+
+    local holding = IsHoldingCrate()
+    if not holding then
+        return false, "Failed to pick up crate"
+    end
+
+    -- 5) Protection check - trigger ChaseCaught for protection names
+    for _, name in ipairs(PROTECT_NPC_NAMES) do
+        if workspace:FindFirstChild(name) then
+            FireChaseCaught(name)
+        end
+    end
+
+    -- 6) Fly to safe zone
+    local safePos = GetSafeZonePosition()
+    if safePos then
+        ShowNotification("Returning to safe zone...")
+        FlyToAndWait(safePos, FLY_SPEED, 10)
+    else
+        ShowNotification("Safe zone not found — firing escape")
+    end
+
+    -- 7) Fire escaped event signal
+    task.wait(0.15)
+    FireStealEscaped()
+    task.wait(0.25)
+
+    -- 8) Fire steal success with specific Areald name
+    FireStealSuccess(crateName)
+
+    -- 9) Verify item successfully obtained
+    task.wait(0.35)
+    if IsHoldingCrate() then
+        FireStealSuccess(crateName)
+    end
+
+    return true, "Stole: " .. crateName
+end
+
+StartStealLoop = function()
+    if stealRunning then return end
+    stealRunning = true
+    ShowNotification("Auto-Steal: ON")
+
+    task.spawn(function()
+        repeat
+            local ok, msg = RunSingleStealCycle()
+            if not ok then
+                ShowNotification("Cycle: " .. tostring(msg))
+            end
+            task.wait(0.4)
+        until not stealRunning or not loopChecked
+
+        if not loopChecked then
+            toggled = false
+            TweenService:Create(ToggleFrame, TWEEN_FAST, {BackgroundColor3 = Color3.fromRGB(32, 35, 44)}):Play()
+            TweenService:Create(ToggleCircle, TWEEN_ELASTIC, {
+                Position = UDim2.new(0, 3, 0.5, 0),
+                AnchorPoint = Vector2.new(0, 0.5),
+                BackgroundColor3 = Color3.fromRGB(150, 155, 165)
+            }):Play()
+            StopProtection()
+        end
+
+        ShowNotification("Auto-Steal: OFF")
+    end)
+end
+
+StopStealLoop = function()
+    stealRunning = false
+end
+
+-- Hook Toggle button
 ToggleFrame.MouseButton1Click:Connect(function()
     toggled = not toggled
     if toggled then
@@ -1378,6 +1462,8 @@ ToggleFrame.MouseButton1Click:Connect(function()
             AnchorPoint = Vector2.new(1, 0.5),
             BackgroundColor3 = Color3.fromRGB(12, 13, 16)
         }):Play()
+        StartStealLoop()
+        StartProtection()
     else
         TweenService:Create(ToggleFrame, TWEEN_FAST, {BackgroundColor3 = Color3.fromRGB(32, 35, 44)}):Play()
         TweenService:Create(ToggleCircle, TWEEN_ELASTIC, {
@@ -1385,246 +1471,16 @@ ToggleFrame.MouseButton1Click:Connect(function()
             AnchorPoint = Vector2.new(0, 0.5),
             BackgroundColor3 = Color3.fromRGB(150, 155, 165)
         }):Play()
+        StopStealLoop()
+        StopProtection()
     end
 end)
 
--- -------------------------------------------------------------
--- [ FEATURES PANEL : AUTO-STEAL / PROTECTION / ANTI-TRAP / RESET ]
--- -------------------------------------------------------------
-local FeaturesPanel = Instance.new("Frame")
-FeaturesPanel.Name = "FeaturesPanel"
-FeaturesPanel.Parent = MainFrame
-FeaturesPanel.BackgroundColor3 = Color3.fromRGB(16, 18, 22)
-FeaturesPanel.Position = UDim2.new(0, 10, 0, FEATURES_TOP_COLLAPSED)
-FeaturesPanel.Size = UDim2.new(1, -20, 0, FEATURES_HEIGHT)
-
-local FeaturesCorner = Instance.new("UICorner")
-FeaturesCorner.CornerRadius = UDim.new(0, 10)
-FeaturesCorner.Parent = FeaturesPanel
-
-local FeaturesStroke = Instance.new("UIStroke")
-FeaturesStroke.Parent = FeaturesPanel
-FeaturesStroke.Color = Color3.fromRGB(255, 255, 255)
-FeaturesStroke.Thickness = 1
-FeaturesStroke.Transparency = 0.88
-
--- Features title
-local FeaturesTitle = Instance.new("TextLabel")
-FeaturesTitle.Name = "FeaturesTitle"
-FeaturesTitle.Parent = FeaturesPanel
-FeaturesTitle.BackgroundTransparency = 1
-FeaturesTitle.Position = UDim2.new(0, 12, 0, 6)
-FeaturesTitle.Size = UDim2.new(0, 200, 0, 14)
-FeaturesTitle.Font = Enum.Font.GothamBold
-FeaturesTitle.Text = "FEATURES"
-FeaturesTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-FeaturesTitle.TextSize = 11
-FeaturesTitle.TextXAlignment = Enum.TextXAlignment.Left
-
--- Helper to build toggle row
-local function CreateFeatureRow(yPos, titleText, subtitleText)
-    local row = Instance.new("Frame")
-    row.Name = titleText:gsub("%s", "") .. "Row"
-    row.Parent = FeaturesPanel
-    row.BackgroundColor3 = Color3.fromRGB(22, 24, 30)
-    row.BackgroundTransparency = 0.25
-    row.BorderSizePixel = 0
-    row.Position = UDim2.new(0, 8, 0, yPos)
-    row.Size = UDim2.new(1, -16, 0, 34)
-
-    local rowCorner = Instance.new("UICorner")
-    rowCorner.CornerRadius = UDim.new(0, 7)
-    rowCorner.Parent = row
-
-    local rowStroke = Instance.new("UIStroke")
-    rowStroke.Parent = row
-    rowStroke.Color = Color3.fromRGB(255, 255, 255)
-    rowStroke.Thickness = 1
-    rowStroke.Transparency = 0.9
-
-    local titleLbl = Instance.new("TextLabel")
-    titleLbl.Name = "Title"
-    titleLbl.Parent = row
-    titleLbl.BackgroundTransparency = 1
-    titleLbl.Position = UDim2.new(0, 10, 0, 3)
-    titleLbl.Size = UDim2.new(1, -70, 0, 14)
-    titleLbl.Font = Enum.Font.GothamBold
-    titleLbl.Text = titleText
-    titleLbl.TextColor3 = Color3.fromRGB(235, 240, 250)
-    titleLbl.TextSize = 10
-    titleLbl.TextXAlignment = Enum.TextXAlignment.Left
-
-    local subLbl = Instance.new("TextLabel")
-    subLbl.Name = "Sub"
-    subLbl.Parent = row
-    subLbl.BackgroundTransparency = 1
-    subLbl.Position = UDim2.new(0, 10, 0, 17)
-    subLbl.Size = UDim2.new(1, -70, 0, 14)
-    subLbl.Font = Enum.Font.GothamMedium
-    subLbl.Text = subtitleText or ""
-    subLbl.TextColor3 = Color3.fromRGB(130, 135, 145)
-    subLbl.TextSize = 8
-    subLbl.TextXAlignment = Enum.TextXAlignment.Left
-
-    return row, titleLbl, subLbl, rowStroke
-end
-
--- Toggle switch builder (return toggleControl, setState, getState)
-local function CreateToggleSwitch(parent, initial)
-    local holder = Instance.new("TextButton")
-    holder.Parent = parent
-    holder.BackgroundColor3 = Color3.fromRGB(32, 35, 44)
-    holder.AnchorPoint = Vector2.new(1, 0.5)
-    holder.Position = UDim2.new(1, -8, 0.5, 0)
-    holder.Size = UDim2.new(0, 40, 0, 20)
-    holder.Text = ""
-    holder.AutoButtonColor = false
-
-    local hc = Instance.new("UICorner")
-    hc.CornerRadius = UDim.new(1, 0)
-    hc.Parent = holder
-
-    local knob = Instance.new("Frame")
-    knob.Parent = holder
-    knob.BackgroundColor3 = Color3.fromRGB(150, 155, 165)
-    knob.Size = UDim2.new(0, 14, 0, 14)
-    knob.Position = UDim2.new(0, 3, 0.5, 0)
-    knob.AnchorPoint = Vector2.new(0, 0.5)
-
-    local kc = Instance.new("UICorner")
-    kc.CornerRadius = UDim.new(1, 0)
-    kc.Parent = knob
-
-    local state = initial and true or false
-
-    local function applyVisual()
-        if state then
-            TweenService:Create(holder, TWEEN_FAST, {BackgroundColor3 = Color3.fromRGB(255, 255, 255)}):Play()
-            TweenService:Create(knob, TWEEN_ELASTIC, {
-                Position = UDim2.new(1, -3, 0.5, 0),
-                AnchorPoint = Vector2.new(1, 0.5),
-                BackgroundColor3 = Color3.fromRGB(12, 13, 16)
-            }):Play()
-        else
-            TweenService:Create(holder, TWEEN_FAST, {BackgroundColor3 = Color3.fromRGB(32, 35, 44)}):Play()
-            TweenService:Create(knob, TWEEN_ELASTIC, {
-                Position = UDim2.new(0, 3, 0.5, 0),
-                AnchorPoint = Vector2.new(0, 0.5),
-                BackgroundColor3 = Color3.fromRGB(150, 155, 165)
-            }):Play()
-        end
-    end
-
-    applyVisual()
-
-    holder.MouseButton1Click:Connect(function()
-        state = not state
-        applyVisual()
-        if holder:GetAttribute("OnChanged") and type(holder:GetAttribute("OnChanged")) == "function" then
-            -- not used
-        end
-        -- dispatch via BindableEvent
-        local evt = holder:FindFirstChild("ChangedEvent")
-        if evt then
-            evt:Fire(state)
-        end
-    end)
-
-    -- BindableEvent for external wiring
-    local be = Instance.new("BindableEvent")
-    be.Name = "ChangedEvent"
-    be.Parent = holder
-
-    -- setState from outside
-    local function setState(newState)
-        state = newState and true or false
-        applyVisual()
-    end
-    local function getState() return state end
-
-    return holder, setState, getState, be
-end
-
--- ROW 1 : AUTO STEAL
-local stealRow, stealTitle, stealSub, stealStroke = CreateFeatureRow(22, "AUTO STEAL", "Fly • Loot • Escape to Safe Zone")
-local stealSwitch, setStealSwitch, getStealSwitch, stealEvent = CreateToggleSwitch(stealRow, false)
-
--- ROW 2 : PROTECTION
-local protectRow, protectTitle, protectSub, protectStroke = CreateFeatureRow(60, "PROTECTION", "Anti-Chase NPCS (fires rev_ChaseCaught)")
-local protectSwitch, setProtectSwitch, getProtectSwitch, protectEvent = CreateToggleSwitch(protectRow, false)
-
--- ROW 3 : ANTI-TRAP
-local trapRow, trapTitle, trapSub, trapStroke = CreateFeatureRow(98, "ANTI-TRAP", "Disables local trap parts")
-local trapSwitch, setTrapSwitch, getTrapSwitch, trapEvent = CreateToggleSwitch(trapRow, false)
-
--- ROW 4 : ARENA RESET (Button)
-local resetRow, resetTitle, resetSub, resetStroke = CreateFeatureRow(136, "ARENA RESET", "Unlock crates via rev_ARENA_RESET")
-local resetBtn = Instance.new("TextButton")
-resetBtn.Name = "ResetBtn"
-resetBtn.Parent = resetRow
-resetBtn.BackgroundColor3 = Color3.fromRGB(40, 44, 55)
-resetBtn.AnchorPoint = Vector2.new(1, 0.5)
-resetBtn.Position = UDim2.new(1, -8, 0.5, 0)
-resetBtn.Size = UDim2.new(0, 56, 0, 22)
-resetBtn.Font = Enum.Font.GothamBold
-resetBtn.Text = "RESET"
-resetBtn.TextColor3 = Color3.fromRGB(220, 225, 235)
-resetBtn.TextSize = 9
-
-local resetBtnCorner = Instance.new("UICorner")
-resetBtnCorner.CornerRadius = UDim.new(0, 5)
-resetBtnCorner.Parent = resetBtn
-
-resetBtn.MouseEnter:Connect(function()
-    TweenService:Create(resetBtn, TWEEN_FAST, {BackgroundColor3 = Color3.fromRGB(90, 120, 255)}):Play()
-end)
-resetBtn.MouseLeave:Connect(function()
-    TweenService:Create(resetBtn, TWEEN_FAST, {BackgroundColor3 = Color3.fromRGB(40, 44, 55)}):Play()
-end)
-
--- -------------------------------------------------------------
--- [ FEATURE WIRING ]
--- -------------------------------------------------------------
-stealEvent.Event:Connect(function(state)
-    stealEnabled = state
-    stealSub.Text = state and "Stealing crates..." or "Fly • Loot • Escape to Safe Zone"
-    if state then
-        ShowNotification("Auto-Steal ENABLED")
-        StartStealLoop()
-    else
-        ShowNotification("Auto-Steal DISABLED")
-    end
-end)
-
-protectEvent.Event:Connect(function(state)
-    protectionEnabled = state
-    protectSub.Text = state and "Monitoring protected NPCs..." or "Anti-Chase NPCS (fires rev_ChaseCaught)"
-    ShowNotification("Protection " .. (state and "ENABLED" or "DISABLED"))
-end)
-
-trapEvent.Event:Connect(function(state)
-    antiTrapEnabled = state
-    trapSub.Text = state and "Neutralizing traps..." or "Disables local trap parts"
-    ShowNotification("Anti-Trap " .. (state and "ENABLED" or "DISABLED"))
-end)
-
-resetBtn.MouseButton1Click:Connect(function()
-    if arenaResetRunning then
-        ShowNotification("Arena reset already in progress...")
-        return
-    end
-    ShowNotification("Arena Reset Sent (10s)")
-    DoArenaReset()
-    local squish = TweenService:Create(resetBtn, TWEEN_FAST, {Size = UDim2.new(0, 50, 0, 20)})
-    squish:Play()
-    squish.Completed:Connect(function()
-        TweenService:Create(resetBtn, TWEEN_SPRING, {Size = UDim2.new(0, 56, 0, 22)}):Play()
-    end)
-end)
-
--- -------------------------------------------------------------
+-- =============================================================
 -- [ CRATE DATA -> UI REFRESH LOGIC ]
--- -------------------------------------------------------------
+-- =============================================================
+local selectedCrate = nil
+
 local function CreateMiniCrateRow(crate, rank)
     local ITEM_HEIGHT = 56
 
@@ -1668,7 +1524,8 @@ local function CreateMiniCrateRow(crate, rank)
         SetupViewport(vp, crate)
     end)
 
-    local areald = crate:GetAttribute("Areald") or crate.Name
+    -- Use Areald attribute/property instead of raw model name
+    local areald = GetArealdName(crate)
     local kg     = tonumber(crate:GetAttribute("CrateKg")) or 0
     local tier   = crate:GetAttribute("CrateTier") or "Common"
     local size   = crate:GetAttribute("CrateSize") or ""
@@ -1720,6 +1577,32 @@ local function CreateMiniCrateRow(crate, rank)
     rankLbl.TextXAlignment = Enum.TextXAlignment.Right
     rankLbl.Parent = item
 
+    -- CARD SELECTION : Click row -> select & automatically collapse
+    local rowButton = Instance.new("TextButton")
+    rowButton.Name = "RowButton"
+    rowButton.BackgroundTransparency = 1
+    rowButton.Size = UDim2.new(1, 0, 1, 0)
+    rowButton.Text = ""
+    rowButton.ZIndex = 10
+    rowButton.Parent = item
+
+    rowButton.MouseButton1Click:Connect(function()
+        if SelectCrateByRow then
+            SelectCrateByRow(crate)
+        end
+    end)
+
+    rowButton.MouseEnter:Connect(function()
+        TweenService:Create(itemStroke, TWEEN_FAST, {Transparency = 0.15}):Play()
+        TweenService:Create(item, TWEEN_FAST, {BackgroundColor3 = Color3.fromRGB(30, 34, 42)}):Play()
+    end)
+
+    rowButton.MouseLeave:Connect(function()
+        local isFirst = (rank == 1)
+        TweenService:Create(itemStroke, TWEEN_FAST, {Transparency = isFirst and 0.4 or 0.92}):Play()
+        TweenService:Create(item, TWEEN_FAST, {BackgroundColor3 = Color3.fromRGB(22, 24, 30)}):Play()
+    end)
+
     return item
 end
 
@@ -1757,21 +1640,55 @@ local function PopulateCratesList(crates)
     end)
 end
 
+-- Selection handler : updates top card + auto-collapse
+SelectCrateByRow = function(crate)
+    selectedCrate = crate
+    if not crate then return end
+
+    local areald = GetArealdName(crate)
+    local kg     = tonumber(crate:GetAttribute("CrateKg")) or 0
+    local tier   = crate:GetAttribute("CrateTier") or "Common"
+
+    ItemName.Text = tostring(areald)
+    ValueLabel.Text = FormatWeight(kg) .. " kg"
+    RarityLabel.Text = tostring(tier)
+    RarityLabel.TextColor3 = GetTierColor(tier)
+
+    SetupViewport(ItemViewport, crate)
+
+    ShowNotification("Selected: " .. areald)
+
+    -- Automatically collapse list after selection
+    if listExpanded then
+        listExpanded = false
+        ApplyLayout()
+    end
+end
+
 RefreshCratesUI = function()
     local crates = GetAllCrates()
 
-    local best = crates[1]
-    if best then
-        local areald = best:GetAttribute("Areald") or best.Name
-        local kg     = tonumber(best:GetAttribute("CrateKg")) or 0
-        local tier   = best:GetAttribute("CrateTier") or "Common"
+    if not selectedCrate and crates[1] then
+        selectedCrate = crates[1]
+    end
+
+    if selectedCrate and selectedCrate.Parent == nil then
+        selectedCrate = crates[1]
+    end
+
+    -- 1. Update top card
+    local show = selectedCrate or crates[1]
+    if show then
+        local areald = GetArealdName(show)
+        local kg     = tonumber(show:GetAttribute("CrateKg")) or 0
+        local tier   = show:GetAttribute("CrateTier") or "Common"
 
         ItemName.Text = tostring(areald)
         ValueLabel.Text = FormatWeight(kg) .. " kg"
         RarityLabel.Text = tostring(tier)
         RarityLabel.TextColor3 = GetTierColor(tier)
 
-        SetupViewport(ItemViewport, best)
+        SetupViewport(ItemViewport, show)
     else
         ItemName.Text = "No Crate Found"
         ValueLabel.Text = "0 kg"
@@ -1780,6 +1697,7 @@ RefreshCratesUI = function()
         for _, c in ipairs(ItemViewport:GetChildren()) do c:Destroy() end
     end
 
+    -- 2. Refresh mini scroll list if expanded
     if listExpanded then
         PopulateCratesList(crates)
     end
@@ -1789,7 +1707,7 @@ task.defer(function()
     RefreshCratesUI()
 end)
 
--- Auto-refresh watchers
+-- Workspace Watchers
 local watchedCrates = {}
 local refreshQueued = false
 local function QueueRefresh()
@@ -1849,8 +1767,16 @@ task.spawn(function()
     end
 end)
 
+-- Periodic ProximityPrompt zeroing (HoldDuration = 0)
+task.spawn(function()
+    while YanzHubUI and YanzHubUI.Parent do
+        ZeroAllPrompts()
+        task.wait(1.5)
+    end
+end)
+
 -- -------------------------------------------------------------
--- [ HIGH-PRECISION ZERO-LAG UNIVERSAL DRAGGING ENGINE ]
+-- [ HIGH-PRECISION UNIVERSAL DRAGGING ENGINE WITH TILT ]
 -- -------------------------------------------------------------
 local isDragging = false
 local dragStartMouse = Vector2.new()
@@ -1867,6 +1793,31 @@ local function CurrentMainHeight()
     return listExpanded and EXPANDED_HEIGHT or COLLAPSED_HEIGHT
 end
 
+local function ClampMainFramePosition(position)
+    if not Camera then
+        return position
+    end
+
+    local viewport = Camera.ViewportSize
+    local scale = math.max(UIScale.Scale, 0.01)
+    local frameWidth = MAIN_WIDTH * scale
+    local frameHeight = CurrentMainHeight() * scale
+    local rotationPadding = math.max(frameWidth, frameHeight) * 0.05
+    local halfWidth = frameWidth * 0.5 + SCREEN_PADDING + rotationPadding
+    local halfHeight = frameHeight * 0.5 + SCREEN_PADDING + rotationPadding
+    local minX = math.min(halfWidth, viewport.X * 0.5)
+    local maxX = math.max(viewport.X - halfWidth, viewport.X * 0.5)
+    local minY = math.min(halfHeight, viewport.Y * 0.5)
+    local maxY = math.max(viewport.Y - halfHeight, viewport.Y * 0.5)
+    local centerX = position.X.Scale * viewport.X + position.X.Offset
+    local centerY = position.Y.Scale * viewport.Y + position.Y.Offset
+
+    centerX = math.clamp(centerX, minX, maxX)
+    centerY = math.clamp(centerY, minY, maxY)
+
+    return UDim2.new(0.5, centerX - viewport.X * 0.5, 0.5, centerY - viewport.Y * 0.5)
+end
+
 local function OnDragBegan(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         isDragging = true
@@ -1874,14 +1825,12 @@ local function OnDragBegan(input)
         lastMousePos = dragStartMouse
         dragStartFramePos = MainFrame.Position
 
-        TweenService:Create(MainFrame, TWEEN_FAST, {Size = UDim2.new(0, MAIN_WIDTH - 5, 0, CurrentMainHeight() - 4)}):Play()
         TweenService:Create(MainStroke, TWEEN_FAST, {Transparency = 0.02, Color = Color3.fromRGB(255, 255, 255)}):Play()
 
         input.Changed:Connect(function()
             if input.UserInputState == Enum.UserInputState.End then
                 isDragging = false
                 TweenService:Create(MainFrame, TWEEN_SPRING, {
-                    Size = UDim2.new(0, MAIN_WIDTH, 0, CurrentMainHeight()),
                     Rotation = 0
                 }):Play()
                 TweenService:Create(MainStroke, TWEEN_FAST, {Transparency = 0.12}):Play()
@@ -1893,21 +1842,20 @@ end
 Header.InputBegan:Connect(OnDragBegan)
 EggCard.InputBegan:Connect(OnDragBegan)
 ControlPanel.InputBegan:Connect(OnDragBegan)
-FeaturesPanel.InputBegan:Connect(OnDragBegan)
 MainFrame.InputBegan:Connect(OnDragBegan)
 
 UserInputService.InputChanged:Connect(function(input)
     if isDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
         local currentMouse = Vector2.new(input.Position.X, input.Position.Y)
         local delta = currentMouse - dragStartMouse
-        local currentScale = UIScale.Scale
+        local currentScale = math.max(UIScale.Scale, 0.01)
 
-        targetPos = UDim2.new(
+        targetPos = ClampMainFramePosition(UDim2.new(
             dragStartFramePos.X.Scale,
             dragStartFramePos.X.Offset + (delta.X / currentScale),
             dragStartFramePos.Y.Scale,
             dragStartFramePos.Y.Offset + (delta.Y / currentScale)
-        )
+        ))
 
         currentVelocity = (currentMouse - lastMousePos)
         lastMousePos = currentMouse
@@ -1915,45 +1863,35 @@ UserInputService.InputChanged:Connect(function(input)
 end)
 
 -- -------------------------------------------------------------
--- [ BACKGROUND TASK LOOPS : PROTECTION / ANTI-TRAP ]
--- -------------------------------------------------------------
-task.spawn(function()
-    while YanzHubUI and YanzHubUI.Parent do
-        task.wait(0.5)
-        if protectionEnabled then
-            pcall(ProtectionTick)
-        end
-    end
-end)
-
-task.spawn(function()
-    while YanzHubUI and YanzHubUI.Parent do
-        task.wait(1.0)
-        if antiTrapEnabled then
-            pcall(AntiTrapTick)
-        end
-    end
-end)
-
--- -------------------------------------------------------------
--- [ RENDER STEPPED ENGINE LOOP ]
+-- [ RENDER STEPPED ENGINE LOOP (FLAME & KINEMATICS) ]
 -- -------------------------------------------------------------
 local clock = os.clock()
 
 RunService.RenderStepped:Connect(function(dt)
     clock = clock + dt
 
+    -- 1. Position and GUI Tilt Update
     if isDragging and isGuiVisible then
-        MainFrame.Position = targetPos
-        local targetTilt = math.clamp(currentVelocity.X * 0.25, -6, 6)
+        MainFrame.Position = ClampMainFramePosition(targetPos)
+        targetPos = MainFrame.Position
+        
+        -- Slight GUI tilt allowing all overflowing flame and particle parts to display smoothly
+        local targetTilt = math.clamp(currentVelocity.X * 0.15, -6, 6)
         tiltAngle = tiltAngle + (targetTilt - tiltAngle) * math.min(dt * 20, 1)
         MainFrame.Rotation = tiltAngle
 
         flameWindVelocity = flameWindVelocity:Lerp(-currentVelocity * 1.65, math.min(dt * 25, 1))
     else
+        MainFrame.Position = ClampMainFramePosition(MainFrame.Position)
+        if math.abs(MainFrame.Rotation) > 0.01 then
+            MainFrame.Rotation = MainFrame.Rotation + (0 - MainFrame.Rotation) * math.min(dt * 12, 1)
+        else
+            MainFrame.Rotation = 0
+        end
         flameWindVelocity = flameWindVelocity:Lerp(Vector2.new(0, 0), math.min(dt * 10, 1))
     end
 
+    -- 2. Thermal Core Aura Pulsation
     local tSpeed = clock * 18
     local corePulse = 0.15 + math.sin(tSpeed) * 0.1 + (math.random() * 0.05)
     local auraPulse = 0.40 + math.cos(tSpeed * 1.2) * 0.12 + (math.random() * 0.08)
@@ -1968,6 +1906,7 @@ RunService.RenderStepped:Connect(function(dt)
     AuraGlow.BackgroundTransparency = math.clamp(auraPulse, 0.2, 0.65)
     AuraGlow.Size = UDim2.new(0, 54 + math.sin(tSpeed) * 5, 0, 60 + math.cos(tSpeed * 1.5) * 6)
 
+    -- 3. Dynamic Flame Tendrils
     for i = 1, TENDRIL_COUNT do
         local ft = flameTendrils[i]
         ft.Life = ft.Life + dt
@@ -2005,6 +1944,7 @@ RunService.RenderStepped:Connect(function(dt)
         ft.Object.BackgroundTransparency = math.clamp(fadeAlpha, 0.05, 1)
     end
 
+    -- 4. Micro Spark Particles
     for i = 1, SPARK_COUNT do
         local sp = sparkParticles[i]
         sp.Life = sp.Life + dt
@@ -2034,12 +1974,4 @@ RunService.RenderStepped:Connect(function(dt)
         sp.Object.Size = UDim2.new(0, sp.Size, 0, sp.Size * (1 + flameWindVelocity.Magnitude * 0.02))
         sp.Object.BackgroundTransparency = math.clamp(spFade + flickerFactor, 0, 1)
     end
-end)
-
--- -------------------------------------------------------------
--- [ STARTUP MESSAGE ]
--- -------------------------------------------------------------
-task.defer(function()
-    task.wait(0.4)
-    ShowNotification("YANZ HUB V2.2 Loaded — Features Ready")
 end)

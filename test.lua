@@ -70,11 +70,11 @@ local TWEEN_SPRING  = TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirec
 local TWEEN_ELASTIC = TweenInfo.new(0.5, Enum.EasingStyle.Elastic, Enum.EasingDirection.Out)
 local TWEEN_FAST    = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
-local MAIN_WIDTH           = 345
-local COLLAPSED_HEIGHT     = 242
-local LIST_HEIGHT          = 170
-local LIST_TOP             = 140
-local EXPANDED_HEIGHT      = COLLAPSED_HEIGHT + LIST_HEIGHT + 8
+local MAIN_WIDTH            = 345
+local COLLAPSED_HEIGHT      = 242
+local LIST_HEIGHT           = 170
+local LIST_TOP              = 140
+local EXPANDED_HEIGHT       = COLLAPSED_HEIGHT + LIST_HEIGHT + 8
 local CONTROL_TOP_COLLAPSED = 144
 local CONTROL_TOP_EXPANDED  = 144 + LIST_HEIGHT + 8
 local SCREEN_PADDING        = 12
@@ -95,7 +95,10 @@ local TIER_COLORS = {
 }
 
 local function GetTierColor(tier)
-    if not tier then return Color3.fromRGB(180, 185, 195) end
+    if not tier then
+        return Color3.fromRGB(180, 185, 195)
+    end
+
     tier = tostring(tier)
     local key = tier:gsub("^%l", string.upper)
     return TIER_COLORS[key] or Color3.fromRGB(255, 140, 40)
@@ -103,135 +106,240 @@ end
 
 local function FormatWeight(kg)
     kg = tonumber(kg) or 0
-    if kg >= 1e12 then return string.format("%.2fT", kg / 1e12)
-    elseif kg >= 1e9 then return string.format("%.2fB", kg / 1e9)
-    elseif kg >= 1e6 then return string.format("%.2fM", kg / 1e6)
-    elseif kg >= 1e3 then return string.format("%.2fK", kg / 1e3)
-    else return string.format("%d", kg) end
+
+    if kg >= 1e12 then
+        return string.format("%.2fT", kg / 1e12)
+    elseif kg >= 1e9 then
+        return string.format("%.2fB", kg / 1e9)
+    elseif kg >= 1e6 then
+        return string.format("%.2fM", kg / 1e6)
+    elseif kg >= 1e3 then
+        return string.format("%.2fK", kg / 1e3)
+    else
+        return string.format("%d", kg)
+    end
 end
 
 local function ValidArealdValue(value)
-    if value == nil then return nil end
+    if value == nil then
+        return nil
+    end
+
     local valueType = typeof(value)
+
     if valueType == "string" then
-        if value ~= "" then return value end
+        if value ~= "" then
+            return value
+        end
     elseif valueType == "number" then
         return tostring(value)
     elseif valueType == "Instance" then
         return value.Name
     end
+
     return nil
 end
 
+-- Scan crate/model for `Areald` attribute / value child / case variants.
 local function GetArealdName(crate)
-    if not crate then return "Unknown" end
+    if not crate then
+        return "Unknown"
+    end
+
     local function ExtractFromInstance(inst)
-        if not inst then return nil end
-        local okAttr, attr = pcall(function() return inst:GetAttribute("Areald") end)
+        if not inst then
+            return nil
+        end
+
+        local okAttr, attr = pcall(function()
+            return inst:GetAttribute("Areald")
+        end)
+
         if okAttr then
             local attrValue = ValidArealdValue(attr)
-            if attrValue then return attrValue end
+            if attrValue then
+                return attrValue
+            end
         end
-        local okAttrs, attrs = pcall(function() return inst:GetAttributes() end)
+
+        local okAttrs, attrs = pcall(function()
+            return inst:GetAttributes()
+        end)
+
         if okAttrs and attrs then
             for key, value in pairs(attrs) do
                 if tostring(key):lower() == "areald" then
                     local attrTableValue = ValidArealdValue(value)
-                    if attrTableValue then return attrTableValue end
+                    if attrTableValue then
+                        return attrTableValue
+                    end
                 end
             end
         end
+
         local child = inst:FindFirstChild("Areald")
         if child then
             if child:IsA("ValueBase") then
-                local okValue, value = pcall(function() return child.Value end)
+                local okValue, value = pcall(function()
+                    return child.Value
+                end)
+
                 if okValue then
                     local childValue = ValidArealdValue(value)
-                    if childValue then return childValue end
+                    if childValue then
+                        return childValue
+                    end
                 end
             elseif child:IsA("TextLabel") then
-                if child.Text ~= "" then return child.Text end
+                if child.Text ~= "" then
+                    return child.Text
+                end
             end
         end
+
         return nil
     end
+
     local direct = ExtractFromInstance(crate)
-    if direct then return direct end
+    if direct then
+        return direct
+    end
+
     for _, descendant in ipairs(crate:GetDescendants()) do
         local found = ExtractFromInstance(descendant)
-        if found then return found end
+        if found then
+            return found
+        end
     end
+
     return crate.Name
 end
 
 local function GetAllCrates()
     local CratesFolder = workspace:FindFirstChild("Crates")
-    if not CratesFolder then return {} end
+    if not CratesFolder then
+        return {}
+    end
+
     local crates = {}
+
     for _, crate in ipairs(CratesFolder:GetChildren()) do
         local kg = crate:GetAttribute("CrateKg")
-        if kg ~= nil then table.insert(crates, crate) end
+        if kg ~= nil then
+            table.insert(crates, crate)
+        end
     end
+
     table.sort(crates, function(a, b)
         local ka = tonumber(a:GetAttribute("CrateKg")) or 0
         local kb = tonumber(b:GetAttribute("CrateKg")) or 0
         return ka > kb
     end)
+
     return crates
 end
 
 local function SafeBoundingBox(obj)
-    local ok, cf, size = pcall(function() return obj:GetBoundingBox() end)
-    if ok and cf and size then return cf, size end
+    local ok, cf, size = pcall(function()
+        return obj:GetBoundingBox()
+    end)
+
+    if ok and cf and size then
+        return cf, size
+    end
+
     local minV = Vector3.new(math.huge, math.huge, math.huge)
     local maxV = Vector3.new(-math.huge, -math.huge, -math.huge)
     local found = false
+
     for _, p in ipairs(obj:GetDescendants()) do
         if p:IsA("BasePart") then
             found = true
+
             local sz = p.Size / 2
             local base = p.CFrame
+
             for x = -1, 1, 2 do
                 for y = -1, 1, 2 do
                     for z = -1, 1, 2 do
                         local corner = (base * CFrame.new(sz.X * x, sz.Y * y, sz.Z * z)).Position
-                        minV = Vector3.new(math.min(minV.X, corner.X), math.min(minV.Y, corner.Y), math.min(minV.Z, corner.Z))
-                        maxV = Vector3.new(math.max(maxV.X, corner.X), math.max(maxV.Y, corner.Y), math.max(maxV.Z, corner.Z))
+
+                        minV = Vector3.new(
+                            math.min(minV.X, corner.X),
+                            math.min(minV.Y, corner.Y),
+                            math.min(minV.Z, corner.Z)
+                        )
+
+                        maxV = Vector3.new(
+                            math.max(maxV.X, corner.X),
+                            math.max(maxV.Y, corner.Y),
+                            math.max(maxV.Z, corner.Z)
+                        )
                     end
                 end
             end
         end
     end
-    if not found then return CFrame.new(0, 0, 0), Vector3.new(4, 4, 4) end
+
+    if not found then
+        return CFrame.new(0, 0, 0), Vector3.new(4, 4, 4)
+    end
+
     local center = (minV + maxV) / 2
     local sizeV = maxV - minV
+
     return CFrame.new(center), sizeV
 end
 
 local function SetupViewport(viewport, crate)
-    if not viewport or not viewport.Parent then return end
-    for _, c in ipairs(viewport:GetChildren()) do c:Destroy() end
+    if not viewport or not viewport.Parent then
+        return
+    end
+
+    for _, c in ipairs(viewport:GetChildren()) do
+        c:Destroy()
+    end
+
     local cam = Instance.new("Camera")
     cam.FieldOfView = 50
     cam.Parent = viewport
     viewport.CurrentCamera = cam
+
     local ok, clone = pcall(function()
         local c = crate:Clone()
+
         for _, d in ipairs(c:GetDescendants()) do
-            if d:IsA("Script") or d:IsA("LocalScript") or d:IsA("ModuleScript") then d:Destroy()
-            elseif d:IsA("BasePart") then d.Anchored = true; d.CanCollide = false; d.CanTouch = false; d.CanQuery = false
-            elseif d:IsA("ParticleEmitter") or d:IsA("Fire") or d:IsA("Smoke") or d:IsA("Sparkles") then d.Enabled = false end
+            if d:IsA("Script") or d:IsA("LocalScript") or d:IsA("ModuleScript") then
+                d:Destroy()
+            elseif d:IsA("BasePart") then
+                d.Anchored = true
+                d.CanCollide = false
+                d.CanTouch = false
+                d.CanQuery = false
+            elseif d:IsA("ParticleEmitter") or d:IsA("Fire") or d:IsA("Smoke") or d:IsA("Sparkles") then
+                d.Enabled = false
+            end
         end
+
         c.Parent = viewport
         return c
     end)
-    if not ok or not clone then return end
+
+    if not ok or not clone then
+        return
+    end
+
     local cf, size = SafeBoundingBox(clone)
     local center = cf.Position
     local maxDim = math.max(size.X, size.Y, size.Z)
-    if maxDim <= 0.01 then maxDim = 4 end
+
+    if maxDim <= 0.01 then
+        maxDim = 4
+    end
+
     local distance = maxDim * 1.85
     local eye = center + Vector3.new(distance * 0.75, distance * 0.55, distance * 0.9)
+
     cam.CFrame = CFrame.new(eye, center)
 end
 
@@ -266,27 +374,42 @@ local targetScaleValue = 1.0
 local viewportConnection
 
 local function UpdateAutoScaler()
-    if not Camera then return end
+    if not Camera then
+        return
+    end
+
     local viewport = Camera.ViewportSize
+
+    -- Rotation-aware autoscale: slight tilt never clips or overflows.
     local maxTilt = math.rad(MAX_GUI_TILT)
     local rotatedWidth = (MAIN_WIDTH * math.cos(maxTilt)) + (EXPANDED_HEIGHT * math.sin(maxTilt))
     local rotatedHeight = (MAIN_WIDTH * math.sin(maxTilt)) + (EXPANDED_HEIGHT * math.cos(maxTilt))
+
     local widthScale = (viewport.X - SCREEN_PADDING * 2) / math.max(rotatedWidth, 1)
     local heightScale = (viewport.Y - SCREEN_PADDING * 2) / math.max(rotatedHeight, 1)
+
     targetScaleValue = math.max(0.01, math.min(1, widthScale, heightScale))
     UIScale.Scale = targetScaleValue
 end
 
 local function BindCurrentCamera()
-    if viewportConnection then viewportConnection:Disconnect(); viewportConnection = nil end
+    if viewportConnection then
+        viewportConnection:Disconnect()
+        viewportConnection = nil
+    end
+
     Camera = workspace.CurrentCamera
-    if not Camera then return end
+    if not Camera then
+        return
+    end
+
     viewportConnection = Camera:GetPropertyChangedSignal("ViewportSize"):Connect(UpdateAutoScaler)
     UpdateAutoScaler()
 end
 
 workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(BindCurrentCamera)
 BindCurrentCamera()
+
 UIScale.Scale = 0
 TweenService:Create(UIScale, TWEEN_SPRING, {Scale = targetScaleValue}):Play()
 
@@ -341,27 +464,40 @@ NotifText.TextTransparency = 1
 NotifText.ZIndex = 7
 
 local notifDebounce = false
+
 local function ShowNotification(text)
-    if notifDebounce then return end
+    if notifDebounce then
+        return
+    end
+
     notifDebounce = true
     NotifText.Text = text or "Notification"
+
     NotifFrame.Position = UDim2.new(0, 12, 0, 9)
     NotifFrame.BackgroundTransparency = 1
     NotifStroke.Transparency = 1
     NotifText.TextTransparency = 1
     NotifIcon.ImageTransparency = 1
     NotifFrame.Visible = true
+
     TweenService:Create(NotifFrame, TWEEN_SPRING, {BackgroundTransparency = 0.05}):Play()
     TweenService:Create(NotifStroke, TWEEN_FAST, {Transparency = 0.25}):Play()
     TweenService:Create(NotifText, TWEEN_FAST, {TextTransparency = 0}):Play()
     TweenService:Create(NotifIcon, TWEEN_FAST, {ImageTransparency = 0}):Play()
+
     task.delay(3, function()
         local slideDown = TweenService:Create(NotifFrame, TWEEN_SPRING, {BackgroundTransparency = 1})
+
         TweenService:Create(NotifStroke, TWEEN_FAST, {Transparency = 1}):Play()
         TweenService:Create(NotifText, TWEEN_FAST, {TextTransparency = 1}):Play()
         TweenService:Create(NotifIcon, TWEEN_FAST, {ImageTransparency = 1}):Play()
+
         slideDown:Play()
-        slideDown.Completed:Connect(function() NotifFrame.Visible = false; notifDebounce = false end)
+
+        slideDown.Completed:Connect(function()
+            NotifFrame.Visible = false
+            notifDebounce = false
+        end)
     end)
 end
 
@@ -404,34 +540,45 @@ TopGlowCorner.CornerRadius = UDim.new(1, 0)
 TopGlowCorner.Parent = TopGlow
 
 local isGuiVisible = true
+
 local function ToggleGuiState()
     isGuiVisible = not isGuiVisible
+
     if isGuiVisible then
         MainFrame.Visible = true
+
         TweenService:Create(UIScale, TWEEN_SPRING, {Scale = targetScaleValue}):Play()
         TweenService:Create(TopToggleButton, TWEEN_SPRING, {Size = UDim2.new(0, 42, 0, 42)}):Play()
         TweenService:Create(TopToggleStroke, TWEEN_FAST, {Transparency = 0.2}):Play()
     else
         local closeAnim = TweenService:Create(UIScale, TWEEN_SPRING, {Scale = 0})
         closeAnim:Play()
-        closeAnim.Completed:Connect(function() if not isGuiVisible then MainFrame.Visible = false end end)
+
+        closeAnim.Completed:Connect(function()
+            if not isGuiVisible then
+                MainFrame.Visible = false
+            end
+        end)
+
         TweenService:Create(TopToggleButton, TWEEN_SPRING, {Size = UDim2.new(0, 38, 0, 38)}):Play()
         TweenService:Create(TopToggleStroke, TWEEN_FAST, {Transparency = 0.6}):Play()
     end
 end
 
 TopToggleButton.MouseButton1Click:Connect(ToggleGuiState)
+
 TopToggleButton.MouseEnter:Connect(function()
     TweenService:Create(TopToggleStroke, TWEEN_FAST, {Transparency = 0}):Play()
     TweenService:Create(TopGlow, TWEEN_FAST, {BackgroundTransparency = 0.65}):Play()
 end)
+
 TopToggleButton.MouseLeave:Connect(function()
     TweenService:Create(TopToggleStroke, TWEEN_FAST, {Transparency = isGuiVisible and 0.2 or 0.6}):Play()
     TweenService:Create(TopGlow, TWEEN_FAST, {BackgroundTransparency = 0.85}):Play()
 end)
 
 -- =============================================================
--- [ HEADER SECTION & FLAME ENGINE ]
+-- [ HEADER SECTION ]
 -- =============================================================
 local Header = Instance.new("Frame")
 Header.Name = "Header"
@@ -441,6 +588,9 @@ Header.Size = UDim2.new(1, 0, 0, 52)
 Header.ClipsDescendants = false
 Header.ZIndex = 2
 
+-- =============================================================
+-- [ ADVANCED DYNAMIC WHITE FLAME ENGINE ]
+-- =============================================================
 local FireContainer = Instance.new("Frame")
 FireContainer.Name = "FireContainer"
 FireContainer.Parent = Header
@@ -464,6 +614,15 @@ local CoreCorner = Instance.new("UICorner")
 CoreCorner.CornerRadius = UDim.new(1, 0)
 CoreCorner.Parent = CoreGlow
 
+local CoreGrad = Instance.new("UIGradient")
+CoreGrad.Rotation = -90
+CoreGrad.Transparency = NumberSequence.new({
+    NumberSequenceKeypoint.new(0, 0.05),
+    NumberSequenceKeypoint.new(0.5, 0.4),
+    NumberSequenceKeypoint.new(1, 1)
+})
+CoreGrad.Parent = CoreGlow
+
 local AuraGlow = Instance.new("Frame")
 AuraGlow.Name = "AuraGlow"
 AuraGlow.Parent = FireContainer
@@ -478,8 +637,18 @@ local AuraCorner = Instance.new("UICorner")
 AuraCorner.CornerRadius = UDim.new(1, 0)
 AuraCorner.Parent = AuraGlow
 
+local AuraGrad = Instance.new("UIGradient")
+AuraGrad.Rotation = -90
+AuraGrad.Transparency = NumberSequence.new({
+    NumberSequenceKeypoint.new(0, 0.2),
+    NumberSequenceKeypoint.new(0.6, 0.7),
+    NumberSequenceKeypoint.new(1, 1)
+})
+AuraGrad.Parent = AuraGlow
+
 local flameTendrils = {}
 local TENDRIL_COUNT = 16
+
 for i = 1, TENDRIL_COUNT do
     local f = Instance.new("Frame")
     f.Name = "FlameTendril_" .. i
@@ -488,19 +657,37 @@ for i = 1, TENDRIL_COUNT do
     f.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     f.BorderSizePixel = 0
     f.ZIndex = 2
+
     local fCorner = Instance.new("UICorner")
     fCorner.CornerRadius = UDim.new(1, 0)
     fCorner.Parent = f
+
+    local fGrad = Instance.new("UIGradient")
+    fGrad.Rotation = -90
+    fGrad.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0.05),
+        NumberSequenceKeypoint.new(0.4, 0.3),
+        NumberSequenceKeypoint.new(1, 1)
+    })
+    fGrad.Parent = f
+
     flameTendrils[i] = {
-        Object = f, PosX = (math.random() - 0.5) * 20, PosY = math.random(10, 22),
-        VelX = (math.random() - 0.5) * 16, VelY = -math.random(35, 70),
-        BaseWidth = math.random(8, 15), BaseHeight = math.random(16, 32),
-        SwayFreq = math.random(6, 14), Life = math.random(), MaxLife = math.random(35, 75) / 100
+        Object = f,
+        PosX = (math.random() - 0.5) * 20,
+        PosY = math.random(10, 22),
+        VelX = (math.random() - 0.5) * 16,
+        VelY = -math.random(35, 70),
+        BaseWidth = math.random(8, 15),
+        BaseHeight = math.random(16, 32),
+        SwayFreq = math.random(6, 14),
+        Life = math.random(),
+        MaxLife = math.random(35, 75) / 100
     }
 end
 
 local sparkParticles = {}
 local SPARK_COUNT = 18
+
 for i = 1, SPARK_COUNT do
     local s = Instance.new("Frame")
     s.Name = "Spark_" .. i
@@ -509,13 +696,20 @@ for i = 1, SPARK_COUNT do
     s.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     s.BorderSizePixel = 0
     s.ZIndex = 3
+
     local sCorner = Instance.new("UICorner")
     sCorner.CornerRadius = UDim.new(1, 0)
     sCorner.Parent = s
+
     sparkParticles[i] = {
-        Object = s, PosX = (math.random() - 0.5) * 18, PosY = math.random(5, 18),
-        VelX = (math.random() - 0.5) * 30, VelY = -math.random(50, 110),
-        Size = math.random(2, 4), Life = math.random(), MaxLife = math.random(20, 50) / 100
+        Object = s,
+        PosX = (math.random() - 0.5) * 18,
+        PosY = math.random(5, 18),
+        VelX = (math.random() - 0.5) * 30,
+        VelY = -math.random(50, 110),
+        Size = math.random(2, 4),
+        Life = math.random(),
+        MaxLife = math.random(20, 50) / 100
     }
 end
 
@@ -532,6 +726,12 @@ HubLogo.ZIndex = 5
 local LogoCorner = Instance.new("UICorner")
 LogoCorner.CornerRadius = UDim.new(1, 0)
 LogoCorner.Parent = HubLogo
+
+local LogoStroke = Instance.new("UIStroke")
+LogoStroke.Parent = HubLogo
+LogoStroke.Color = Color3.fromRGB(255, 255, 255)
+LogoStroke.Thickness = 1
+LogoStroke.Transparency = 0.35
 
 local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Name = "TitleLabel"
@@ -559,6 +759,9 @@ SubtitleLabel.TextSize = 9
 SubtitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 SubtitleLabel.ZIndex = 5
 
+-- =============================================================
+-- [ DISCORD BUTTON ]
+-- =============================================================
 local DiscordButton = Instance.new("ImageButton")
 DiscordButton.Name = "DiscordButton"
 DiscordButton.Parent = Header
@@ -573,11 +776,57 @@ local DiscordCorner = Instance.new("UICorner")
 DiscordCorner.CornerRadius = UDim.new(0, 8)
 DiscordCorner.Parent = DiscordButton
 
+local DiscordStroke = Instance.new("UIStroke")
+DiscordStroke.Parent = DiscordButton
+DiscordStroke.Color = Color3.fromRGB(255, 255, 255)
+DiscordStroke.Thickness = 1
+DiscordStroke.Transparency = 0.7
+
+DiscordButton.MouseEnter:Connect(function()
+    TweenService:Create(DiscordButton, TWEEN_FAST, {BackgroundColor3 = Color3.fromRGB(88, 101, 242)}):Play()
+    TweenService:Create(DiscordStroke, TWEEN_FAST, {Transparency = 0.15}):Play()
+    TweenService:Create(DiscordButton, TWEEN_SPRING, {
+        Size = UDim2.new(0, 33, 0, 33),
+        Position = UDim2.new(1, -73.5, 0, 9.5)
+    }):Play()
+end)
+
+DiscordButton.MouseLeave:Connect(function()
+    TweenService:Create(DiscordButton, TWEEN_FAST, {BackgroundColor3 = Color3.fromRGB(30, 32, 42)}):Play()
+    TweenService:Create(DiscordStroke, TWEEN_FAST, {Transparency = 0.7}):Play()
+    TweenService:Create(DiscordButton, TWEEN_SPRING, {
+        Size = UDim2.new(0, 30, 0, 30),
+        Position = UDim2.new(1, -72, 0, 11)
+    }):Play()
+end)
+
 DiscordButton.MouseButton1Click:Connect(function()
-    pcall(function() if setclipboard then setclipboard("https://discord.gg/mNGeUVcjKB") end end)
+    pcall(function()
+        if setclipboard then
+            setclipboard("https://discord.gg/mNGeUVcjKB")
+        end
+    end)
+
+    local tweenSquish = TweenService:Create(DiscordButton, TWEEN_FAST, {
+        Size = UDim2.new(0, 26, 0, 26),
+        Position = UDim2.new(1, -70, 0, 13)
+    })
+
+    tweenSquish:Play()
+
+    tweenSquish.Completed:Connect(function()
+        TweenService:Create(DiscordButton, TWEEN_SPRING, {
+            Size = UDim2.new(0, 33, 0, 33),
+            Position = UDim2.new(1, -73.5, 0, 9.5)
+        }):Play()
+    end)
+
     ShowNotification("Discord Link Copied to Clipboard!")
 end)
 
+-- =============================================================
+-- [ CLOSE BUTTON ]
+-- =============================================================
 local CloseButton = Instance.new("TextButton")
 CloseButton.Name = "CloseButton"
 CloseButton.Parent = Header
@@ -594,7 +843,43 @@ local CloseCorner = Instance.new("UICorner")
 CloseCorner.CornerRadius = UDim.new(0, 8)
 CloseCorner.Parent = CloseButton
 
-CloseButton.MouseButton1Click:Connect(function() ToggleGuiState() end)
+local CloseStroke = Instance.new("UIStroke")
+CloseStroke.Parent = CloseButton
+CloseStroke.Color = Color3.fromRGB(255, 50, 60)
+CloseStroke.Thickness = 1
+CloseStroke.Transparency = 1
+
+CloseButton.MouseEnter:Connect(function()
+    TweenService:Create(CloseButton, TWEEN_FAST, {
+        BackgroundColor3 = Color3.fromRGB(220, 45, 60),
+        TextColor3 = Color3.fromRGB(255, 255, 255)
+    }):Play()
+
+    TweenService:Create(CloseStroke, TWEEN_FAST, {Transparency = 0.2}):Play()
+
+    TweenService:Create(CloseButton, TWEEN_SPRING, {
+        Size = UDim2.new(0, 33, 0, 33),
+        Position = UDim2.new(1, -37.5, 0, 9.5)
+    }):Play()
+end)
+
+CloseButton.MouseLeave:Connect(function()
+    TweenService:Create(CloseButton, TWEEN_FAST, {
+        BackgroundColor3 = Color3.fromRGB(24, 26, 32),
+        TextColor3 = Color3.fromRGB(180, 185, 195)
+    }):Play()
+
+    TweenService:Create(CloseStroke, TWEEN_FAST, {Transparency = 1}):Play()
+
+    TweenService:Create(CloseButton, TWEEN_SPRING, {
+        Size = UDim2.new(0, 30, 0, 30),
+        Position = UDim2.new(1, -36, 0, 11)
+    }):Play()
+end)
+
+CloseButton.MouseButton1Click:Connect(function()
+    ToggleGuiState()
+end)
 
 -- =============================================================
 -- [ CARD 1 : BEST EGG CONTAINER ]
@@ -610,6 +895,12 @@ EggCard.ClipsDescendants = true
 local EggCardCorner = Instance.new("UICorner")
 EggCardCorner.CornerRadius = UDim.new(0, 10)
 EggCardCorner.Parent = EggCard
+
+local EggCardStroke = Instance.new("UIStroke")
+EggCardStroke.Parent = EggCard
+EggCardStroke.Color = Color3.fromRGB(255, 255, 255)
+EggCardStroke.Thickness = 1
+EggCardStroke.Transparency = 0.88
 
 local ItemFrame = Instance.new("Frame")
 ItemFrame.Name = "ItemFrame"
@@ -704,6 +995,7 @@ CratesScroll.Position = UDim2.new(0, 10, 0, LIST_TOP)
 CratesScroll.Size = UDim2.new(1, -20, 0, LIST_HEIGHT)
 CratesScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 CratesScroll.ScrollBarThickness = 3
+CratesScroll.ScrollBarImageColor3 = Color3.fromRGB(120, 125, 135)
 CratesScroll.Visible = false
 CratesScroll.ClipsDescendants = true
 
@@ -711,11 +1003,18 @@ local CratesScrollCorner = Instance.new("UICorner")
 CratesScrollCorner.CornerRadius = UDim.new(0, 10)
 CratesScrollCorner.Parent = CratesScroll
 
+local CratesScrollStroke = Instance.new("UIStroke")
+CratesScrollStroke.Parent = CratesScroll
+CratesScrollStroke.Color = Color3.fromRGB(255, 255, 255)
+CratesScrollStroke.Thickness = 1
+CratesScrollStroke.Transparency = 0.88
+
 local CratesListLayout = Instance.new("UIListLayout")
 CratesListLayout.Parent = CratesScroll
 CratesListLayout.FillDirection = Enum.FillDirection.Vertical
 CratesListLayout.Padding = UDim.new(0, 6)
 CratesListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+CratesListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
 local CratesListPad = Instance.new("UIPadding")
 CratesListPad.Parent = CratesScroll
@@ -725,7 +1024,7 @@ CratesListPad.PaddingRight = UDim.new(0, 6)
 CratesListPad.PaddingBottom = UDim.new(0, 6)
 
 -- =============================================================
--- [ CARD 2 : CONTROL PANEL ]
+-- [ CARD 2 : CONTROL PANEL / TELEGUIADO ]
 -- =============================================================
 local ControlPanel = Instance.new("Frame")
 ControlPanel.Name = "ControlPanel"
@@ -738,26 +1037,61 @@ local ControlCorner = Instance.new("UICorner")
 ControlCorner.CornerRadius = UDim.new(0, 10)
 ControlCorner.Parent = ControlPanel
 
+local ControlStroke = Instance.new("UIStroke")
+ControlStroke.Parent = ControlPanel
+ControlStroke.Color = Color3.fromRGB(255, 255, 255)
+ControlStroke.Thickness = 1
+ControlStroke.Transparency = 0.88
+
 local listExpanded = false
+
 local function ApplyLayout()
     if listExpanded then
         CratesScroll.Visible = true
-        TweenService:Create(CratesScroll, TWEEN_SPRING, {Size = UDim2.new(1, -20, 0, LIST_HEIGHT)}):Play()
-        TweenService:Create(ControlPanel, TWEEN_SPRING, {Position = UDim2.new(0, 10, 0, CONTROL_TOP_EXPANDED)}):Play()
-        TweenService:Create(MainFrame, TWEEN_SPRING, {Size = UDim2.new(0, MAIN_WIDTH, 0, EXPANDED_HEIGHT)}):Play()
+
+        TweenService:Create(CratesScroll, TWEEN_SPRING, {
+            Size = UDim2.new(1, -20, 0, LIST_HEIGHT)
+        }):Play()
+
+        TweenService:Create(ControlPanel, TWEEN_SPRING, {
+            Position = UDim2.new(0, 10, 0, CONTROL_TOP_EXPANDED)
+        }):Play()
+
+        TweenService:Create(MainFrame, TWEEN_SPRING, {
+            Size = UDim2.new(0, MAIN_WIDTH, 0, EXPANDED_HEIGHT)
+        }):Play()
+
         TweenService:Create(ArrowBtn, TWEEN_ELASTIC, {Rotation = 180}):Play()
     else
-        TweenService:Create(CratesScroll, TWEEN_SPRING, {Size = UDim2.new(1, -20, 0, 0)}):Play()
-        TweenService:Create(ControlPanel, TWEEN_SPRING, {Position = UDim2.new(0, 10, 0, CONTROL_TOP_COLLAPSED)}):Play()
-        TweenService:Create(MainFrame, TWEEN_SPRING, {Size = UDim2.new(0, MAIN_WIDTH, 0, COLLAPSED_HEIGHT)}):Play()
+        TweenService:Create(CratesScroll, TWEEN_SPRING, {
+            Size = UDim2.new(1, -20, 0, 0)
+        }):Play()
+
+        TweenService:Create(ControlPanel, TWEEN_SPRING, {
+            Position = UDim2.new(0, 10, 0, CONTROL_TOP_COLLAPSED)
+        }):Play()
+
+        TweenService:Create(MainFrame, TWEEN_SPRING, {
+            Size = UDim2.new(0, MAIN_WIDTH, 0, COLLAPSED_HEIGHT)
+        }):Play()
+
         TweenService:Create(ArrowBtn, TWEEN_ELASTIC, {Rotation = 0}):Play()
-        task.delay(0.3, function() if not listExpanded then CratesScroll.Visible = false end end)
+
+        task.delay(0.3, function()
+            if not listExpanded then
+                CratesScroll.Visible = false
+            end
+        end)
     end
 end
 
 ArrowBtn.MouseButton1Click:Connect(function()
     listExpanded = not listExpanded
-    if listExpanded and RefreshCratesUI then RefreshCratesUI() end
+
+    if listExpanded and RefreshCratesUI then
+        RefreshCratesUI()
+    end
+
     ApplyLayout()
 end)
 
@@ -800,22 +1134,55 @@ local SwapCorner = Instance.new("UICorner")
 SwapCorner.CornerRadius = UDim.new(0, 10)
 SwapCorner.Parent = SwapButton
 
+local SwapStroke = Instance.new("UIStroke")
+SwapStroke.Parent = SwapButton
+SwapStroke.Color = Color3.fromRGB(255, 255, 255)
+SwapStroke.Thickness = 2
+SwapStroke.Transparency = 0.5
+
 local swapRotation = 0
+
+SwapButton.MouseEnter:Connect(function()
+    TweenService:Create(SwapButton, TWEEN_SPRING, {
+        Size = UDim2.new(0, 43, 0, 43),
+        Position = UDim2.new(0, 114.5, 0, 20.5)
+    }):Play()
+
+    TweenService:Create(SwapStroke, TWEEN_FAST, {Transparency = 0}):Play()
+end)
+
+SwapButton.MouseLeave:Connect(function()
+    TweenService:Create(SwapButton, TWEEN_SPRING, {
+        Size = UDim2.new(0, 40, 0, 40),
+        Position = UDim2.new(0, 116, 0, 22)
+    }):Play()
+
+    TweenService:Create(SwapStroke, TWEEN_FAST, {Transparency = 0.5}):Play()
+end)
+
 SwapButton.MouseButton1Click:Connect(function()
     swapRotation = swapRotation + 180
     TweenService:Create(SwapButton, TWEEN_ELASTIC, {Rotation = swapRotation}):Play()
-    if ResetArena then ResetArena(false, 0) end
+
+    if ResetArena then
+        ResetArena(false, 0)
+    end
+
     ShowNotification("ARENA_RESET(false, 0) fired")
 end)
 
+-- =============================================================
+-- [ LOOP CHECKBOX ]
+-- =============================================================
 local LoopBox = Instance.new("TextButton")
 LoopBox.Name = "LoopBox"
 LoopBox.Parent = ControlPanel
 LoopBox.BackgroundColor3 = Color3.fromRGB(22, 25, 32)
+LoopBox.BackgroundTransparency = 0.3
 LoopBox.Position = UDim2.new(0, 172, 0, 30)
 LoopBox.Size = UDim2.new(0, 24, 0, 24)
 LoopBox.Font = Enum.Font.GothamBold
-LoopBox.Text = "✓"
+LoopBox.Text = ""
 LoopBox.TextColor3 = Color3.fromRGB(255, 255, 255)
 LoopBox.TextSize = 14
 
@@ -825,15 +1192,44 @@ LoopBoxCorner.Parent = LoopBox
 
 local LoopBoxStroke = Instance.new("UIStroke")
 LoopBoxStroke.Parent = LoopBox
-LoopBoxStroke.Color = Color3.fromRGB(255, 255, 255)
+LoopBoxStroke.Color = Color3.fromRGB(140, 145, 155)
 LoopBoxStroke.Thickness = 1.2
+LoopBoxStroke.Transparency = 0.3
 
 local loopChecked = true
+
 local function ToggleLoopFunc()
     loopChecked = not loopChecked
-    LoopBox.Text = loopChecked and "✓" or ""
-    TweenService:Create(LoopBoxStroke, TWEEN_FAST, {Color = loopChecked and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(140, 145, 155)}):Play()
+
+    if loopChecked then
+        LoopBox.Text = "✓"
+
+        TweenService:Create(LoopBox, TWEEN_SPRING, {
+            Size = UDim2.new(0, 27, 0, 27),
+            Position = UDim2.new(0, 170.5, 0, 28.5)
+        }):Play()
+
+        TweenService:Create(LoopBoxStroke, TWEEN_FAST, {
+            Color = Color3.fromRGB(255, 255, 255),
+            Transparency = 0
+        }):Play()
+
+        task.delay(0.1, function()
+            TweenService:Create(LoopBox, TWEEN_FAST, {
+                Size = UDim2.new(0, 24, 0, 24),
+                Position = UDim2.new(0, 172, 0, 30)
+            }):Play()
+        end)
+    else
+        LoopBox.Text = ""
+
+        TweenService:Create(LoopBoxStroke, TWEEN_FAST, {
+            Color = Color3.fromRGB(140, 145, 155),
+            Transparency = 0.3
+        }):Play()
+    end
 end
+
 LoopBox.MouseButton1Click:Connect(ToggleLoopFunc)
 
 local LoopLabel = Instance.new("TextButton")
@@ -849,6 +1245,13 @@ LoopLabel.TextSize = 11
 LoopLabel.TextXAlignment = Enum.TextXAlignment.Left
 LoopLabel.MouseButton1Click:Connect(ToggleLoopFunc)
 
+LoopBox.Text = "✓"
+LoopBoxStroke.Color = Color3.fromRGB(255, 255, 255)
+LoopBoxStroke.Transparency = 0
+
+-- =============================================================
+-- [ STEAL TOGGLE ]
+-- =============================================================
 local StealLabel = Instance.new("TextLabel")
 StealLabel.Name = "StealLabel"
 StealLabel.Parent = ControlPanel
@@ -886,36 +1289,69 @@ CircleCorner.CornerRadius = UDim.new(1, 0)
 CircleCorner.Parent = ToggleCircle
 
 local toggled = false
+
 SetStealToggleVisual = function(state)
     toggled = state
+
     if toggled then
-        TweenService:Create(ToggleFrame, TWEEN_FAST, {BackgroundColor3 = Color3.fromRGB(255, 255, 255)}):Play()
-        TweenService:Create(ToggleCircle, TWEEN_ELASTIC, {Position = UDim2.new(1, -3, 0.5, 0), AnchorPoint = Vector2.new(1, 0.5), BackgroundColor3 = Color3.fromRGB(12, 13, 16)}):Play()
+        TweenService:Create(ToggleFrame, TWEEN_FAST, {
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        }):Play()
+
+        TweenService:Create(ToggleCircle, TWEEN_ELASTIC, {
+            Position = UDim2.new(1, -3, 0.5, 0),
+            AnchorPoint = Vector2.new(1, 0.5),
+            BackgroundColor3 = Color3.fromRGB(12, 13, 16)
+        }):Play()
     else
-        TweenService:Create(ToggleFrame, TWEEN_FAST, {BackgroundColor3 = Color3.fromRGB(32, 35, 44)}):Play()
-        TweenService:Create(ToggleCircle, TWEEN_ELASTIC, {Position = UDim2.new(0, 3, 0.5, 0), AnchorPoint = Vector2.new(0, 0.5), BackgroundColor3 = Color3.fromRGB(150, 155, 165)}):Play()
+        TweenService:Create(ToggleFrame, TWEEN_FAST, {
+            BackgroundColor3 = Color3.fromRGB(32, 35, 44)
+        }):Play()
+
+        TweenService:Create(ToggleCircle, TWEEN_ELASTIC, {
+            Position = UDim2.new(0, 3, 0.5, 0),
+            AnchorPoint = Vector2.new(0, 0.5),
+            BackgroundColor3 = Color3.fromRGB(150, 155, 165)
+        }):Play()
     end
 end
+
+ToggleFrame.MouseButton1Click:Connect(function()
+    SetStealToggleVisual(not toggled)
+end)
 
 -- =============================================================
 -- [ AUTOMATION / GAMEPLAY MODULES ]
 -- =============================================================
+
+-- [ NETWORK HELPERS ]
 local function GetNetworkFolder()
     local shared = ReplicatedStorage:FindFirstChild("Shared")
-    if not shared then return nil end
+    if not shared then
+        return nil
+    end
+
     local packages = shared:FindFirstChild("Packages")
-    if not packages then return nil end
+    if not packages then
+        return nil
+    end
+
     return packages:FindFirstChild("Network")
 end
 
 local function SafeFireSignal(eventObj, ...)
-    if not eventObj then return end
+    if not eventObj then
+        return
+    end
+
     pcall(function()
         if type(firesignal) == "function" then
             firesignal(eventObj.OnClientEvent, ...)
         elseif type(getconnections) == "function" then
             for _, c in ipairs(getconnections(eventObj.OnClientEvent)) do
-                if c.Fire then pcall(c.Fire, c, ...) end
+                if c.Fire then
+                    pcall(c.Fire, c, ...)
+                end
             end
         end
     end)
@@ -923,197 +1359,403 @@ end
 
 local function FireStealEscaped()
     local net = GetNetworkFolder()
-    if not net then return false end
+    if not net then
+        return false
+    end
+
     local ev = net:FindFirstChild("rev_STEAL_ESCAPED")
-    if not ev then return false end
+    if not ev then
+        return false
+    end
+
     SafeFireSignal(ev)
     return true
 end
 
 local function FireStealSuccess(name)
     local net = GetNetworkFolder()
-    if not net then return false end
+    if not net then
+        return false
+    end
+
     local ev = net:FindFirstChild("rev_STEAL_SUCCESS")
-    if not ev then return false end
+    if not ev then
+        return false
+    end
+
     SafeFireSignal(ev, tostring(name or "Unknown"))
     return true
 end
 
 local function FireChaseCaught(name)
     local net = GetNetworkFolder()
-    if not net then return false end
+    if not net then
+        return false
+    end
+
     local ev = net:FindFirstChild("rev_ChaseCaught")
-    if not ev then return false end
+    if not ev then
+        return false
+    end
+
     SafeFireSignal(ev, tostring(name or "Unknown"))
     return true
 end
 
 ResetArena = function(active, timeVal)
     local net = GetNetworkFolder()
-    if not net then return false end
+    if not net then
+        return false
+    end
+
     local ev = net:FindFirstChild("rev_ARENA_RESET")
-    if not ev then return false end
+    if not ev then
+        return false
+    end
+
     SafeFireSignal(ev, active == true, tonumber(timeVal) or 0)
     return true
 end
 
+-- [ ARENA RESET VERIFICATION : true,10 -> wait crates -> false,0 ]
 EnsureArenaReset = function(force)
     local crates = GetAllCrates()
-    if not force and #crates > 0 then return true end
-    if not ResetArena(true, 10) then return false end
+
+    if not force and #crates > 0 then
+        return true
+    end
+
+    if not ResetArena(true, 10) then
+        return false
+    end
+
     local deadline = os.clock() + 6
     local ready = false
+
     while os.clock() < deadline do
         local folder = workspace:FindFirstChild("Crates")
+
         if folder then
             for _, crate in ipairs(folder:GetChildren()) do
-                if crate:GetAttribute("CrateKg") ~= nil then ready = true; break end
+                if crate:GetAttribute("CrateKg") ~= nil then
+                    ready = true
+                    break
+                end
             end
         end
-        if ready then break end
+
+        if ready then
+            break
+        end
+
         RunService.Heartbeat:Wait()
     end
+
     ResetArena(false, 0)
     task.wait(0.35)
-    if not ready then task.wait(0.65); ready = #GetAllCrates() > 0 end
+
+    if not ready then
+        task.wait(0.65)
+        ready = #GetAllCrates() > 0
+    end
+
     return ready
 end
 
+-- [ PROXIMITYPROMPT : HOLD DURATION = 0 SCANNER ]
 local function ZeroAllPrompts()
     for _, v in ipairs(workspace:GetDescendants()) do
         if v.ClassName == "ProximityPrompt" then
-            pcall(function() v.HoldDuration = 0 end)
+            pcall(function()
+                v.HoldDuration = 0
+            end)
         end
     end
 end
 
-local FlyState = { Active = false, TargetPos = nil }
+-- [ FLY SYSTEM : 300 STUDS/SEC ]
+local FlyState = {
+    Active = false,
+    TargetPos = nil,
+}
 
 local function GetHRP()
     local char = LocalPlayer.Character
-    if not char then char = LocalPlayer.CharacterAdded:Wait() end
-    if not char then return nil, nil end
+
+    if not char then
+        char = LocalPlayer.CharacterAdded:Wait()
+    end
+
+    if not char then
+        return nil, nil
+    end
+
     return char:FindFirstChild("HumanoidRootPart"), char:FindFirstChildOfClass("Humanoid")
 end
 
 local function FlyToPosition(targetPos, speed)
     speed = speed or FLY_SPEED
+
     return task.spawn(function()
         local hrp, hum = GetHRP()
-        if not hrp or not hum then return end
+        if not hrp or not hum then
+            return
+        end
+
         hum.PlatformStand = true
+
         local lastTime = os.clock()
+
         while FlyState.Active do
             local now = os.clock()
             local dt = now - lastTime
             lastTime = now
+
             hrp = GetHRP()
-            if not hrp or not FlyState.TargetPos then return end
+            if not hrp then
+                return
+            end
+
+            if not FlyState.TargetPos then
+                return
+            end
+
             local diff = FlyState.TargetPos - hrp.Position
             local dist = diff.Magnitude
-            if dist < 2 then hrp.CFrame = CFrame.new(FlyState.TargetPos) * (hrp.CFrame - hrp.Position); break end
+
+            if dist < 2 then
+                hrp.CFrame = CFrame.new(FlyState.TargetPos) * (hrp.CFrame - hrp.Position)
+                break
+            end
+
             local dir = diff.Unit
             local step = math.min(speed * dt, dist)
-            hrp.CFrame = CFrame.new(hrp.Position + dir * step) * (hrp.CFrame - hrp.Position)
+            local orientation = hrp.CFrame - hrp.Position
+
+            hrp.CFrame = CFrame.new(hrp.Position + dir * step) * orientation
+
             RunService.Heartbeat:Wait()
         end
-        if hum then hum.PlatformStand = false end
+
+        if hum then
+            hum.PlatformStand = false
+        end
     end)
 end
 
 local function FlyToAndWait(targetPos, speed, timeout)
     timeout = timeout or 8
+
     FlyState.Active = true
     FlyState.TargetPos = targetPos
+
     local hrp = GetHRP()
-    if not hrp then FlyState.Active = false; FlyState.TargetPos = nil; return false end
+    if not hrp then
+        FlyState.Active = false
+        FlyState.TargetPos = nil
+        return false
+    end
+
     FlyToPosition(targetPos, speed)
+
     local startT = os.clock()
+
     while FlyState.Active do
-        if os.clock() - startT > timeout then break end
+        if os.clock() - startT > timeout then
+            break
+        end
+
         hrp = GetHRP()
-        if hrp and (hrp.Position - targetPos).Magnitude < 3 then break end
+
+        if hrp and (hrp.Position - targetPos).Magnitude < 3 then
+            break
+        end
+
         RunService.Heartbeat:Wait()
     end
+
     FlyState.Active = false
     FlyState.TargetPos = nil
+
     task.wait(0.05)
+
     return true
 end
 
+-- [ SAFE ZONE HELPER ]
 local function GetSafeZonePosition()
     local map = workspace:FindFirstChild("Steal Map")
-    if not map then return nil end
+    if not map then
+        return nil
+    end
+
     local lobby = map:FindFirstChild("Lobby")
-    if not lobby then return nil end
+    if not lobby then
+        return nil
+    end
+
     local zone = lobby:FindFirstChild("safe zone")
-    if not zone then return nil end
-    if zone:IsA("BasePart") then return zone.Position end
-    local ok, cf = pcall(function() return zone:GetPivot() end)
-    if ok and cf then return cf.Position end
-    for _, d in ipairs(zone:GetDescendants()) do if d:IsA("BasePart") then return d.Position end end
+    if not zone then
+        return nil
+    end
+
+    if zone:IsA("BasePart") then
+        return zone.Position
+    end
+
+    local ok, cf = pcall(function()
+        return zone:GetPivot()
+    end)
+
+    if ok and cf then
+        return cf.Position
+    end
+
+    for _, d in ipairs(zone:GetDescendants()) do
+        if d:IsA("BasePart") then
+            return d.Position
+        end
+    end
+
     return nil
 end
 
+-- [ CRATE HOLDING CHECK ]
 local function IsHoldingCrate()
     local char = LocalPlayer.Character
-    if not char then return false end
-    for _, v in ipairs(char:GetDescendants()) do
-        if v:GetAttribute("Areald") ~= nil then return true end
-        if v:GetAttribute("CrateKg") ~= nil then return true end
-        local lowerName = v.Name:lower()
-        if (v:IsA("Model") or v:IsA("Tool") or v:IsA("BasePart")) and (lowerName:find("crate") or lowerName:find("chest") or lowerName:find("box")) then return true end
+    if not char then
+        return false
     end
+
+    for _, v in ipairs(char:GetDescendants()) do
+        if v:GetAttribute("Areald") ~= nil then
+            return true
+        end
+
+        if v:GetAttribute("CrateKg") ~= nil then
+            return true
+        end
+
+        local lowerName = v.Name:lower()
+
+        if
+            (v:IsA("Model") or v:IsA("Tool") or v:IsA("BasePart"))
+            and (
+                lowerName:find("crate")
+                or lowerName:find("chest")
+                or lowerName:find("box")
+            )
+        then
+            return true
+        end
+    end
+
     return false
 end
 
+-- [ CRATE POSITION ]
 local function GetCratePosition(crate)
-    if crate:IsA("BasePart") then return crate.Position end
-    local ok, cf = pcall(function() return crate:GetPivot() end)
-    if ok and cf then return cf.Position end
+    if crate:IsA("BasePart") then
+        return crate.Position
+    end
+
+    local ok, cf = pcall(function()
+        return crate:GetPivot()
+    end)
+
+    if ok and cf then
+        return cf.Position
+    end
+
     local cf2 = SafeBoundingBox(crate)
-    if cf2 then return cf2.Position end
+    if cf2 then
+        return cf2.Position
+    end
+
     return nil
 end
 
+-- [ TRIGGER PROXIMITY PROMPT ON CRATE ]
 local function TriggerCratePrompts(crate)
     ZeroAllPrompts()
+
     local triggered = false
+
     for _, d in ipairs(crate:GetDescendants()) do
         if d:IsA("ProximityPrompt") then
-            pcall(function() d.HoldDuration = 0 end)
-            pcall(function() if type(fireproximityprompt) == "function" then fireproximityprompt(d, 0) end end)
-            pcall(function() if type(firesignal) == "function" then firesignal(d.Triggered) end end)
+            pcall(function()
+                d.HoldDuration = 0
+            end)
+
+            pcall(function()
+                if type(fireproximityprompt) == "function" then
+                    fireproximityprompt(d, 0)
+                end
+            end)
+
+            pcall(function()
+                if type(firesignal) == "function" then
+                    firesignal(d.PromptButtonHoldBegan)
+                    firesignal(d.PromptButtonHoldEnded)
+                    firesignal(d.Triggered)
+                end
+            end)
+
             triggered = true
         end
     end
+
     return triggered
 end
 
+-- [ PROTECTION SYSTEM ]
 local protectionActive = false
 local protectedNPCCache = {}
 
 local function FindProtectedNPC(name)
     local cached = protectedNPCCache[name]
-    if cached and cached.Parent ~= nil then return cached end
+
+    if cached and cached.Parent ~= nil then
+        return cached
+    end
+
     local obj = workspace:FindFirstChild(name)
+
     if not obj then
         local areaNPCs = workspace:FindFirstChild("AreaNPCs")
-        if areaNPCs then obj = areaNPCs:FindFirstChild(name) end
+        if areaNPCs then
+            obj = areaNPCs:FindFirstChild(name)
+        end
     end
+
+    if not obj then
+        obj = workspace:FindFirstChild(name, true)
+
+        if obj and LocalPlayer.Character and obj:IsDescendantOf(LocalPlayer.Character) then
+            obj = nil
+        end
+    end
+
     protectedNPCCache[name] = obj
+
     return obj
 end
 
 local function FireProtectionForNearbyNPCs()
     for _, name in ipairs(PROTECT_NPC_NAMES) do
-        if FindProtectedNPC(name) then FireChaseCaught(name) end
+        if FindProtectedNPC(name) then
+            FireChaseCaught(name)
+        end
     end
 end
 
 local function StartProtection()
-    if protectionActive then return end
+    if protectionActive then
+        return
+    end
+
     protectionActive = true
+
     task.spawn(function()
         while protectionActive and YanzHubUI and YanzHubUI.Parent do
             FireProtectionForNearbyNPCs()
@@ -1122,123 +1764,281 @@ local function StartProtection()
     end)
 end
 
-local function StopProtection() protectionActive = false end
+local function StopProtection()
+    protectionActive = false
+end
 
+-- [ TARGET SELECTION : selected card, else heaviest ]
 local function GetTargetCrate()
     local crates = GetAllCrates()
+
     if selectedCrate and selectedCrate.Parent then
-        if selectedCrate:GetAttribute("CrateKg") ~= nil then return selectedCrate, crates end
+        if selectedCrate:GetAttribute("CrateKg") ~= nil then
+            return selectedCrate, crates
+        end
+
+        for _, crate in ipairs(crates) do
+            if crate == selectedCrate then
+                return crate, crates
+            end
+        end
     end
+
     return crates[1], crates
 end
 
+-- [ ITEM VERIFICATION ]
 local function HasItemInBackpack(name)
-    if not name then return false end
+    if not name then
+        return false
+    end
+
     local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
-    if backpack and backpack:FindFirstChild(name) then return true end
+
+    if backpack and backpack:FindFirstChild(name) then
+        return true
+    end
+
     local char = LocalPlayer.Character
-    if char and char:FindFirstChild(name) then return true end
+
+    if char and char:FindFirstChild(name) then
+        return true
+    end
+
     return false
 end
 
 local function VerifyCrateSecured(crate, crateName)
     task.wait(0.2)
-    if HasItemInBackpack(crateName) then return true end
-    if not IsHoldingCrate() then return true end
-    if crate and crate.Parent == nil then return true end
+
+    if HasItemInBackpack(crateName) then
+        return true
+    end
+
+    if not IsHoldingCrate() then
+        return true
+    end
+
+    if crate and crate.Parent == nil then
+        return true
+    end
+
+    local cratesFolder = workspace:FindFirstChild("Crates")
+
+    if crate and cratesFolder and crate.Parent ~= cratesFolder then
+        return true
+    end
+
     return false
 end
 
+-- [ STEAL LOOP CONTROLLER ]
 local stealRunning = false
+
 local function RunSingleStealCycle()
+    -- 0) Ensure prompts are zeroed.
     ZeroAllPrompts()
+
+    -- 1) Get selected/heaviest crate.
     local target = GetTargetCrate()
-    if not target then EnsureArenaReset(true); target = GetTargetCrate() end
-    if not target then return false, "No crates found" end
+
+    if not target then
+        EnsureArenaReset(true)
+        target = GetTargetCrate()
+    end
+
+    if not target then
+        return false, "No crates found"
+    end
+
     local crateName = GetArealdName(target)
+
+    -- 2) Fly to crate.
     local cratePos = GetCratePosition(target)
-    if not cratePos then return false, "Crate position unavailable" end
+
+    if not cratePos then
+        return false, "Crate position unavailable"
+    end
+
     ShowNotification("Flying to: " .. crateName)
     FlyToAndWait(cratePos, FLY_SPEED, 8)
+
+    -- 3) Trigger prompts with HoldDuration = 0.
     ZeroAllPrompts()
     TriggerCratePrompts(target)
     task.wait(0.35)
-    if not IsHoldingCrate() then TriggerCratePrompts(target); task.wait(0.45) end
-    if not IsHoldingCrate() then return false, "Failed to pick up crate" end
+
+    -- 4) Check if character is holding a crate.
+    if not IsHoldingCrate() then
+        TriggerCratePrompts(target)
+        task.wait(0.45)
+    end
+
+    if not IsHoldingCrate() then
+        EnsureArenaReset(true)
+
+        target = GetTargetCrate()
+
+        if target then
+            crateName = GetArealdName(target)
+            cratePos = GetCratePosition(target)
+
+            if cratePos then
+                ShowNotification("Retrying target: " .. crateName)
+                FlyToAndWait(cratePos, FLY_SPEED, 8)
+                TriggerCratePrompts(target)
+                task.wait(0.45)
+            end
+        end
+    end
+
+    if not IsHoldingCrate() then
+        return false, "Failed to pick up crate"
+    end
+
+    -- 5) Protection before returning.
     FireProtectionForNearbyNPCs()
+
+    -- 6) Fly to safe zone.
     local safePos = GetSafeZonePosition()
-    if safePos then ShowNotification("Returning to safe zone..."); FlyToAndWait(safePos, FLY_SPEED, 10) end
+
+    if safePos then
+        ShowNotification("Returning to safe zone...")
+        FlyToAndWait(safePos, FLY_SPEED, 10)
+    else
+        ShowNotification("Safe zone not found — firing escape")
+    end
+
+    -- 7) Fire escape signal.
     task.wait(0.15)
     FireProtectionForNearbyNPCs()
     FireStealEscaped()
     task.wait(0.25)
+
+    -- 8) Fire success signal using Areald name.
     FireStealSuccess(crateName)
     task.wait(0.35)
-    if not VerifyCrateSecured(target, crateName) then FireStealSuccess(crateName) end
+
+    -- 9) Verify item obtained/secured.
+    if not VerifyCrateSecured(target, crateName) then
+        FireStealSuccess(crateName)
+        task.wait(0.35)
+
+        if not VerifyCrateSecured(target, crateName) then
+            return false, "Could not verify: " .. crateName
+        end
+    end
+
     return true, "Stole: " .. crateName
 end
 
 StartStealLoop = function()
-    if stealRunning then return end
+    if stealRunning then
+        return
+    end
+
     stealRunning = true
+
     ShowNotification("Auto-Steal: ON")
+
     task.spawn(function()
         EnsureArenaReset(true)
+
         repeat
             local ok, msg = RunSingleStealCycle()
-            if not ok then ShowNotification("Cycle: " .. tostring(msg)) end
-            if not loopChecked then stealRunning = false; SetStealToggleVisual(false); StopProtection(); break end
+
+            if not ok then
+                ShowNotification("Cycle: " .. tostring(msg))
+            end
+
+            if not loopChecked then
+                stealRunning = false
+
+                if SetStealToggleVisual then
+                    SetStealToggleVisual(false)
+                end
+
+                StopProtection()
+
+                break
+            end
+
             task.wait(0.4)
         until not stealRunning
+
         stealRunning = false
+
         ShowNotification("Auto-Steal: OFF")
     end)
 end
 
-StopStealLoop = function() stealRunning = false end
+StopStealLoop = function()
+    stealRunning = false
+end
 
+-- [ HOOK TOGGLE -> START/STOP STEAL LOOP ]
 ToggleFrame.MouseButton1Click:Connect(function()
-    SetStealToggleVisual(not toggled)
-    if toggled then StartStealLoop(); StartProtection() else StopStealLoop(); StopProtection() end
+    if toggled then
+        StartStealLoop()
+        StartProtection()
+    else
+        StopStealLoop()
+        StopProtection()
+    end
 end)
 
 -- =============================================================
--- [ UI LOGIC & WATCHERS ]
+-- [ CRATE DATA -> UI REFRESH LOGIC ]
 -- =============================================================
 local function CreateMiniCrateRow(crate, rank)
     local ITEM_HEIGHT = 56
+
     local item = Instance.new("Frame")
     item.Name = "CrateItem_" .. rank
     item.BackgroundColor3 = Color3.fromRGB(22, 24, 30)
     item.Size = UDim2.new(1, 0, 0, ITEM_HEIGHT)
     item.BorderSizePixel = 0
     item.LayoutOrder = rank
+
     local itemCorner = Instance.new("UICorner")
     itemCorner.CornerRadius = UDim.new(0, 8)
     itemCorner.Parent = item
+
     local itemStroke = Instance.new("UIStroke")
     itemStroke.Color = (rank == 1) and Color3.fromRGB(255, 215, 0) or Color3.fromRGB(255, 255, 255)
     itemStroke.Transparency = (rank == 1) and 0.4 or 0.92
     itemStroke.Thickness = (rank == 1) and 1.4 or 1
     itemStroke.Parent = item
+
     local vpFrame = Instance.new("Frame")
     vpFrame.BackgroundColor3 = Color3.fromRGB(26, 18, 20)
     vpFrame.Position = UDim2.new(0, 6, 0, 6)
     vpFrame.Size = UDim2.new(0, 44, 0, 44)
     vpFrame.ClipsDescendants = true
     vpFrame.Parent = item
+
     local vpCorner = Instance.new("UICorner")
     vpCorner.CornerRadius = UDim.new(0, 8)
     vpCorner.Parent = vpFrame
+
     local vp = Instance.new("ViewportFrame")
     vp.BackgroundTransparency = 1
     vp.Size = UDim2.new(1, 0, 1, 0)
+    vp.Ambient = Color3.fromRGB(180, 180, 180)
+    vp.LightColor = Color3.fromRGB(255, 255, 255)
+    vp.LightDirection = Vector3.new(-0.5, -1, -0.7)
     vp.Parent = vpFrame
-    task.defer(function() SetupViewport(vp, crate) end)
+
+    task.defer(function()
+        SetupViewport(vp, crate)
+    end)
+
     local areald = GetArealdName(crate)
     local kg = tonumber(crate:GetAttribute("CrateKg")) or 0
     local tier = crate:GetAttribute("CrateTier") or "Common"
+    local size = crate:GetAttribute("CrateSize") or ""
     local tierColor = GetTierColor(tier)
+
     local nameLbl = Instance.new("TextLabel")
     nameLbl.BackgroundTransparency = 1
     nameLbl.Position = UDim2.new(0, 56, 0, 6)
@@ -1248,17 +2048,20 @@ local function CreateMiniCrateRow(crate, rank)
     nameLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
     nameLbl.TextSize = 11
     nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+    nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
     nameLbl.Parent = item
+
     local tierLbl = Instance.new("TextLabel")
     tierLbl.BackgroundTransparency = 1
     tierLbl.Position = UDim2.new(0, 56, 0, 22)
     tierLbl.Size = UDim2.new(1, -110, 0, 12)
     tierLbl.Font = Enum.Font.GothamBold
-    tierLbl.Text = tostring(tier)
+    tierLbl.Text = tostring(tier) .. (size ~= "" and (" • " .. tostring(size)) or "")
     tierLbl.TextColor3 = tierColor
     tierLbl.TextSize = 9
     tierLbl.TextXAlignment = Enum.TextXAlignment.Left
     tierLbl.Parent = item
+
     local kgLbl = Instance.new("TextLabel")
     kgLbl.BackgroundTransparency = 1
     kgLbl.Position = UDim2.new(0, 56, 0, 36)
@@ -1269,66 +2072,249 @@ local function CreateMiniCrateRow(crate, rank)
     kgLbl.TextSize = 9
     kgLbl.TextXAlignment = Enum.TextXAlignment.Left
     kgLbl.Parent = item
+
+    local rankLbl = Instance.new("TextLabel")
+    rankLbl.BackgroundTransparency = 1
+    rankLbl.AnchorPoint = Vector2.new(1, 0.5)
+    rankLbl.Position = UDim2.new(1, -10, 0.5, 0)
+    rankLbl.Size = UDim2.new(0, 40, 0, 30)
+    rankLbl.Font = Enum.Font.GothamBold
+    rankLbl.Text = "#" .. tostring(rank)
+    rankLbl.TextColor3 = (rank == 1) and Color3.fromRGB(255, 215, 0) or Color3.fromRGB(150, 155, 165)
+    rankLbl.TextSize = 12
+    rankLbl.TextXAlignment = Enum.TextXAlignment.Right
+    rankLbl.Parent = item
+
     local rowButton = Instance.new("TextButton")
+    rowButton.Name = "RowButton"
     rowButton.BackgroundTransparency = 1
     rowButton.Size = UDim2.new(1, 0, 1, 0)
     rowButton.Text = ""
     rowButton.ZIndex = 10
     rowButton.Parent = item
-    rowButton.MouseButton1Click:Connect(function() if SelectCrateByRow then SelectCrateByRow(crate) end end)
+
+    rowButton.MouseButton1Click:Connect(function()
+        if SelectCrateByRow then
+            SelectCrateByRow(crate)
+        end
+    end)
+
+    rowButton.MouseEnter:Connect(function()
+        TweenService:Create(itemStroke, TWEEN_FAST, {Transparency = 0.15}):Play()
+        TweenService:Create(item, TWEEN_FAST, {BackgroundColor3 = Color3.fromRGB(30, 34, 42)}):Play()
+    end)
+
+    rowButton.MouseLeave:Connect(function()
+        local isFirst = (rank == 1)
+
+        TweenService:Create(itemStroke, TWEEN_FAST, {
+            Transparency = isFirst and 0.4 or 0.92
+        }):Play()
+
+        TweenService:Create(item, TWEEN_FAST, {
+            BackgroundColor3 = Color3.fromRGB(22, 24, 30)
+        }):Play()
+    end)
+
     return item
 end
 
 local function PopulateCratesList(crates)
-    for _, child in ipairs(CratesScroll:GetChildren()) do if child:IsA("Frame") then child:Destroy() end end
-    if #crates == 0 then return end
-    for i, crate in ipairs(crates) do local row = CreateMiniCrateRow(crate, i); if row then row.Parent = CratesScroll end end
-    task.defer(function() if CratesScroll and CratesScroll.Parent then CratesScroll.CanvasSize = UDim2.new(0, 0, 0, CratesListLayout.AbsoluteContentSize.Y + 12) end end)
+    for _, child in ipairs(CratesScroll:GetChildren()) do
+        if child:IsA("Frame") then
+            child:Destroy()
+        end
+    end
+
+    if #crates == 0 then
+        local empty = Instance.new("TextLabel")
+        empty.BackgroundTransparency = 1
+        empty.Size = UDim2.new(1, 0, 0, 40)
+        empty.Font = Enum.Font.GothamMedium
+        empty.Text = "No crates in workspace.Crates"
+        empty.TextColor3 = Color3.fromRGB(150, 155, 165)
+        empty.TextSize = 11
+        empty.Parent = CratesScroll
+
+        CratesScroll.CanvasSize = UDim2.new(0, 0, 0, 46)
+
+        return
+    end
+
+    for i, crate in ipairs(crates) do
+        local row = CreateMiniCrateRow(crate, i)
+
+        if row then
+            row.Parent = CratesScroll
+        end
+    end
+
+    task.defer(function()
+        if CratesScroll and CratesScroll.Parent then
+            CratesScroll.CanvasSize = UDim2.new(0, 0, 0, CratesListLayout.AbsoluteContentSize.Y + 12)
+        end
+    end)
 end
 
 SelectCrateByRow = function(crate)
     selectedCrate = crate
-    if not crate then return end
+
+    if not crate then
+        return
+    end
+
     local areald = GetArealdName(crate)
     local kg = tonumber(crate:GetAttribute("CrateKg")) or 0
     local tier = crate:GetAttribute("CrateTier") or "Common"
+
     ItemName.Text = tostring(areald)
     ValueLabel.Text = FormatWeight(kg) .. " kg"
     RarityLabel.Text = tostring(tier)
     RarityLabel.TextColor3 = GetTierColor(tier)
+
     SetupViewport(ItemViewport, crate)
+
     ShowNotification("Selected: " .. areald)
-    if listExpanded then listExpanded = false; ApplyLayout() end
+
+    -- Card selection automatically collapses the list.
+    if listExpanded then
+        listExpanded = false
+        ApplyLayout()
+    end
 end
 
 RefreshCratesUI = function()
     local crates = GetAllCrates()
-    if not selectedCrate and crates[1] then selectedCrate = crates[1] end
+
+    if not selectedCrate and crates[1] then
+        selectedCrate = crates[1]
+    end
+
+    if selectedCrate and selectedCrate.Parent == nil then
+        selectedCrate = crates[1]
+    end
+
     local show = selectedCrate or crates[1]
+
     if show then
         local areald = GetArealdName(show)
         local kg = tonumber(show:GetAttribute("CrateKg")) or 0
         local tier = show:GetAttribute("CrateTier") or "Common"
+
         ItemName.Text = tostring(areald)
         ValueLabel.Text = FormatWeight(kg) .. " kg"
         RarityLabel.Text = tostring(tier)
         RarityLabel.TextColor3 = GetTierColor(tier)
+
         SetupViewport(ItemViewport, show)
+    else
+        ItemName.Text = "No Crate Found"
+        ValueLabel.Text = "0 kg"
+        RarityLabel.Text = "N/A"
+        RarityLabel.TextColor3 = Color3.fromRGB(120, 122, 132)
+
+        for _, c in ipairs(ItemViewport:GetChildren()) do
+            c:Destroy()
+        end
     end
-    if listExpanded then PopulateCratesList(crates) end
+
+    if listExpanded then
+        PopulateCratesList(crates)
+    end
 end
-task.defer(function() RefreshCratesUI() end)
 
-task.spawn(function()
-    while YanzHubUI and YanzHubUI.Parent do task.wait(4); RefreshCratesUI() end
-end)
-
-task.spawn(function()
-    while YanzHubUI and YanzHubUI.Parent do ZeroAllPrompts(); task.wait(1.5) end
+task.defer(function()
+    RefreshCratesUI()
 end)
 
 -- =============================================================
--- [ DRAGGING & KINEMATICS ]
+-- [ WATCHERS ]
+-- =============================================================
+local watchedCrates = {}
+local refreshQueued = false
+
+local function QueueRefresh()
+    if refreshQueued then
+        return
+    end
+
+    refreshQueued = true
+
+    task.delay(0.35, function()
+        refreshQueued = false
+        RefreshCratesUI()
+    end)
+end
+
+local function WatchCrate(crate)
+    if watchedCrates[crate] then
+        return
+    end
+
+    watchedCrates[crate] = true
+
+    crate.AttributeChanged:Connect(function()
+        QueueRefresh()
+    end)
+
+    crate.ChildAdded:Connect(QueueRefresh)
+    crate.ChildRemoved:Connect(QueueRefresh)
+end
+
+local function BindCratesFolder(folder)
+    if not folder then
+        return
+    end
+
+    for _, c in ipairs(folder:GetChildren()) do
+        WatchCrate(c)
+    end
+
+    folder.ChildAdded:Connect(function(c)
+        WatchCrate(c)
+        QueueRefresh()
+    end)
+
+    folder.ChildRemoved:Connect(QueueRefresh)
+end
+
+local existingFolder = workspace:FindFirstChild("Crates")
+
+if existingFolder then
+    BindCratesFolder(existingFolder)
+end
+
+workspace.ChildAdded:Connect(function(child)
+    if child.Name == "Crates" then
+        BindCratesFolder(child)
+        QueueRefresh()
+    end
+end)
+
+workspace.ChildRemoved:Connect(function(child)
+    if child.Name == "Crates" then
+        QueueRefresh()
+    end
+end)
+
+-- Periodic safety refresh.
+task.spawn(function()
+    while YanzHubUI and YanzHubUI.Parent do
+        task.wait(4)
+        RefreshCratesUI()
+    end
+end)
+
+-- Periodic ProximityPrompt zeroing.
+task.spawn(function()
+    while YanzHubUI and YanzHubUI.Parent do
+        ZeroAllPrompts()
+        task.wait(1.5)
+    end
+end)
+
+-- =============================================================
+-- [ HIGH-PRECISION ZERO-LAG UNIVERSAL DRAGGING ENGINE ]
 -- =============================================================
 local isDragging = false
 local dragStartMouse = Vector2.new()
@@ -1339,65 +2325,223 @@ local lastMousePos = Vector2.new()
 local tiltAngle = 0
 local flameWindVelocity = Vector2.new(0, 0)
 
-local function CurrentMainHeight() return listExpanded and EXPANDED_HEIGHT or COLLAPSED_HEIGHT end
+local function CurrentMainHeight()
+    return listExpanded and EXPANDED_HEIGHT or COLLAPSED_HEIGHT
+end
 
 local function ClampMainFramePosition(position)
-    if not Camera then return position end
+    if not Camera then
+        return position
+    end
+
     local viewport = Camera.ViewportSize
     local scale = math.max(UIScale.Scale, 0.01)
+
     local frameWidth = MAIN_WIDTH * scale
     local frameHeight = CurrentMainHeight() * scale
-    local halfWidth = frameWidth * 0.5 + SCREEN_PADDING
-    local halfHeight = frameHeight * 0.5 + SCREEN_PADDING
+
+    -- Rotation-aware clamp: slight tilt never overflows off-screen.
+    local maxTilt = math.rad(MAX_GUI_TILT)
+
+    local rotatedWidth = math.abs(frameWidth * math.cos(maxTilt)) + math.abs(frameHeight * math.sin(maxTilt))
+    local rotatedHeight = math.abs(frameWidth * math.sin(maxTilt)) + math.abs(frameHeight * math.cos(maxTilt))
+
+    local halfWidth = rotatedWidth * 0.5 + SCREEN_PADDING
+    local halfHeight = rotatedHeight * 0.5 + SCREEN_PADDING
+
     local minX = math.min(halfWidth, viewport.X * 0.5)
     local maxX = math.max(viewport.X - halfWidth, viewport.X * 0.5)
+
     local minY = math.min(halfHeight, viewport.Y * 0.5)
     local maxY = math.max(viewport.Y - halfHeight, viewport.Y * 0.5)
+
     local centerX = position.X.Scale * viewport.X + position.X.Offset
     local centerY = position.Y.Scale * viewport.Y + position.Y.Offset
+
     centerX = math.clamp(centerX, minX, maxX)
     centerY = math.clamp(centerY, minY, maxY)
+
     return UDim2.new(0.5, centerX - viewport.X * 0.5, 0.5, centerY - viewport.Y * 0.5)
 end
 
 local function OnDragBegan(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         isDragging = true
+
         dragStartMouse = Vector2.new(input.Position.X, input.Position.Y)
         lastMousePos = dragStartMouse
         dragStartFramePos = MainFrame.Position
-        input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then isDragging = false end end)
+
+        TweenService:Create(MainStroke, TWEEN_FAST, {
+            Transparency = 0.02,
+            Color = Color3.fromRGB(255, 255, 255)
+        }):Play()
+
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                isDragging = false
+
+                TweenService:Create(MainFrame, TWEEN_SPRING, {
+                    Rotation = 0
+                }):Play()
+
+                TweenService:Create(MainStroke, TWEEN_FAST, {
+                    Transparency = 0.12
+                }):Play()
+            end
+        end)
     end
 end
 
 Header.InputBegan:Connect(OnDragBegan)
 EggCard.InputBegan:Connect(OnDragBegan)
 ControlPanel.InputBegan:Connect(OnDragBegan)
+MainFrame.InputBegan:Connect(OnDragBegan)
+
+-- NOTE:
+-- CratesScroll.InputBegan is intentionally not connected so scrolling remains usable.
 
 UserInputService.InputChanged:Connect(function(input)
-    if isDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+    if
+        isDragging
+        and (
+            input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch
+        )
+    then
         local currentMouse = Vector2.new(input.Position.X, input.Position.Y)
         local delta = currentMouse - dragStartMouse
         local currentScale = math.max(UIScale.Scale, 0.01)
-        targetPos = ClampMainFramePosition(UDim2.new(dragStartFramePos.X.Scale, dragStartFramePos.X.Offset + (delta.X / currentScale), dragStartFramePos.Y.Scale, dragStartFramePos.Y.Offset + (delta.Y / currentScale)))
+
+        targetPos = ClampMainFramePosition(UDim2.new(
+            dragStartFramePos.X.Scale,
+            dragStartFramePos.X.Offset + (delta.X / currentScale),
+            dragStartFramePos.Y.Scale,
+            dragStartFramePos.Y.Offset + (delta.Y / currentScale)
+        ))
+
         currentVelocity = currentMouse - lastMousePos
         lastMousePos = currentMouse
     end
 end)
 
+-- =============================================================
+-- [ RENDER STEPPED ENGINE LOOP : FLAME & KINEMATICS ]
+-- =============================================================
 local clock = os.clock()
+
 RunService.RenderStepped:Connect(function(dt)
     clock = clock + dt
+
+    -- 1) Position and drag update.
     if isDragging and isGuiVisible then
         MainFrame.Position = ClampMainFramePosition(targetPos)
         targetPos = MainFrame.Position
+
         local targetTilt = math.clamp(currentVelocity.X * 0.12, -MAX_GUI_TILT, MAX_GUI_TILT)
         tiltAngle = tiltAngle + (targetTilt - tiltAngle) * math.min(dt * 20, 1)
+
         MainFrame.Rotation = tiltAngle
+
         flameWindVelocity = flameWindVelocity:Lerp(-currentVelocity * 1.65, math.min(dt * 25, 1))
     else
         MainFrame.Position = ClampMainFramePosition(MainFrame.Position)
-        if math.abs(MainFrame.Rotation) > 0.01 then MainFrame.Rotation = MainFrame.Rotation + (0 - MainFrame.Rotation) * math.min(dt * 12, 1) else MainFrame.Rotation = 0 end
+
+        if math.abs(MainFrame.Rotation) > 0.01 then
+            MainFrame.Rotation = MainFrame.Rotation + (0 - MainFrame.Rotation) * math.min(dt * 12, 1)
+        else
+            MainFrame.Rotation = 0
+        end
+
         flameWindVelocity = flameWindVelocity:Lerp(Vector2.new(0, 0), math.min(dt * 10, 1))
+    end
+
+    -- 2) Thermal core aura pulsation.
+    local tSpeed = clock * 18
+
+    local corePulse = 0.15 + math.sin(tSpeed) * 0.1 + (math.random() * 0.05)
+    local auraPulse = 0.40 + math.cos(tSpeed * 1.2) * 0.12 + (math.random() * 0.08)
+
+    local windOffsetCoreX = math.clamp(flameWindVelocity.X * 0.2, -12, 12)
+    local windOffsetCoreY = math.clamp(flameWindVelocity.Y * 0.2, -10, 10)
+
+    CoreGlow.Position = UDim2.new(0.5, windOffsetCoreX, 0.5, windOffsetCoreY)
+    CoreGlow.BackgroundTransparency = math.clamp(corePulse, 0.05, 0.35)
+
+    AuraGlow.Position = UDim2.new(0.5, windOffsetCoreX * 1.2, 0.5, -4 + windOffsetCoreY * 1.2)
+    AuraGlow.BackgroundTransparency = math.clamp(auraPulse, 0.2, 0.65)
+    AuraGlow.Size = UDim2.new(0, 54 + math.sin(tSpeed) * 5, 0, 60 + math.cos(tSpeed * 1.5) * 6)
+
+    -- 3) Fluid flame tendrils.
+    for i = 1, TENDRIL_COUNT do
+        local ft = flameTendrils[i]
+
+        ft.Life = ft.Life + dt
+
+        if ft.Life >= ft.MaxLife then
+            ft.Life = 0
+            ft.PosX = (math.random() - 0.5) * 20
+            ft.PosY = math.random(10, 22)
+            ft.VelX = (math.random() - 0.5) * 16
+            ft.VelY = -math.random(35, 70)
+            ft.BaseWidth = math.random(8, 15)
+            ft.BaseHeight = math.random(16, 32)
+            ft.SwayFreq = math.random(6, 14)
+            ft.MaxLife = math.random(35, 75) / 100
+        end
+
+        local prog = ft.Life / ft.MaxLife
+
+        local totalVelX = ft.VelX + (flameWindVelocity.X * (1 + prog * 1.2))
+        local totalVelY = ft.VelY + (flameWindVelocity.Y * (1 + prog * 1.2))
+
+        ft.PosY = ft.PosY + (totalVelY * dt)
+        ft.PosX = ft.PosX + (totalVelX * dt) + math.sin(clock * ft.SwayFreq + i) * 0.6
+
+        local angle = math.deg(math.atan2(totalVelX + math.cos(clock * ft.SwayFreq) * 2, -totalVelY))
+
+        local windStretch = math.clamp(flameWindVelocity.Magnitude * 0.015, 0, 0.8)
+
+        local curWidth = ft.BaseWidth * (1 - prog ^ 1.4) * (1 - windStretch * 0.3)
+        local curHeight = ft.BaseHeight * (1 + prog * 0.4) * (1 + windStretch)
+
+        local fadeAlpha = prog < 0.15 and (prog / 0.15) * 0.1 or (0.1 + ((prog - 0.15) / 0.85) * 0.9)
+
+        ft.Object.Position = UDim2.new(0.5, ft.PosX, 0.5, ft.PosY)
+        ft.Object.Size = UDim2.new(0, curWidth, 0, curHeight)
+        ft.Object.Rotation = angle
+        ft.Object.BackgroundTransparency = math.clamp(fadeAlpha, 0.05, 1)
+    end
+
+    -- 4) Wind-drifting micro sparks.
+    for i = 1, SPARK_COUNT do
+        local sp = sparkParticles[i]
+
+        sp.Life = sp.Life + dt
+
+        if sp.Life >= sp.MaxLife then
+            sp.Life = 0
+            sp.PosX = (math.random() - 0.5) * 18
+            sp.PosY = math.random(5, 18)
+            sp.VelX = (math.random() - 0.5) * 30
+            sp.VelY = -math.random(50, 110)
+            sp.Size = math.random(2, 4)
+            sp.MaxLife = math.random(20, 50) / 100
+        end
+
+        local spProg = sp.Life / sp.MaxLife
+
+        local sparkWindX = flameWindVelocity.X * 1.5
+        local sparkWindY = flameWindVelocity.Y * 1.5
+
+        sp.PosY = sp.PosY + ((sp.VelY + sparkWindY) * dt)
+        sp.PosX = sp.PosX + ((sp.VelX + sparkWindX) * dt)
+
+        local spFade = spProg > 0.5 and ((spProg - 0.5) / 0.5) or 0
+        local flickerFactor = math.random() > 0.3 and 0 or 0.5
+
+        sp.Object.Position = UDim2.new(0.5, sp.PosX, 0.5, sp.PosY)
+        sp.Object.Size = UDim2.new(0, sp.Size, 0, sp.Size * (1 + flameWindVelocity.Magnitude * 0.02))
+        sp.Object.BackgroundTransparency = math.clamp(spFade + flickerFactor, 0, 1)
     end
 end)

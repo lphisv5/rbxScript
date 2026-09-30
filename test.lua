@@ -27,6 +27,50 @@ local noclipConnection = nil
 local originalEggCFrames = {}
 local toggleDropdown
 
+-- =======================================================
+-- RIDE A PET WIKI EGG DATABASE
+-- =======================================================
+local WikiEggDatabase = {
+    ["White Egg"] = "Common", ["Brown Egg"] = "Common",
+    ["Cracked Egg"] = "Rare", ["Easter Egg"] = "Rare", ["Stone Egg"] = "Rare",
+    ["Ocean Egg"] = "Rare", ["Leaf Egg"] = "Rare", ["Asteroid Egg"] = "Rare",
+    ["Magma Egg"] = "Rare",
+    ["Mushroom Egg"] = "Epic", ["Flower Egg"] = "Epic", ["Slime Egg"] = "Epic",
+    ["Ice Egg"] = "Epic", ["Cauldron"] = "Epic",
+    ["Glass Egg"] = "Legendary", ["Golden Egg"] = "Legendary", ["Obsidian Egg"] = "Legendary",
+    ["Crystal Egg"] = "Mythic", ["Skull Egg"] = "Mythic", ["Dominus Egg"] = "Mythic",
+    ["Flaming Egg"] = "Mythic", ["Sinister Egg"] = "Mythic", ["Soul Egg"] = "Mythic",
+    ["Darkness Egg"] = "Mythic", ["Rainbow Egg"] = "Mythic", ["Steel Egg"] = "Mythic",
+    ["Dragon Egg"] = "Mythic",
+    ["Aurora Egg"] = "Divine", ["Galaxy Egg"] = "Divine", ["Lava Egg"] = "Divine",
+    ["Galactic Egg"] = "Divine", ["Bloom Egg"] = "Divine",
+    ["Black Hole Egg"] = "Ethereal", ["Blackhole Egg"] = "Ethereal",
+    ["Solaris Egg"] = "Ethereal", ["Cherub Egg"] = "Ethereal", ["AdminEgg"] = "Ethereal",
+    ["Void Egg"] = "Ethereal", ["Ethereal Egg"] = "Ethereal", ["Etheral Egg"] = "Ethereal",
+    ["Volcanic Egg"] = "Ethereal"
+}
+
+local RarityWeights = {
+    ["Ethereal"] = 7, ["Etheral"] = 7,
+    ["Divine"] = 6,
+    ["Mythic"] = 5,
+    ["Legendary"] = 4,
+    ["Epic"] = 3,
+    ["Rare"] = 2,
+    ["Common"] = 1
+}
+
+local RarityColors = {
+    ["Ethereal"] = Color3.fromRGB(255, 0, 128),
+    ["Etheral"] = Color3.fromRGB(255, 0, 128),
+    ["Divine"] = Color3.fromRGB(0, 240, 255),
+    ["Mythic"] = Color3.fromRGB(220, 40, 255),
+    ["Legendary"] = Color3.fromRGB(255, 170, 0),
+    ["Epic"] = Color3.fromRGB(160, 50, 255),
+    ["Rare"] = Color3.fromRGB(0, 140, 255),
+    ["Common"] = Color3.fromRGB(180, 180, 180)
+}
+
 local function storeOriginalEggCFrame(eggObj)
     if eggObj and eggObj.Parent and not originalEggCFrames[eggObj] then
         pcall(function()
@@ -48,43 +92,54 @@ end
 Workspace.DescendantAdded:Connect(removeHoldTime)
 
 -- =======================================================
--- PRECISION EGG DETECTION SYSTEM (แก้ไขจุดตรวจจับสับสน)
+-- ULTRA PRECISION EGG HOLDING DETECTION ENGINE
 -- =======================================================
 local function isHoldingEgg()
     local char = LocalPlayer.Character
     if not char then return false end
 
-    -- 1. ตรวจสอบ Tool ไข่ที่ถืออยู่ในมือ
+    -- 1. เช็กสิ่งของใน Backpack
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
+    if backpack and #backpack:GetChildren() > 0 then
+        for _, item in ipairs(backpack:GetChildren()) do
+            if item:IsA("Tool") then return true, item end
+        end
+    end
+
+    -- 2. เช็ก Tool หรือ Model แปลกปลอมที่ตัวละครถืออยู่
     for _, child in ipairs(char:GetChildren()) do
         if child:IsA("Tool") then
+            return true, child
+        elseif child:IsA("Model") and not child:IsA("Accessory") then
             local nameLower = string.lower(child.Name)
-            if string.find(nameLower, "egg") then
+            if string.find(nameLower, "egg") or string.find(nameLower, "cauldron") or WikiEggDatabase[child.Name] then
+                return true, child
+            end
+            if child:FindFirstChildWhichIsA("BasePart") then
                 return true, child
             end
         end
     end
 
-    -- 2. ตรวจสอบ Model ไข่ที่ถูกยึดติดกับตัวละคร (ไม่รวม Accessory)
-    for _, child in ipairs(char:GetChildren()) do
-        if child:IsA("Model") and not child:IsA("Accessory") then
-            local nameLower = string.lower(child.Name)
-            if string.find(nameLower, "egg") then
-                return true, child
-            end
-        end
-    end
-
-    -- 3. ตรวจสอบข้อต่อที่มือขวา/มือซ้าย สำหรับโมเดลไข่โดยตรง
-    local rightHand = char:FindFirstChild("RightHand") or char:FindFirstChild("Right Arm")
-    if rightHand then
-        for _, weld in ipairs(rightHand:GetChildren()) do
-            if weld:IsA("Weld") or weld:IsA("WeldConstraint") then
-                local part1 = weld.Part1
-                if part1 and part1.Parent and string.find(string.lower(part1.Parent.Name), "egg") then
-                    return true, part1.Parent
+    -- 3. เช็กข้อต่อ (Welds) บนตัวละครทั้งหมดกับวัตถุภายนอก
+    for _, part in ipairs(char:GetDescendants()) do
+        if part:IsA("Weld") or part:IsA("WeldConstraint") or part:IsA("Motor6D") then
+            local p0 = part.Part0
+            local p1 = part.Part1
+            if p0 and p1 then
+                local target = p0:IsDescendantOf(char) and p1 or (p1:IsDescendantOf(char) and p0 or nil)
+                if target and not target:IsDescendantOf(char) then
+                    return true, target
+                elseif target and target.Parent and target.Parent ~= char and not target.Parent:IsA("Accessory") then
+                    return true, target
                 end
             end
         end
+    end
+
+    -- 4. เช็กว่าไข่เป้าหมายหลุดออกจากโฟลเดอร์ RenderedEggs หรือยัง (ถ้าหลุดแสดงว่าถูกเก็บเข้าตัวไปแล้ว)
+    if selectedEggInstance and (not selectedEggInstance.Parent or selectedEggInstance.Parent.Name ~= "RenderedEggs") then
+        return true, selectedEggInstance
     end
 
     return false
@@ -138,7 +193,7 @@ if parentContainer:FindFirstChild("YanzHubUI") then
 end
 
 -- =======================================================
--- VOLCANO ENTRANCE BYPASS & NOCLIP ENGINE (DELTA READY)
+-- VOLCANO ENTRANCE BYPASS & NOCLIP ENGINE
 -- =======================================================
 local cachedVolcano = Workspace:FindFirstChild("Volcano")
 
@@ -1043,50 +1098,6 @@ UIPadding.PaddingLeft = UDim.new(0, 6)
 UIPadding.PaddingRight = UDim.new(0, 6)
 UIPadding.Parent = DropdownFrame
 
--- =======================================================
--- RIDE A PET WIKI EGG DATABASE
--- =======================================================
-local WikiEggDatabase = {
-    ["White Egg"] = "Common", ["Brown Egg"] = "Common",
-    ["Cracked Egg"] = "Rare", ["Easter Egg"] = "Rare", ["Stone Egg"] = "Rare",
-    ["Ocean Egg"] = "Rare", ["Leaf Egg"] = "Rare", ["Asteroid Egg"] = "Rare",
-    ["Magma Egg"] = "Rare",
-    ["Mushroom Egg"] = "Epic", ["Flower Egg"] = "Epic", ["Slime Egg"] = "Epic",
-    ["Ice Egg"] = "Epic", ["Cauldron"] = "Epic",
-    ["Glass Egg"] = "Legendary", ["Golden Egg"] = "Legendary", ["Obsidian Egg"] = "Legendary",
-    ["Crystal Egg"] = "Mythic", ["Skull Egg"] = "Mythic", ["Dominus Egg"] = "Mythic",
-    ["Flaming Egg"] = "Mythic", ["Sinister Egg"] = "Mythic", ["Soul Egg"] = "Mythic",
-    ["Darkness Egg"] = "Mythic", ["Rainbow Egg"] = "Mythic", ["Steel Egg"] = "Mythic",
-    ["Dragon Egg"] = "Mythic",
-    ["Aurora Egg"] = "Divine", ["Galaxy Egg"] = "Divine", ["Lava Egg"] = "Divine",
-    ["Galactic Egg"] = "Divine", ["Bloom Egg"] = "Divine",
-    ["Black Hole Egg"] = "Ethereal", ["Blackhole Egg"] = "Ethereal",
-    ["Solaris Egg"] = "Ethereal", ["Cherub Egg"] = "Ethereal", ["AdminEgg"] = "Ethereal",
-    ["Void Egg"] = "Ethereal", ["Ethereal Egg"] = "Ethereal", ["Etheral Egg"] = "Ethereal",
-    ["Volcanic Egg"] = "Ethereal"
-}
-
-local RarityWeights = {
-    ["Ethereal"] = 7, ["Etheral"] = 7,
-    ["Divine"] = 6,
-    ["Mythic"] = 5,
-    ["Legendary"] = 4,
-    ["Epic"] = 3,
-    ["Rare"] = 2,
-    ["Common"] = 1
-}
-
-local RarityColors = {
-    ["Ethereal"] = Color3.fromRGB(255, 0, 128),
-    ["Etheral"] = Color3.fromRGB(255, 0, 128),
-    ["Divine"] = Color3.fromRGB(0, 240, 255),
-    ["Mythic"] = Color3.fromRGB(220, 40, 255),
-    ["Legendary"] = Color3.fromRGB(255, 170, 0),
-    ["Epic"] = Color3.fromRGB(160, 50, 255),
-    ["Rare"] = Color3.fromRGB(0, 140, 255),
-    ["Common"] = Color3.fromRGB(180, 180, 180)
-}
-
 local function parseLuckValue(val)
     if type(val) == "number" then return val end
     if type(val) ~= "string" then return 1 end
@@ -1873,7 +1884,7 @@ local function instantWarpTo(targetCFrame)
 end
 
 -- =======================================================
--- PROCESS MOVEMENT (ปรับปรุงการวนลูปการทำงานใหม่)
+-- PROCESS MOVEMENT (ปรับปรุงระบบเช็กไข่และส่งกลับฐาน)
 -- =======================================================
 local function processMovement()
     if not isToggled then return end
@@ -1884,38 +1895,33 @@ local function processMovement()
     local homeCF = getHomeCFrame()
     local distToHome = (hrp.Position - homeCF.Position).Magnitude
 
-    -- 🟢 กรณีที่ 1: ตรวจพบว่ากำลังถือไข่อยู่ในมือจริงๆ
+    -- 🟢 1. ตรวจสอบว่ากำลังถือไข่อยู่ในมือหรือตัวละครหรือไม่
     if isHoldingEgg() then
-        -- เดินทางกลับบ้านเฉพาะตอนที่ยังอยู่ห่างจากบ้านเกิน 15 studs
-        if distToHome > 15 then
+        if distToHome > 12 then
             if currentMode == 2 then
                 instantWarpTo(homeCF)
             else
                 tweenTo(homeCF, 300)
             end
         end
-        -- เมื่ออยู่บ้านแล้ว ให้ยืนรอระบบเกมเคลียร์ไข่ลงตะกร้า/ส่งไข่
-        task.wait(0.5)
+        task.wait(0.4)
         return
     end
 
-    -- 🔴 กรณีที่ 2: ไม่มีไข่ในตัว ให้เริ่มเดินทางไปเก็บไข่เป้าหมาย
-    if not selectedEggInstance or not selectedEggInstance.Parent then
-        local renderedEggs = Workspace:FindFirstChild("RenderedEggs")
-        if renderedEggs and #renderedEggs:GetChildren() > 0 then
-            refreshEggDropdownList()
-        end
+    -- 🔴 2. ค้นหาไข่เป้าหมายเมื่อไม่มีไข่ในตัว
+    if not selectedEggInstance or not selectedEggInstance.Parent or selectedEggInstance.Parent.Name ~= "RenderedEggs" then
+        refreshEggDropdownList()
     end
 
     if not selectedEggInstance or not selectedEggInstance.Parent then return end
 
+    local targetEgg = selectedEggInstance
     local eggCF = getEggCFrame()
     if not eggCF or not homeCF then return end
 
-    local isVolcanicEgg = selectedEggInstance and string.find(string.lower(selectedEggInstance.Name), "volcan")
+    local isVolcanicEgg = targetEgg and string.find(string.lower(targetEgg.Name), "volcan")
     local entranceCF = getVolcanoEntranceCFrame()
 
-    -- ทะลุประตูภูเขาไฟเมื่อไข่เป้าหมายอยู่ข้างใน
     if isVolcanicEgg and entranceCF then
         if currentMode == 2 then
             instantWarpTo(entranceCF)
@@ -1934,11 +1940,12 @@ local function processMovement()
         if not isToggled then return end
         task.wait(0.15)
 
-        fireEggPrompt(selectedEggInstance)
-        task.wait(0.2)
+        -- ส่งคำสั่งเก็บไข่
+        fireEggPrompt(targetEgg)
+        task.wait(0.25)
 
-        -- ตรวจสอบว่าได้ไข่มาในมือหรือไม่ ถ้าได้จึงวาร์ปกลับบ้านทันที
-        if isHoldingEgg() then
+        -- เช็กทันทีว่าไข่หลุดออกจากจุดเกิด (RenderedEggs) หรือเข้ามาในตัวแล้วหรือยัง
+        if isHoldingEgg() or not targetEgg.Parent or targetEgg.Parent.Name ~= "RenderedEggs" then
             instantWarpTo(homeCF)
         end
         task.wait(0.2)
@@ -1948,11 +1955,12 @@ local function processMovement()
         if not isToggled then return end
         task.wait(0.15)
 
-        fireEggPrompt(selectedEggInstance)
+        -- ส่งคำสั่งเก็บไข่
+        fireEggPrompt(targetEgg)
         task.wait(0.3)
 
-        -- ตรวจสอบว่าได้ไข่มาในมือหรือไม่ ถ้าได้จึงบินกลับบ้านทันที
-        if isHoldingEgg() then
+        -- เช็กทันทีว่าไข่หลุดออกจากจุดเกิด (RenderedEggs) หรือเข้ามาในตัวแล้วหรือยัง
+        if isHoldingEgg() or not targetEgg.Parent or targetEgg.Parent.Name ~= "RenderedEggs" then
             tweenTo(homeCF, 300)
         end
         task.wait(0.2)

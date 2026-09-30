@@ -1,6 +1,3 @@
--- [[ YANZ HUB GUI - NEXT-GEN HYPER-REALISTIC FLAME & 3D CRATE ENGINE (v5) ]] --
--- [ CANCEL TOKEN + SAFE E-HOLD + SMART PICKUP DETECTION ]
-
 local CoreGui              = game:GetService("CoreGui")
 local TweenService         = game:GetService("TweenService")
 local UserInputService     = game:GetService("UserInputService")
@@ -53,22 +50,16 @@ local TWEEN_ELASTIC = TweenInfo.new(0.50, Enum.EasingStyle.Elastic, Enum.EasingD
 local TWEEN_FAST    = TweenInfo.new(0.10, Enum.EasingStyle.Quad,    Enum.EasingDirection.Out)
 
 local FLY_SPEED          = 275
-local SAFE_ZONE_CFRAME   = CFrame.new(2435.00024, -12.4999971, -940,
-                                      1, 0, 0,
-                                      0, 1, 0,
-                                      0, 0, 1)
+local SAFE_ZONE_CFRAME   = CFrame.new(2435.00024, -12.4999971, -940, 1, 0, 0, 0, 1, 0, 0, 0, 1)
 
--- ★ Global state
 local activeNoclipConnection = nil
 local loopChecked = false
 local toggled     = false
 
--- ★ Cancel token — ตัวนับการยกเลิก
-local cancelToken = 0
-
--- ★ E-Hold state
-local eHoldActive      = false
-local eSafetyDeadline  = 0
+-- E-Hold states (Unified & Balanced)
+local E_HOLD_ACTIVE = false
+local E_HOLD_CONNECTION = nil
+local E_HOLD_SAFETY_TIME = 0
 
 -- -------------------------------------------------------------
 -- [ MAIN FRAME ]
@@ -99,9 +90,11 @@ UIScale.Parent = MainFrame
 
 local targetScaleValue = 1.0
 local function UpdateAutoScaler()
+    local cam = workspace.CurrentCamera
+    if not cam then return end
     local isMobileOrTablet = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
     if isMobileOrTablet then
-        local ViewportY = Camera.ViewportSize.Y
+        local ViewportY = cam.ViewportSize.Y
         targetScaleValue = math.clamp(ViewportY / 620, 0.62, 1.08)
     else
         targetScaleValue = 1.0
@@ -109,7 +102,9 @@ local function UpdateAutoScaler()
     UIScale.Scale = targetScaleValue
 end
 
-Camera:GetPropertyChangedSignal("ViewportSize"):Connect(UpdateAutoScaler)
+if Camera then
+    Camera:GetPropertyChangedSignal("ViewportSize"):Connect(UpdateAutoScaler)
+end
 UpdateAutoScaler()
 
 UIScale.Scale = 0
@@ -517,7 +512,7 @@ DiscordButton.MouseButton1Click:Connect(function()
 end)
 
 -- -------------------------------------------------------------
--- [ CLOSE BUTTON — ★ หยุดบอทก่อนปิด ]
+-- [ CLOSE BUTTON ]
 -- -------------------------------------------------------------
 local CloseButton = Instance.new("TextButton")
 CloseButton.Name             = "CloseButton"
@@ -565,7 +560,9 @@ CloseButton.MouseLeave:Connect(function()
     }):Play()
 end)
 
--- ★ CloseButton handler จะถูก set หลังจาก StopEverything ถูก define (ด้านล่าง)
+CloseButton.MouseButton1Click:Connect(function()
+    ToggleGuiState()
+end)
 
 -- -------------------------------------------------------------
 -- [ EGG CARD ]
@@ -876,7 +873,7 @@ local function ScanCrateData(crate)
     if not rawName or rawName == "" then
         local nameStr = crate.Name
         nameStr = nameStr:gsub("^Crate_", ""):gsub("^Crate%s*", ""):gsub("^Egg_", ""):gsub("^Egg%s*", "")
-        local parts = nameStr:split("_")
+        local parts = string.split(nameStr, "_")
         rawName = (#parts > 0 and parts[1] ~= "") and parts[1] or nameStr
     end
     data.Name = rawName
@@ -1336,45 +1333,27 @@ end)
 -- =============================================================
 local isStealingInProcess = false
 local currentTriggerSource = nil
+local cancelToken = 0
 
-local function GetSafeZoneCFrame()
-    local result = SAFE_ZONE_CFRAME
-    pcall(function()
-        local spawnLocation = workspace:FindFirstChild("SpawnLocation")
-        if spawnLocation and spawnLocation:IsA("BasePart") then
-            result = spawnLocation.CFrame
-        end
-    end)
-    return result
-end
-
-local function GetCharacterHRP()
-    local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-    return char:FindFirstChild("HumanoidRootPart") or char:WaitForChild("HumanoidRootPart", 2)
-end
-
--- ═════════════════════════════════════════════════════════════
--- [ E-HOLD CORE ]
--- ═════════════════════════════════════════════════════════════
+-- ★ Unified E-Hold State Management
 local function StartHoldE()
-    if eHoldActive then return end
-    eHoldActive = true
-    eSafetyDeadline = os.clock() + 8
+    if E_HOLD_ACTIVE then return end
+    E_HOLD_ACTIVE = true
+    E_HOLD_SAFETY_TIME = os.clock() + 8
     pcall(function()
         VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
     end)
 end
 
 local function StopHoldE()
-    if not eHoldActive then return end
-    eHoldActive = false
-    eSafetyDeadline = 0
+    if not E_HOLD_ACTIVE then return end
+    E_HOLD_ACTIVE = false
+    E_HOLD_SAFETY_TIME = 0
     pcall(function()
         VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
     end)
 end
 
--- ★ หยุดทุกอย่างทันที (เรียกได้จากทุกที่)
 local function StopEverything(reason)
     cancelToken = cancelToken + 1
     StopHoldE()
@@ -1389,7 +1368,6 @@ local function StopEverything(reason)
     end
 end
 
--- ★ ตรวจว่าถือหีบผ่านตัวละคร
 local function IsCarryingCrate(crateModel)
     local char = LocalPlayer.Character
     if not char or not char.Parent then return false end
@@ -1406,7 +1384,7 @@ local function IsCarryingCrate(crateModel)
         for _, item in ipairs(char:GetDescendants()) do
             if item:IsA("Weld") or item:IsA("WeldConstraint") or item:IsA("Motor6D") then
                 local p0, p1 = item.Part0, item.Part1
-                if p0 and p1 then
+                if p0 and p1 and p0.Parent and p1.Parent then
                     local crate0 = (p0 == crateModel) or p0:IsDescendantOf(crateModel)
                     local crate1 = (p1 == crateModel) or p1:IsDescendantOf(crateModel)
                     local char0  = p0:IsDescendantOf(char)
@@ -1438,7 +1416,6 @@ local function IsCarryingCrate(crateModel)
     return false
 end
 
--- ★ ตรวจว่ากำลังถูกไล่ (เฉพาะ attribute ที่ชัดเจน)
 local function IsBeingChased()
     local char = LocalPlayer.Character
     local attrList = {
@@ -1466,7 +1443,6 @@ local function IsBeingChased()
     return false
 end
 
--- ★ ตรวจว่าหีบ "ตาม" ตัวละคร (positional)
 local function IsCrateFollowing(crateModel)
     if not crateModel or not crateModel.Parent then return false end
 
@@ -1475,28 +1451,27 @@ local function IsCrateFollowing(crateModel)
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return false end
 
-    local cratePos
-    if crateModel:IsA("Model") then
-        local ok, cf = pcall(function() return crateModel:GetBoundingBox() end)
-        if ok then cratePos = cf.Position end
-    elseif crateModel:IsA("BasePart") then
-        cratePos = crateModel.Position
+    local function getPos(model)
+        if model:IsA("Model") then
+            local ok, cf = pcall(function() return model:GetBoundingBox() end)
+            if ok then return cf.Position end
+        elseif model:IsA("BasePart") then
+            return model.Position
+        end
+        return nil
     end
 
+    local cratePos = getPos(crateModel)
     if not cratePos then return false end
 
     local dist = (cratePos - hrp.Position).Magnitude
-    return dist < 12
+    return dist < 15
 end
 
--- ═════════════════════════════════════════════════════════════
--- [ SAFE PICKUP — E-HOLD + TOKEN ]
--- ═════════════════════════════════════════════════════════════
 local function AttemptStealInteraction(crateModel, myToken)
     if not crateModel then return false end
 
-    local prompt = crateModel:FindFirstChildOfClass("ProximityPrompt", true)
-
+    local prompt = crateModel:FindFirstChildWhichIsA("ProximityPrompt", true)
     local ok, result = pcall(function()
         if prompt then
             pcall(function() fireproximityprompt(prompt) end)
@@ -1505,7 +1480,7 @@ local function AttemptStealInteraction(crateModel, myToken)
         StartHoldE()
 
         local startTime      = os.clock()
-        local TIMEOUT        = 4.5
+        local TIMEOUT        = 5.0
         local followStart    = nil
         local lastPromptTime = 0
 
@@ -1521,14 +1496,14 @@ local function AttemptStealInteraction(crateModel, myToken)
 
             if IsCrateFollowing(crateModel) then
                 followStart = followStart or os.clock()
-                if (os.clock() - followStart) > 0.4 then
+                if (os.clock() - followStart) > 0.5 then
                     return true
                 end
             else
                 followStart = nil
             end
 
-            if (os.clock() - startTime) > 0.6 and IsBeingChased() then
+            if (os.clock() - startTime) > 0.8 and IsBeingChased() then
                 task.wait(0.15)
                 return true
             end
@@ -1546,20 +1521,27 @@ local function AttemptStealInteraction(crateModel, myToken)
 
     StopHoldE()
 
-    if not ok then return false end
+    if not ok then
+        return false
+    end
     return result
 end
 
--- ═════════════════════════════════════════════════════════════
--- [ FLY — token check ]
--- ═════════════════════════════════════════════════════════════
+local function GetCharacterHRP()
+    local char = LocalPlayer.Character
+    if not char or not char.Parent then
+        return nil
+    end
+    return char:FindFirstChild("HumanoidRootPart")
+end
+
 local function FlyToTarget(targetCF, myToken, canAbort)
     local hrp = GetCharacterHRP()
     if not hrp or not targetCF then return false end
 
     local startCF = hrp.CFrame
     local distance = (targetCF.Position - startCF.Position).Magnitude
-    if distance < 1 then return true end
+    if distance < 2 then return true end
 
     local travelTime = distance / FLY_SPEED
     local startTime  = os.clock()
@@ -1590,6 +1572,11 @@ local function FlyToTarget(targetCF, myToken, canAbort)
             break
         end
 
+        if not hrp.Parent then
+            completed = false
+            break
+        end
+
         local elapsed = os.clock() - startTime
         local alpha   = math.clamp(elapsed / travelTime, 0, 1)
         hrp.CFrame = startCF:Lerp(targetCF, alpha)
@@ -1602,7 +1589,7 @@ local function FlyToTarget(targetCF, myToken, canAbort)
         task.wait()
     end
 
-    if completed then
+    if completed and hrp.Parent then
         hrp.CFrame = targetCF
     end
 
@@ -1615,7 +1602,7 @@ local function FlyToTarget(targetCF, myToken, canAbort)
         local char = LocalPlayer.Character
         if char then
             for _, part in ipairs(char:GetDescendants()) do
-                if part:IsA("BasePart") and (part.Name == "HumanoidRootPart" or part.Name == "Torso") then
+                if part:IsA("BasePart") and (part.Name == "HumanoidRootPart" or part.Name == "Torso" or part.Name == "UpperTorso") then
                     part.CanCollide = true
                 end
             end
@@ -1625,9 +1612,17 @@ local function FlyToTarget(targetCF, myToken, canAbort)
     return completed
 end
 
--- ═════════════════════════════════════════════════════════════
--- [ EXECUTE SEQUENCE ]
--- ═════════════════════════════════════════════════════════════
+local function GetSafeZoneCFrame()
+    local result = SAFE_ZONE_CFRAME
+    pcall(function()
+        local spawnLocation = workspace:FindFirstChild("SpawnLocation")
+        if spawnLocation and spawnLocation:IsA("BasePart") then
+            result = spawnLocation.CFrame
+        end
+    end)
+    return result
+end
+
 local function ExecuteStealSequence(triggerSource)
     if isStealingInProcess then return end
     if not currentTargetCrate or not currentTargetCrate.Parent then return end
@@ -1639,13 +1634,14 @@ local function ExecuteStealSequence(triggerSource)
     local targetModel = currentTargetCrate
     local targetCF
     if targetModel:IsA("Model") then
-        targetCF = targetModel:GetBoundingBox()
+        local ok, cf = pcall(function() return targetModel:GetBoundingBox() end)
+        targetCF = ok and cf or (targetModel.PrimaryPart and targetModel.PrimaryPart.CFrame)
     elseif targetModel:IsA("BasePart") then
         targetCF = targetModel.CFrame
     end
 
     if not targetCF then
-        StopEverything()
+        StopEverything("Invalid Target")
         return
     end
 
@@ -1654,7 +1650,7 @@ local function ExecuteStealSequence(triggerSource)
     local flySuccess = FlyToTarget(targetCF, myToken, true)
 
     if myToken ~= cancelToken then
-        StopEverything()
+        StopEverything("Cancelled")
         return
     end
 
@@ -1667,7 +1663,7 @@ local function ExecuteStealSequence(triggerSource)
     StopHoldE()
 
     if myToken ~= cancelToken then
-        StopEverything()
+        StopEverything("Cancelled")
         return
     end
 
@@ -1686,12 +1682,6 @@ local function ExecuteStealSequence(triggerSource)
         currentTriggerSource = nil
     end
 end
-
--- ★ CloseButton handler — set หลังจาก StopEverything พร้อมแล้ว
-CloseButton.MouseButton1Click:Connect(function()
-    StopEverything("Bot Stopped (GUI Closed)")
-    ToggleGuiState()
-end)
 
 -- -------------------------------------------------------------
 -- [ CONTROL PANEL DETAILS ]
@@ -1758,7 +1748,7 @@ SwapButton.MouseLeave:Connect(function()
 end)
 
 -- -------------------------------------------------------------
--- [ LOOP CHECKBOX — ★ OFF → StopEverything ]
+-- [ LOOP CHECKBOX ]
 -- -------------------------------------------------------------
 local LoopBox = Instance.new("TextButton")
 LoopBox.Name             = "LoopBox"
@@ -1806,10 +1796,7 @@ local function ToggleLoopFunc()
             Color = Color3.fromRGB(140, 145, 155),
             Transparency = 0.3
         }):Play()
-        -- ★ ถ้า toggle ปิดด้วย → หยุดทุกอย่างทันที
-        if not toggled then
-            StopEverything("Loop OFF — Stopped")
-        end
+        if not toggled then StopHoldE() end
     end
 end
 
@@ -1830,7 +1817,7 @@ LoopLabel.TextXAlignment         = Enum.TextXAlignment.Left
 LoopLabel.MouseButton1Click:Connect(ToggleLoopFunc)
 
 -- -------------------------------------------------------------
--- [ TOGGLE SWITCH — ★ OFF → StopEverything ]
+-- [ TOGGLE SWITCH ]
 -- -------------------------------------------------------------
 local ToggleFrame = Instance.new("TextButton")
 ToggleFrame.Name             = "ToggleFrame"
@@ -1872,10 +1859,7 @@ ToggleFrame.MouseButton1Click:Connect(function()
             AnchorPoint = Vector2.new(0, 0.5),
             BackgroundColor3 = Color3.fromRGB(150, 155, 165)
         }):Play()
-        -- ★ ถ้า loop ปิดด้วย → หยุดทุกอย่างทันที
-        if not loopChecked then
-            StopEverything("Toggle OFF — Stopped")
-        end
+        if not loopChecked then StopHoldE() end
     end
 end)
 
@@ -1911,8 +1895,9 @@ end)
 task.spawn(function()
     while true do
         task.wait(0.5)
-        if eHoldActive and eSafetyDeadline > 0 and os.clock() > eSafetyDeadline then
+        if E_HOLD_ACTIVE and E_HOLD_SAFETY_TIME > 0 and os.clock() > E_HOLD_SAFETY_TIME then
             StopHoldE()
+            ShowNotification("Safety: E Hold Reset")
         end
     end
 end)
@@ -2111,7 +2096,6 @@ end)
 -- -------------------------------------------------------------
 LocalPlayer.CharacterRemoving:Connect(function()
     pcall(function()
-        cancelToken = cancelToken + 1
         StopHoldE()
         if activeNoclipConnection then
             activeNoclipConnection:Disconnect()
@@ -2122,7 +2106,6 @@ end)
 
 YanzHubUI.Destroying:Connect(function()
     pcall(function()
-        cancelToken = cancelToken + 1
         StopHoldE()
         if activeNoclipConnection then
             activeNoclipConnection:Disconnect()
@@ -2130,7 +2113,3 @@ YanzHubUI.Destroying:Connect(function()
         end
     end)
 end)
-
--- ═════════════════════════════════════════════════════════════
--- [ END OF SCRIPT — v5 ]
--- ═════════════════════════════════════════════════════════════

@@ -1,5 +1,5 @@
 -- [[ YANZ HUB GUI - NEXT-GEN HYPER-REALISTIC FLAME & PHYSICS ENGINE ]] --
--- [ V2 : AUTO CRATE SCANNER + 3D VIEWPORT PREVIEW SYSTEM ] --
+-- [ V2.1 : AUTO CRATE SCANNER + 3D VIEWPORT PREVIEW SYSTEM (FIXED) ] --
 
 local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
@@ -27,13 +27,13 @@ local TWEEN_ELASTIC = TweenInfo.new(0.5, Enum.EasingStyle.Elastic, Enum.EasingDi
 local TWEEN_FAST    = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
 -- Layout constants
-local MAIN_WIDTH          = 345
-local COLLAPSED_HEIGHT    = 242
-local LIST_HEIGHT         = 120
-local LIST_TOP            = 140
-local EXPANDED_HEIGHT     = COLLAPSED_HEIGHT + LIST_HEIGHT + 8       -- 370
+local MAIN_WIDTH           = 345
+local COLLAPSED_HEIGHT     = 242
+local LIST_HEIGHT          = 170 -- ปรับให้สูงขึ้นเพื่อแสดงผลได้หลายรายการ
+local LIST_TOP             = 140
+local EXPANDED_HEIGHT      = COLLAPSED_HEIGHT + LIST_HEIGHT + 8  -- 420
 local CONTROL_TOP_COLLAPSED = 144
-local CONTROL_TOP_EXPANDED  = 144 + LIST_HEIGHT + 8                  -- 272
+local CONTROL_TOP_EXPANDED  = 144 + LIST_HEIGHT + 8              -- 322
 
 -- -------------------------------------------------------------
 -- [ CRATE DATA HELPERS ]
@@ -134,6 +134,7 @@ end
 
 -- Populate a ViewportFrame with a 3D preview of the crate
 local function SetupViewport(viewport, crate)
+    if not viewport or not viewport.Parent then return end
     -- reset
     for _, c in ipairs(viewport:GetChildren()) do
         c:Destroy()
@@ -716,7 +717,7 @@ ItemName.Name = "ItemName"
 ItemName.Parent = EggCard
 ItemName.BackgroundTransparency = 1
 ItemName.Position = UDim2.new(0, 80, 0, 26)
-ItemName.Size = UDim2.new(0, 160, 0, 18)
+ItemName.Size = UDim2.new(1, -150, 0, 18) -- ปรับความกว้างให้มากขึ้น
 ItemName.Font = Enum.Font.GothamBold
 ItemName.Text = "Loading..."
 ItemName.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -741,7 +742,7 @@ ValueLabel.Name = "ValueLabel"
 ValueLabel.Parent = EggCard
 ValueLabel.BackgroundTransparency = 1
 ValueLabel.Position = UDim2.new(1, -85, 0, 36)
-ValueLabel.Size = UDim2.new(0, 60, 0, 18)
+ValueLabel.Size = UDim2.new(0, 75, 0, 18) -- ปรับความกว้างให้มากขึ้น
 ValueLabel.Font = Enum.Font.GothamBold
 ValueLabel.Text = "0"
 ValueLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -1023,7 +1024,7 @@ end)
 -- [ CRATE DATA -> UI REFRESH LOGIC ]
 -- -------------------------------------------------------------
 local function CreateMiniCrateRow(crate, rank)
-    local ITEM_HEIGHT = 64
+    local ITEM_HEIGHT = 56 -- ปรับให้เล็กลงเพื่อให้พอดีกับ LIST_HEIGHT
 
     local item = Instance.new("Frame")
     item.Name = "CrateItem_" .. rank
@@ -1046,7 +1047,7 @@ local function CreateMiniCrateRow(crate, rank)
     local vpFrame = Instance.new("Frame")
     vpFrame.BackgroundColor3 = Color3.fromRGB(26, 18, 20)
     vpFrame.Position = UDim2.new(0, 6, 0, 6)
-    vpFrame.Size = UDim2.new(0, 52, 0, 52)
+    vpFrame.Size = UDim2.new(0, 44, 0, 44)
     vpFrame.ClipsDescendants = true
     vpFrame.Parent = item
 
@@ -1077,12 +1078,12 @@ local function CreateMiniCrateRow(crate, rank)
     -- Name (Areald)
     local nameLbl = Instance.new("TextLabel")
     nameLbl.BackgroundTransparency = 1
-    nameLbl.Position = UDim2.new(0, 66, 0, 8)
-    nameLbl.Size = UDim2.new(1, -130, 0, 16)
+    nameLbl.Position = UDim2.new(0, 56, 0, 6)
+    nameLbl.Size = UDim2.new(1, -110, 0, 16)
     nameLbl.Font = Enum.Font.GothamBold
     nameLbl.Text = tostring(areald)
     nameLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
-    nameLbl.TextSize = 12
+    nameLbl.TextSize = 11
     nameLbl.TextXAlignment = Enum.TextXAlignment.Left
     nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
     nameLbl.Parent = item
@@ -1090,24 +1091,24 @@ local function CreateMiniCrateRow(crate, rank)
     -- Tier + Size
     local tierLbl = Instance.new("TextLabel")
     tierLbl.BackgroundTransparency = 1
-    tierLbl.Position = UDim2.new(0, 66, 0, 26)
-    tierLbl.Size = UDim2.new(1, -130, 0, 12)
+    tierLbl.Position = UDim2.new(0, 56, 0, 22)
+    tierLbl.Size = UDim2.new(1, -110, 0, 12)
     tierLbl.Font = Enum.Font.GothamBold
     tierLbl.Text = tostring(tier) .. (size ~= "" and (" • " .. tostring(size)) or "")
     tierLbl.TextColor3 = tierColor
-    tierLbl.TextSize = 10
+    tierLbl.TextSize = 9
     tierLbl.TextXAlignment = Enum.TextXAlignment.Left
     tierLbl.Parent = item
 
     -- Weight (CrateKg auto-format)
     local kgLbl = Instance.new("TextLabel")
     kgLbl.BackgroundTransparency = 1
-    kgLbl.Position = UDim2.new(0, 66, 0, 42)
-    kgLbl.Size = UDim2.new(1, -130, 0, 14)
+    kgLbl.Position = UDim2.new(0, 56, 0, 36)
+    kgLbl.Size = UDim2.new(1, -110, 0, 14)
     kgLbl.Font = Enum.Font.GothamMedium
     kgLbl.Text = "⚖ " .. FormatWeight(kg) .. " kg"
     kgLbl.TextColor3 = Color3.fromRGB(180, 185, 195)
-    kgLbl.TextSize = 10
+    kgLbl.TextSize = 9
     kgLbl.TextXAlignment = Enum.TextXAlignment.Left
     kgLbl.Parent = item
 
@@ -1116,11 +1117,11 @@ local function CreateMiniCrateRow(crate, rank)
     rankLbl.BackgroundTransparency = 1
     rankLbl.AnchorPoint = Vector2.new(1, 0.5)
     rankLbl.Position = UDim2.new(1, -10, 0.5, 0)
-    rankLbl.Size = UDim2.new(0, 50, 0, 30)
+    rankLbl.Size = UDim2.new(0, 40, 0, 30)
     rankLbl.Font = Enum.Font.GothamBold
     rankLbl.Text = "#" .. tostring(rank)
     rankLbl.TextColor3 = (rank == 1) and Color3.fromRGB(255, 215, 0) or Color3.fromRGB(150, 155, 165)
-    rankLbl.TextSize = 14
+    rankLbl.TextSize = 12
     rankLbl.TextXAlignment = Enum.TextXAlignment.Right
     rankLbl.Parent = item
 
@@ -1149,12 +1150,17 @@ local function PopulateCratesList(crates)
     end
 
     for i, crate in ipairs(crates) do
-        CreateMiniCrateRow(crate, i)
+        local row = CreateMiniCrateRow(crate, i)
+        if row then
+            row.Parent = CratesScroll -- **FIX: นำ Item ไปใส่ใน ScrollingFrame**
+        end
     end
 
     -- wait a tick for layout to compute then set canvas size
     task.defer(function()
-        CratesScroll.CanvasSize = UDim2.new(0, 0, 0, CratesListLayout.AbsoluteContentSize.Y + 12)
+        if CratesScroll and CratesScroll.Parent then
+            CratesScroll.CanvasSize = UDim2.new(0, 0, 0, CratesListLayout.AbsoluteContentSize.Y + 12)
+        end
     end)
 end
 
@@ -1299,12 +1305,7 @@ Header.InputBegan:Connect(OnDragBegan)
 EggCard.InputBegan:Connect(OnDragBegan)
 ControlPanel.InputBegan:Connect(OnDragBegan)
 MainFrame.InputBegan:Connect(OnDragBegan)
-CratesScroll.InputBegan:Connect(function(input)
-    -- Only drag from empty space of scroll to avoid blocking scrolling children
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        OnDragBegan(input)
-    end
-end)
+-- **FIX: ลบ CratesScroll.InputBegan ออกเพื่อให้สามารถ Scroll ได้โดยไม่ติด Drag**
 
 UserInputService.InputChanged:Connect(function(input)
     if isDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then

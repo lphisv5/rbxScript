@@ -1,4 +1,5 @@
--- [[ YANZ HUB GUI - NEXT-GEN HYPER-REALISTIC FLAME & PHYSICS ENGINE (AUTO-FETCH CRATES UPDATE) ]] --
+-- [[ YANZ HUB GUI - NEXT-GEN HYPER-REALISTIC FLAME & PHYSICS ENGINE ]] --
+-- [ V2 : AUTO CRATE SCANNER + 3D VIEWPORT PREVIEW SYSTEM ] --
 
 local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
@@ -21,9 +22,159 @@ YanzHubUI.ResetOnSpawn = false
 -- -------------------------------------------------------------
 -- [ CONFIG & TWEEN PROFILES ]
 -- -------------------------------------------------------------
-local TWEEN_SPRING = TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+local TWEEN_SPRING  = TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 local TWEEN_ELASTIC = TweenInfo.new(0.5, Enum.EasingStyle.Elastic, Enum.EasingDirection.Out)
-local TWEEN_FAST = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local TWEEN_FAST    = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+-- Layout constants
+local MAIN_WIDTH          = 345
+local COLLAPSED_HEIGHT    = 242
+local LIST_HEIGHT         = 120
+local LIST_TOP            = 140
+local EXPANDED_HEIGHT     = COLLAPSED_HEIGHT + LIST_HEIGHT + 8       -- 370
+local CONTROL_TOP_COLLAPSED = 144
+local CONTROL_TOP_EXPANDED  = 144 + LIST_HEIGHT + 8                  -- 272
+
+-- -------------------------------------------------------------
+-- [ CRATE DATA HELPERS ]
+-- -------------------------------------------------------------
+local TIER_COLORS = {
+    Common    = Color3.fromRGB(180, 185, 195),
+    Uncommon  = Color3.fromRGB(90, 220, 120),
+    Rare      = Color3.fromRGB(80, 150, 255),
+    Epic      = Color3.fromRGB(180, 90, 255),
+    Legendary = Color3.fromRGB(255, 160, 40),
+    Mythic    = Color3.fromRGB(255, 60, 90),
+    Secret    = Color3.fromRGB(255, 100, 180),
+    Godly     = Color3.fromRGB(255, 215, 0),
+    Exotic    = Color3.fromRGB(0, 255, 200),
+}
+
+local function GetTierColor(tier)
+    if not tier then return Color3.fromRGB(180, 185, 195) end
+    tier = tostring(tier)
+    local key = tier:gsub("^%l", string.upper)
+    return TIER_COLORS[key] or Color3.fromRGB(255, 140, 40)
+end
+
+-- Auto weight formatter (1030000 -> 1.03M)
+local function FormatWeight(kg)
+    kg = tonumber(kg) or 0
+    if kg >= 1e12 then
+        return string.format("%.2fT", kg / 1e12)
+    elseif kg >= 1e9 then
+        return string.format("%.2fB", kg / 1e9)
+    elseif kg >= 1e6 then
+        return string.format("%.2fM", kg / 1e6)
+    elseif kg >= 1e3 then
+        return string.format("%.2fK", kg / 1e3)
+    else
+        return string.format("%d", kg)
+    end
+end
+
+-- Collect all crates from workspace.Crates, sorted by CrateKg (heaviest first)
+local function GetAllCrates()
+    local CratesFolder = workspace:FindFirstChild("Crates")
+    if not CratesFolder then return {} end
+
+    local crates = {}
+    for _, crate in ipairs(CratesFolder:GetChildren()) do
+        local kg = crate:GetAttribute("CrateKg")
+        if kg ~= nil then
+            table.insert(crates, crate)
+        end
+    end
+
+    table.sort(crates, function(a, b)
+        local ka = tonumber(a:GetAttribute("CrateKg")) or 0
+        local kb = tonumber(b:GetAttribute("CrateKg")) or 0
+        return ka > kb
+    end)
+
+    return crates
+end
+
+-- Safely compute bounding box even for Folders
+local function SafeBoundingBox(obj)
+    local ok, cf, size = pcall(function()
+        return obj:GetBoundingBox()
+    end)
+    if ok and cf and size then return cf, size end
+
+    -- Fallback: manual scan of descendant parts
+    local minV = Vector3.new(math.huge, math.huge, math.huge)
+    local maxV = Vector3.new(-math.huge, -math.huge, -math.huge)
+    local found = false
+    for _, p in ipairs(obj:GetDescendants()) do
+        if p:IsA("BasePart") then
+            found = true
+            local sz = p.Size / 2
+            local base = p.CFrame
+            for x = -1, 1, 2 do
+                for y = -1, 1, 2 do
+                    for z = -1, 1, 2 do
+                        local corner = (base * CFrame.new(sz.X * x, sz.Y * y, sz.Z * z)).Position
+                        minV = Vector3.new(math.min(minV.X, corner.X), math.min(minV.Y, corner.Y), math.min(minV.Z, corner.Z))
+                        maxV = Vector3.new(math.max(maxV.X, corner.X), math.max(maxV.Y, corner.Y), math.max(maxV.Z, corner.Z))
+                    end
+                end
+            end
+        end
+    end
+
+    if not found then
+        return CFrame.new(0, 0, 0), Vector3.new(4, 4, 4)
+    end
+
+    local center = (minV + maxV) / 2
+    local sizeV  = maxV - minV
+    return CFrame.new(center), sizeV
+end
+
+-- Populate a ViewportFrame with a 3D preview of the crate
+local function SetupViewport(viewport, crate)
+    -- reset
+    for _, c in ipairs(viewport:GetChildren()) do
+        c:Destroy()
+    end
+
+    local cam = Instance.new("Camera")
+    cam.FieldOfView = 50
+    cam.Parent = viewport
+    viewport.CurrentCamera = cam
+
+    local ok, clone = pcall(function()
+        local c = crate:Clone()
+        for _, d in ipairs(c:GetDescendants()) do
+            if d:IsA("Script") or d:IsA("LocalScript") or d:IsA("ModuleScript") then
+                d:Destroy()
+            elseif d:IsA("BasePart") then
+                d.Anchored = true
+                d.CanCollide = false
+                d.CanTouch = false
+                d.CanQuery = false
+            elseif d:IsA("ParticleEmitter") or d:IsA("Fire") or d:IsA("Smoke") or d:IsA("Sparkles") then
+                d.Enabled = false
+            end
+        end
+        c.Parent = viewport
+        return c
+    end)
+
+    if not ok or not clone then
+        return
+    end
+
+    local cf, size = SafeBoundingBox(clone)
+    local center = cf.Position
+    local maxDim = math.max(size.X, size.Y, size.Z)
+    if maxDim <= 0.01 then maxDim = 4 end
+
+    local distance = maxDim * 1.85
+    local eye = center + Vector3.new(distance * 0.75, distance * 0.55, distance * 0.9)
+    cam.CFrame = CFrame.new(eye, center)
+end
 
 -- -------------------------------------------------------------
 -- [ MAIN CONTAINER & SMART AUTO-SCALE ]
@@ -35,7 +186,7 @@ MainFrame.BackgroundColor3 = Color3.fromRGB(11, 12, 15)
 MainFrame.BackgroundTransparency = 0.05
 MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 MainFrame.Position = UDim2.new(0.5, 0, 0.45, 0)
-MainFrame.Size = UDim2.new(0, 345, 0, 380)
+MainFrame.Size = UDim2.new(0, MAIN_WIDTH, 0, COLLAPSED_HEIGHT)
 MainFrame.ClipsDescendants = false
 
 local MainCorner = Instance.new("UICorner")
@@ -127,7 +278,7 @@ local notifDebounce = false
 local function ShowNotification(text)
     if notifDebounce then return end
     notifDebounce = true
-    
+
     NotifText.Text = text or "Discord Link Copied to Clipboard!"
     NotifFrame.Position = UDim2.new(0, 12, 0, 10)
     NotifFrame.BackgroundTransparency = 1
@@ -152,7 +303,7 @@ local function ShowNotification(text)
         TweenService:Create(NotifStroke, TWEEN_FAST, {Transparency = 1}):Play()
         TweenService:Create(NotifText, TWEEN_FAST, {TextTransparency = 1}):Play()
         TweenService:Create(NotifIcon, TWEEN_FAST, {ImageTransparency = 1}):Play()
-        
+
         slideDown:Play()
         slideDown.Completed:Connect(function()
             NotifFrame.Visible = false
@@ -304,6 +455,7 @@ AuraGrad.Parent = AuraGlow
 
 local flameTendrils = {}
 local TENDRIL_COUNT = 16
+
 for i = 1, TENDRIL_COUNT do
     local f = Instance.new("Frame")
     f.Name = "FlameTendril_" .. i
@@ -342,6 +494,7 @@ end
 
 local sparkParticles = {}
 local SPARK_COUNT = 18
+
 for i = 1, SPARK_COUNT do
     local s = Instance.new("Frame")
     s.Name = "Spark_" .. i
@@ -407,12 +560,15 @@ SubtitleLabel.BackgroundTransparency = 1
 SubtitleLabel.Position = UDim2.new(0, 52, 0, 27)
 SubtitleLabel.Size = UDim2.new(0, 140, 0, 12)
 SubtitleLabel.Font = Enum.Font.GothamMedium
-SubtitleLabel.Text = "CRATES DATABASE"
+SubtitleLabel.Text = "BEST EGG SYSTEM"
 SubtitleLabel.TextColor3 = Color3.fromRGB(120, 122, 132)
 SubtitleLabel.TextSize = 9
 SubtitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 SubtitleLabel.ZIndex = 5
 
+-- -------------------------------------------------------------
+-- [ DISCORD BUTTON ]
+-- -------------------------------------------------------------
 local DiscordButton = Instance.new("ImageButton")
 DiscordButton.Name = "DiscordButton"
 DiscordButton.Parent = Header
@@ -459,6 +615,9 @@ DiscordButton.MouseButton1Click:Connect(function()
     ShowNotification("Discord Link Copied to Clipboard!")
 end)
 
+-- -------------------------------------------------------------
+-- [ CLOSE BUTTON (X) ]
+-- -------------------------------------------------------------
 local CloseButton = Instance.new("TextButton")
 CloseButton.Name = "CloseButton"
 CloseButton.Parent = Header
@@ -498,314 +657,160 @@ CloseButton.MouseButton1Click:Connect(function()
 end)
 
 -- -------------------------------------------------------------
--- [ SCROLLING FRAME SETUP FOR 3D MAIN CARDS ]
+-- [ CARD 1 : BEST EGG CONTAINER (3D VIEWPORT PREVIEW) ]
 -- -------------------------------------------------------------
-local ContentScroll = Instance.new("ScrollingFrame")
-ContentScroll.Name = "ContentScroll"
-ContentScroll.Parent = MainFrame
-ContentScroll.BackgroundTransparency = 1
-ContentScroll.Position = UDim2.new(0, 0, 0, 52)
-ContentScroll.Size = UDim2.new(1, 0, 1, -56)
-ContentScroll.ScrollBarThickness = 3
-ContentScroll.ScrollBarImageColor3 = Color3.fromRGB(255, 255, 255)
-ContentScroll.ScrollBarImageTransparency = 0.8
-ContentScroll.BorderSizePixel = 0
-ContentScroll.ClipsDescendants = true
+local EggCard = Instance.new("Frame")
+EggCard.Name = "EggCard"
+EggCard.Parent = MainFrame
+EggCard.BackgroundColor3 = Color3.fromRGB(16, 18, 22)
+EggCard.Position = UDim2.new(0, 10, 0, 52)
+EggCard.Size = UDim2.new(1, -20, 0, 82)
+EggCard.ClipsDescendants = true
 
-local UIListLayout = Instance.new("UIListLayout")
-UIListLayout.Parent = ContentScroll
-UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-UIListLayout.Padding = UDim.new(0, 12)
-UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+local EggCardCorner = Instance.new("UICorner")
+EggCardCorner.CornerRadius = UDim.new(0, 10)
+EggCardCorner.Parent = EggCard
 
-UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-    ContentScroll.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y + 20)
-end)
+local EggCardStroke = Instance.new("UIStroke")
+EggCardStroke.Parent = EggCard
+EggCardStroke.Color = Color3.fromRGB(255, 255, 255)
+EggCardStroke.Thickness = 1
+EggCardStroke.Transparency = 0.88
 
--- -------------------------------------------------------------
--- [ HIGH-PRECISION ZERO-LAG UNIVERSAL DRAGGING ENGINE ]
--- -------------------------------------------------------------
-local isDragging = false
-local dragStartMouse = Vector2.new()
-local dragStartFramePos = UDim2.new()
+-- ItemFrame holds the 3D ViewportFrame now
+local ItemFrame = Instance.new("Frame")
+ItemFrame.Name = "ItemFrame"
+ItemFrame.Parent = EggCard
+ItemFrame.BackgroundColor3 = Color3.fromRGB(26, 18, 20)
+ItemFrame.Position = UDim2.new(0, 10, 0, 10)
+ItemFrame.Size = UDim2.new(0, 62, 0, 62)
+ItemFrame.ClipsDescendants = true
 
-local targetPos = MainFrame.Position
-local currentVelocity = Vector2.new()
-local lastMousePos = Vector2.new()
-local tiltAngle = 0
-local flameWindVelocity = Vector2.new(0, 0)
+local ItemFrameCorner = Instance.new("UICorner")
+ItemFrameCorner.CornerRadius = UDim.new(0, 10)
+ItemFrameCorner.Parent = ItemFrame
 
-local function BindDragging(guiElement)
-    guiElement.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            isDragging = true
-            dragStartMouse = Vector2.new(input.Position.X, input.Position.Y)
-            lastMousePos = dragStartMouse
-            dragStartFramePos = MainFrame.Position
+local ItemViewport = Instance.new("ViewportFrame")
+ItemViewport.Name = "ItemViewport"
+ItemViewport.Parent = ItemFrame
+ItemViewport.BackgroundTransparency = 1
+ItemViewport.Size = UDim2.new(1, 0, 1, 0)
+ItemViewport.Ambient = Color3.fromRGB(180, 180, 180)
+ItemViewport.LightColor = Color3.fromRGB(255, 255, 255)
+ItemViewport.LightDirection = Vector3.new(-0.5, -1, -0.7)
 
-            TweenService:Create(MainFrame, TWEEN_FAST, {Size = UDim2.new(0, 340, 0, 374)}):Play()
-            TweenService:Create(MainStroke, TWEEN_FAST, {Transparency = 0.02, Color = Color3.fromRGB(255, 255, 255)}):Play()
+local TagLabel = Instance.new("TextLabel")
+TagLabel.Name = "TagLabel"
+TagLabel.Parent = EggCard
+TagLabel.BackgroundTransparency = 1
+TagLabel.Position = UDim2.new(0, 80, 0, 12)
+TagLabel.Size = UDim2.new(0, 100, 0, 10)
+TagLabel.Font = Enum.Font.GothamBold
+TagLabel.Text = "BEST EGG"
+TagLabel.TextColor3 = Color3.fromRGB(110, 115, 125)
+TagLabel.TextSize = 9
+TagLabel.TextXAlignment = Enum.TextXAlignment.Left
 
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    isDragging = false
-                    TweenService:Create(MainFrame, TWEEN_SPRING, {
-                        Size = UDim2.new(0, 345, 0, 380),
-                        Rotation = 0
-                    }):Play()
-                    TweenService:Create(MainStroke, TWEEN_FAST, {Transparency = 0.12}):Play()
-                end
-            end)
-        end
-    end)
-end
+local ItemName = Instance.new("TextLabel")
+ItemName.Name = "ItemName"
+ItemName.Parent = EggCard
+ItemName.BackgroundTransparency = 1
+ItemName.Position = UDim2.new(0, 80, 0, 26)
+ItemName.Size = UDim2.new(0, 160, 0, 18)
+ItemName.Font = Enum.Font.GothamBold
+ItemName.Text = "Loading..."
+ItemName.TextColor3 = Color3.fromRGB(255, 255, 255)
+ItemName.TextSize = 14
+ItemName.TextXAlignment = Enum.TextXAlignment.Left
+ItemName.TextTruncate = Enum.TextTruncate.AtEnd
 
-BindDragging(Header)
-BindDragging(MainFrame)
+local RarityLabel = Instance.new("TextLabel")
+RarityLabel.Name = "RarityLabel"
+RarityLabel.Parent = EggCard
+RarityLabel.BackgroundTransparency = 1
+RarityLabel.Position = UDim2.new(0, 80, 0, 48)
+RarityLabel.Size = UDim2.new(0, 120, 0, 14)
+RarityLabel.Font = Enum.Font.GothamBold
+RarityLabel.Text = "Rarity"
+RarityLabel.TextColor3 = Color3.fromRGB(255, 140, 40)
+RarityLabel.TextSize = 11
+RarityLabel.TextXAlignment = Enum.TextXAlignment.Left
 
-UserInputService.InputChanged:Connect(function(input)
-    if isDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-        local currentMouse = Vector2.new(input.Position.X, input.Position.Y)
-        local delta = currentMouse - dragStartMouse
-        local currentScale = UIScale.Scale
+local ValueLabel = Instance.new("TextLabel")
+ValueLabel.Name = "ValueLabel"
+ValueLabel.Parent = EggCard
+ValueLabel.BackgroundTransparency = 1
+ValueLabel.Position = UDim2.new(1, -85, 0, 36)
+ValueLabel.Size = UDim2.new(0, 60, 0, 18)
+ValueLabel.Font = Enum.Font.GothamBold
+ValueLabel.Text = "0"
+ValueLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+ValueLabel.TextSize = 13
+ValueLabel.TextXAlignment = Enum.TextXAlignment.Right
 
-        targetPos = UDim2.new(
-            dragStartFramePos.X.Scale,
-            dragStartFramePos.X.Offset + (delta.X / currentScale),
-            dragStartFramePos.Y.Scale,
-            dragStartFramePos.Y.Offset + (delta.Y / currentScale)
-        )
-        
-        currentVelocity = (currentMouse - lastMousePos)
-        lastMousePos = currentMouse
-    end
-end)
-
--- -------------------------------------------------------------
--- [ 3D CRATE CARD GENERATOR ]
--- -------------------------------------------------------------
-local function Create3DCrateCard(layoutOrder, tagText, crateName, rarityText, rColor, vText)
-    local CardContainer = Instance.new("Frame")
-    CardContainer.Name = "CardContainer_" .. layoutOrder
-    CardContainer.Parent = ContentScroll
-    CardContainer.BackgroundTransparency = 1
-    CardContainer.Size = UDim2.new(1, -20, 0, 86)
-    CardContainer.LayoutOrder = layoutOrder
-
-    local Shadow = Instance.new("Frame")
-    Shadow.Name = "Shadow"
-    Shadow.Parent = CardContainer
-    Shadow.BackgroundColor3 = Color3.fromRGB(6, 7, 10)
-    Shadow.Size = UDim2.new(1, 0, 0, 82)
-    Shadow.Position = UDim2.new(0, 0, 0, 4)
-    local ShadowCorner = Instance.new("UICorner")
-    ShadowCorner.CornerRadius = UDim.new(0, 10)
-    ShadowCorner.Parent = Shadow
-
-    local Card = Instance.new("Frame")
-    Card.Name = "Card"
-    Card.Parent = CardContainer
-    Card.BackgroundColor3 = Color3.fromRGB(16, 18, 22)
-    Card.Size = UDim2.new(1, 0, 0, 82)
-    Card.ClipsDescendants = true
-    local CardCorner = Instance.new("UICorner")
-    CardCorner.CornerRadius = UDim.new(0, 10)
-    CardCorner.Parent = Card
-    local CardStroke = Instance.new("UIStroke")
-    CardStroke.Parent = Card
-    CardStroke.Color = Color3.fromRGB(255, 255, 255)
-    CardStroke.Thickness = 1
-    CardStroke.Transparency = 0.88
-
-    local ItemFrame = Instance.new("Frame")
-    ItemFrame.Name = "ItemFrame"
-    ItemFrame.Parent = Card
-    ItemFrame.BackgroundColor3 = Color3.fromRGB(26, 18, 20)
-    ItemFrame.Position = UDim2.new(0, 10, 0, 10)
-    ItemFrame.Size = UDim2.new(0, 62, 0, 62)
-    local ItemFrameCorner = Instance.new("UICorner")
-    ItemFrameCorner.CornerRadius = UDim.new(0, 10)
-    ItemFrameCorner.Parent = ItemFrame
-
-    local ItemIcon = Instance.new("ImageLabel")
-    ItemIcon.Name = "ItemIcon"
-    ItemIcon.Parent = ItemFrame
-    ItemIcon.BackgroundTransparency = 1
-    ItemIcon.Size = UDim2.new(1, 0, 1, 0)
-    ItemIcon.Image = "rbxassetid://76833458893034"
-    ItemIcon.ScaleType = Enum.ScaleType.Fit
-
-    local TagLabel = Instance.new("TextLabel")
-    TagLabel.Name = "TagLabel"
-    TagLabel.Parent = Card
-    TagLabel.BackgroundTransparency = 1
-    TagLabel.Position = UDim2.new(0, 80, 0, 12)
-    TagLabel.Size = UDim2.new(0, 100, 0, 10)
-    TagLabel.Font = Enum.Font.GothamBold
-    TagLabel.Text = tagText
-    TagLabel.TextColor3 = Color3.fromRGB(110, 115, 125)
-    TagLabel.TextSize = 9
-    TagLabel.TextXAlignment = Enum.TextXAlignment.Left
-
-    local ItemName = Instance.new("TextLabel")
-    ItemName.Name = "ItemName"
-    ItemName.Parent = Card
-    ItemName.BackgroundTransparency = 1
-    ItemName.Position = UDim2.new(0, 80, 0, 26)
-    ItemName.Size = UDim2.new(0, 120, 0, 18)
-    ItemName.Font = Enum.Font.GothamBold
-    ItemName.Text = crateName
-    ItemName.TextColor3 = Color3.fromRGB(255, 255, 255)
-    ItemName.TextSize = 14
-    ItemName.TextXAlignment = Enum.TextXAlignment.Left
-
-    local RarityLabel = Instance.new("TextLabel")
-    RarityLabel.Name = "RarityLabel"
-    RarityLabel.Parent = Card
-    RarityLabel.BackgroundTransparency = 1
-    RarityLabel.Position = UDim2.new(0, 80, 0, 48)
-    RarityLabel.Size = UDim2.new(0, 100, 0, 14)
-    RarityLabel.Font = Enum.Font.GothamBold
-    RarityLabel.Text = rarityText
-    RarityLabel.TextColor3 = rColor
-    RarityLabel.TextSize = 11
-    RarityLabel.TextXAlignment = Enum.TextXAlignment.Left
-
-    local ValueLabel = Instance.new("TextLabel")
-    ValueLabel.Name = "ValueLabel"
-    ValueLabel.Parent = Card
-    ValueLabel.BackgroundTransparency = 1
-    ValueLabel.Position = UDim2.new(1, -85, 0, 36)
-    ValueLabel.Size = UDim2.new(0, 60, 0, 18)
-    ValueLabel.Font = Enum.Font.GothamBold
-    ValueLabel.Text = vText
-    ValueLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    ValueLabel.TextSize = 13
-    ValueLabel.TextXAlignment = Enum.TextXAlignment.Right
-
-    local ArrowBtn = Instance.new("TextButton")
-    ArrowBtn.Name = "ArrowBtn"
-    ArrowBtn.Parent = Card
-    ArrowBtn.BackgroundTransparency = 1
-    ArrowBtn.Position = UDim2.new(1, -24, 0, 8)
-    ArrowBtn.Size = UDim2.new(0, 16, 0, 16)
-    ArrowBtn.Font = Enum.Font.GothamBold
-    ArrowBtn.Text = "v"
-    ArrowBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    ArrowBtn.TextSize = 11
-
-    local isExpanded = true
-    ArrowBtn.MouseButton1Click:Connect(function()
-        isExpanded = not isExpanded
-        local targetRot = isExpanded and 0 or 180
-        local targetH = isExpanded and 82 or 30
-        local targetContH = isExpanded and 86 or 34
-
-        TweenService:Create(ArrowBtn, TWEEN_ELASTIC, {Rotation = targetRot}):Play()
-        TweenService:Create(Card, TWEEN_SPRING, {Size = UDim2.new(1, 0, 0, targetH)}):Play()
-        TweenService:Create(Shadow, TWEEN_SPRING, {Size = UDim2.new(1, 0, 0, targetH)}):Play()
-        TweenService:Create(CardContainer, TWEEN_SPRING, {Size = UDim2.new(1, -20, 0, targetContH)}):Play()
-    end)
-    
-    BindDragging(Card)
-end
+local ArrowBtn = Instance.new("TextButton")
+ArrowBtn.Name = "ArrowBtn"
+ArrowBtn.Parent = EggCard
+ArrowBtn.BackgroundTransparency = 1
+ArrowBtn.Position = UDim2.new(1, -24, 0, 8)
+ArrowBtn.Size = UDim2.new(0, 16, 0, 16)
+ArrowBtn.Font = Enum.Font.GothamBold
+ArrowBtn.Text = "v"
+ArrowBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ArrowBtn.TextSize = 11
 
 -- -------------------------------------------------------------
--- [ AUTO-FETCH SYSTEM FROM WORKSPACE ]
+-- [ NEW : CRATES LIST SCROLL (Expanded by ArrowBtn) ]
 -- -------------------------------------------------------------
-local RarityColors = {
-    ["Common"] = Color3.fromRGB(170, 170, 170),
-    ["Uncommon"] = Color3.fromRGB(80, 220, 80),
-    ["Rare"] = Color3.fromRGB(40, 140, 255),
-    ["Epic"] = Color3.fromRGB(170, 80, 255),
-    ["Legendary"] = Color3.fromRGB(255, 140, 40),
-    ["Mythic"] = Color3.fromRGB(255, 40, 40),
-    ["Cosmic"] = Color3.fromRGB(255, 80, 255)
-}
+local CratesScroll = Instance.new("ScrollingFrame")
+CratesScroll.Name = "CratesScroll"
+CratesScroll.Parent = MainFrame
+CratesScroll.BackgroundColor3 = Color3.fromRGB(14, 16, 20)
+CratesScroll.BorderSizePixel = 0
+CratesScroll.Position = UDim2.new(0, 10, 0, LIST_TOP)
+CratesScroll.Size = UDim2.new(1, -20, 0, LIST_HEIGHT)
+CratesScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+CratesScroll.ScrollBarThickness = 3
+CratesScroll.ScrollBarImageColor3 = Color3.fromRGB(120, 125, 135)
+CratesScroll.Visible = false
+CratesScroll.ClipsDescendants = true
 
-local function FormatNumber(n)
-    if not n then return "0" end
-    local num = tonumber(n)
-    if not num then return tostring(n) end
-    
-    if num >= 1000000 then
-        return string.format("%.1fM", num / 1000000)
-    elseif num >= 1000 then
-        return string.format("%.1fK", num / 1000)
-    else
-        return tostring(num)
-    end
-end
+local CratesScrollCorner = Instance.new("UICorner")
+CratesScrollCorner.CornerRadius = UDim.new(0, 10)
+CratesScrollCorner.Parent = CratesScroll
 
--- สแกนข้อมูลจากโฟลเดอร์ Crates ในเกมโดยตรง
-local CratesFolder = workspace:FindFirstChild("Crates")
-local UniqueCrates = {}
-local LayoutIndex = 1
+local CratesScrollStroke = Instance.new("UIStroke")
+CratesScrollStroke.Parent = CratesScroll
+CratesScrollStroke.Color = Color3.fromRGB(255, 255, 255)
+CratesScrollStroke.Thickness = 1
+CratesScrollStroke.Transparency = 0.88
 
-if CratesFolder then
-    for _, crate in pairs(CratesFolder:GetChildren()) do
-        if crate:IsA("Model") then
-            -- ดึงข้อมูลจาก Attributes ตามโครงสร้างในเกม
-            local areaId = crate:GetAttribute("AreaId")
-            local tier = crate:GetAttribute("CrateTier")
-            local weight = crate:GetAttribute("CrateKg")
-            
-            -- หากไม่มี Attribute ให้พยายามแยกคำจากชื่อโมเดลแทน
-            if not areaId or not tier then
-                local splitName = string.split(crate.Name, "_")
-                if #splitName >= 3 then
-                    areaId = areaId or splitName[2]
-                    tier = tier or splitName[3]
-                end
-            end
-            
-            areaId = areaId or "Unknown"
-            tier = tier or "Common"
-            
-            local uniqueKey = areaId .. "_" .. tier
-            
-            -- สร้างเฉพาะรายการที่ไม่ซ้ำกัน
-            if not UniqueCrates[uniqueKey] then
-                UniqueCrates[uniqueKey] = true
-                
-                local rColor = RarityColors[tier] or Color3.fromRGB(200, 200, 200)
-                local vText = weight and FormatNumber(weight) or "???"
-                
-                Create3DCrateCard(LayoutIndex, "CRATE", areaId, tier, rColor, vText)
-                LayoutIndex = LayoutIndex + 1
-            end
-        end
-    end
-else
-    -- แสดงหน้าจอแจ้งเตือนหากหาโฟลเดอร์ไม่พบ
-    Create3DCrateCard(1, "ERROR", "Crates Folder Not Found", "None", Color3.fromRGB(255,50,50), "0")
-end
+local CratesListLayout = Instance.new("UIListLayout")
+CratesListLayout.Parent = CratesScroll
+CratesListLayout.FillDirection = Enum.FillDirection.Vertical
+CratesListLayout.Padding = UDim.new(0, 6)
+CratesListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+CratesListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+local CratesListPad = Instance.new("UIPadding")
+CratesListPad.Parent = CratesScroll
+CratesListPad.PaddingTop = UDim.new(0, 6)
+CratesListPad.PaddingLeft = UDim.new(0, 6)
+CratesListPad.PaddingRight = UDim.new(0, 6)
+CratesListPad.PaddingBottom = UDim.new(0, 6)
+
+-- Forward declaration
+local RefreshCratesUI
 
 -- -------------------------------------------------------------
--- [ CONTROL PANEL (TELEGUIADO) - UPDATED AS 3D CARD IN SCROLL ]
+-- [ CARD 2 : CONTROL PANEL / TELEGUIADO ]
 -- -------------------------------------------------------------
-local ControlContainer = Instance.new("Frame")
-ControlContainer.Name = "ControlContainer"
-ControlContainer.Parent = ContentScroll
-ControlContainer.BackgroundTransparency = 1
-ControlContainer.Size = UDim2.new(1, -20, 0, 88)
-ControlContainer.LayoutOrder = 9999 -- Place at bottom
-
-local ControlShadow = Instance.new("Frame")
-ControlShadow.Name = "ControlShadow"
-ControlShadow.Parent = ControlContainer
-ControlShadow.BackgroundColor3 = Color3.fromRGB(6, 7, 10)
-ControlShadow.Size = UDim2.new(1, 0, 0, 84)
-ControlShadow.Position = UDim2.new(0, 0, 0, 4)
-local CShadowCorner = Instance.new("UICorner")
-CShadowCorner.CornerRadius = UDim.new(0, 10)
-CShadowCorner.Parent = ControlShadow
-
 local ControlPanel = Instance.new("Frame")
 ControlPanel.Name = "ControlPanel"
-ControlPanel.Parent = ControlContainer
+ControlPanel.Parent = MainFrame
 ControlPanel.BackgroundColor3 = Color3.fromRGB(16, 18, 22)
-ControlPanel.Size = UDim2.new(1, 0, 0, 84)
+ControlPanel.Position = UDim2.new(0, 10, 0, CONTROL_TOP_COLLAPSED)
+ControlPanel.Size = UDim2.new(1, -20, 0, 84)
 
 local ControlCorner = Instance.new("UICorner")
 ControlCorner.CornerRadius = UDim.new(0, 10)
@@ -817,6 +822,38 @@ ControlStroke.Color = Color3.fromRGB(255, 255, 255)
 ControlStroke.Thickness = 1
 ControlStroke.Transparency = 0.88
 
+-- ArrowBtn toggle : show / hide crates list
+local listExpanded = false
+
+local function ApplyLayout()
+    if listExpanded then
+        CratesScroll.Visible = true
+        TweenService:Create(CratesScroll, TWEEN_SPRING, {Size = UDim2.new(1, -20, 0, LIST_HEIGHT)}):Play()
+        TweenService:Create(ControlPanel, TWEEN_SPRING, {Position = UDim2.new(0, 10, 0, CONTROL_TOP_EXPANDED)}):Play()
+        TweenService:Create(MainFrame, TWEEN_SPRING, {Size = UDim2.new(0, MAIN_WIDTH, 0, EXPANDED_HEIGHT)}):Play()
+        TweenService:Create(ArrowBtn, TWEEN_ELASTIC, {Rotation = 180}):Play()
+    else
+        TweenService:Create(CratesScroll, TWEEN_SPRING, {Size = UDim2.new(1, -20, 0, 0)}):Play()
+        TweenService:Create(ControlPanel, TWEEN_SPRING, {Position = UDim2.new(0, 10, 0, CONTROL_TOP_COLLAPSED)}):Play()
+        TweenService:Create(MainFrame, TWEEN_SPRING, {Size = UDim2.new(0, MAIN_WIDTH, 0, COLLAPSED_HEIGHT)}):Play()
+        TweenService:Create(ArrowBtn, TWEEN_ELASTIC, {Rotation = 0}):Play()
+        task.delay(0.3, function()
+            if not listExpanded then
+                CratesScroll.Visible = false
+            end
+        end)
+    end
+end
+
+ArrowBtn.MouseButton1Click:Connect(function()
+    listExpanded = not listExpanded
+    if listExpanded and RefreshCratesUI then
+        RefreshCratesUI()
+    end
+    ApplyLayout()
+end)
+
+-- Title "TELEGUIADO"
 local ModeTitle = Instance.new("TextLabel")
 ModeTitle.Name = "ModeTitle"
 ModeTitle.Parent = ControlPanel
@@ -878,6 +915,9 @@ SwapButton.MouseButton1Click:Connect(function()
     TweenService:Create(SwapButton, TWEEN_ELASTIC, {Rotation = swapRotation}):Play()
 end)
 
+-- -------------------------------------------------------------
+-- [ INTERACTIVE LOOP CHECKBOX ]
+-- -------------------------------------------------------------
 local LoopBox = Instance.new("TextButton")
 LoopBox.Name = "LoopBox"
 LoopBox.Parent = ControlPanel
@@ -929,8 +969,12 @@ LoopLabel.Text = "LOOP"
 LoopLabel.TextColor3 = Color3.fromRGB(210, 215, 225)
 LoopLabel.TextSize = 11
 LoopLabel.TextXAlignment = Enum.TextXAlignment.Left
+
 LoopLabel.MouseButton1Click:Connect(ToggleLoopFunc)
 
+-- -------------------------------------------------------------
+-- [ NEON TOGGLE SWITCH ]
+-- -------------------------------------------------------------
 local ToggleFrame = Instance.new("TextButton")
 ToggleFrame.Name = "ToggleFrame"
 ToggleFrame.Parent = ControlPanel
@@ -975,7 +1019,310 @@ ToggleFrame.MouseButton1Click:Connect(function()
     end
 end)
 
-BindDragging(ControlPanel)
+-- -------------------------------------------------------------
+-- [ CRATE DATA -> UI REFRESH LOGIC ]
+-- -------------------------------------------------------------
+local function CreateMiniCrateRow(crate, rank)
+    local ITEM_HEIGHT = 64
+
+    local item = Instance.new("Frame")
+    item.Name = "CrateItem_" .. rank
+    item.BackgroundColor3 = Color3.fromRGB(22, 24, 30)
+    item.Size = UDim2.new(1, 0, 0, ITEM_HEIGHT)
+    item.BorderSizePixel = 0
+    item.LayoutOrder = rank
+
+    local itemCorner = Instance.new("UICorner")
+    itemCorner.CornerRadius = UDim.new(0, 8)
+    itemCorner.Parent = item
+
+    local itemStroke = Instance.new("UIStroke")
+    itemStroke.Color = (rank == 1) and Color3.fromRGB(255, 215, 0) or Color3.fromRGB(255, 255, 255)
+    itemStroke.Transparency = (rank == 1) and 0.4 or 0.92
+    itemStroke.Thickness = (rank == 1) and 1.4 or 1
+    itemStroke.Parent = item
+
+    -- 3D PREVIEW FRAME
+    local vpFrame = Instance.new("Frame")
+    vpFrame.BackgroundColor3 = Color3.fromRGB(26, 18, 20)
+    vpFrame.Position = UDim2.new(0, 6, 0, 6)
+    vpFrame.Size = UDim2.new(0, 52, 0, 52)
+    vpFrame.ClipsDescendants = true
+    vpFrame.Parent = item
+
+    local vpCorner = Instance.new("UICorner")
+    vpCorner.CornerRadius = UDim.new(0, 8)
+    vpCorner.Parent = vpFrame
+
+    local vp = Instance.new("ViewportFrame")
+    vp.BackgroundTransparency = 1
+    vp.Size = UDim2.new(1, 0, 1, 0)
+    vp.Ambient = Color3.fromRGB(180, 180, 180)
+    vp.LightColor = Color3.fromRGB(255, 255, 255)
+    vp.LightDirection = Vector3.new(-0.5, -1, -0.7)
+    vp.Parent = vpFrame
+
+    -- Deferred setup to allow layout
+    task.defer(function()
+        SetupViewport(vp, crate)
+    end)
+
+    -- READ ATTRIBUTES
+    local areald = crate:GetAttribute("Areald") or crate.Name
+    local kg     = tonumber(crate:GetAttribute("CrateKg")) or 0
+    local tier   = crate:GetAttribute("CrateTier") or "Common"
+    local size   = crate:GetAttribute("CrateSize") or ""
+    local tierColor = GetTierColor(tier)
+
+    -- Name (Areald)
+    local nameLbl = Instance.new("TextLabel")
+    nameLbl.BackgroundTransparency = 1
+    nameLbl.Position = UDim2.new(0, 66, 0, 8)
+    nameLbl.Size = UDim2.new(1, -130, 0, 16)
+    nameLbl.Font = Enum.Font.GothamBold
+    nameLbl.Text = tostring(areald)
+    nameLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+    nameLbl.TextSize = 12
+    nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+    nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
+    nameLbl.Parent = item
+
+    -- Tier + Size
+    local tierLbl = Instance.new("TextLabel")
+    tierLbl.BackgroundTransparency = 1
+    tierLbl.Position = UDim2.new(0, 66, 0, 26)
+    tierLbl.Size = UDim2.new(1, -130, 0, 12)
+    tierLbl.Font = Enum.Font.GothamBold
+    tierLbl.Text = tostring(tier) .. (size ~= "" and (" • " .. tostring(size)) or "")
+    tierLbl.TextColor3 = tierColor
+    tierLbl.TextSize = 10
+    tierLbl.TextXAlignment = Enum.TextXAlignment.Left
+    tierLbl.Parent = item
+
+    -- Weight (CrateKg auto-format)
+    local kgLbl = Instance.new("TextLabel")
+    kgLbl.BackgroundTransparency = 1
+    kgLbl.Position = UDim2.new(0, 66, 0, 42)
+    kgLbl.Size = UDim2.new(1, -130, 0, 14)
+    kgLbl.Font = Enum.Font.GothamMedium
+    kgLbl.Text = "⚖ " .. FormatWeight(kg) .. " kg"
+    kgLbl.TextColor3 = Color3.fromRGB(180, 185, 195)
+    kgLbl.TextSize = 10
+    kgLbl.TextXAlignment = Enum.TextXAlignment.Left
+    kgLbl.Parent = item
+
+    -- Rank badge
+    local rankLbl = Instance.new("TextLabel")
+    rankLbl.BackgroundTransparency = 1
+    rankLbl.AnchorPoint = Vector2.new(1, 0.5)
+    rankLbl.Position = UDim2.new(1, -10, 0.5, 0)
+    rankLbl.Size = UDim2.new(0, 50, 0, 30)
+    rankLbl.Font = Enum.Font.GothamBold
+    rankLbl.Text = "#" .. tostring(rank)
+    rankLbl.TextColor3 = (rank == 1) and Color3.fromRGB(255, 215, 0) or Color3.fromRGB(150, 155, 165)
+    rankLbl.TextSize = 14
+    rankLbl.TextXAlignment = Enum.TextXAlignment.Right
+    rankLbl.Parent = item
+
+    return item
+end
+
+local function PopulateCratesList(crates)
+    -- clear existing rows
+    for _, child in ipairs(CratesScroll:GetChildren()) do
+        if child:IsA("Frame") then
+            child:Destroy()
+        end
+    end
+
+    if #crates == 0 then
+        local empty = Instance.new("TextLabel")
+        empty.BackgroundTransparency = 1
+        empty.Size = UDim2.new(1, 0, 0, 40)
+        empty.Font = Enum.Font.GothamMedium
+        empty.Text = "No crates in workspace.Crates"
+        empty.TextColor3 = Color3.fromRGB(150, 155, 165)
+        empty.TextSize = 11
+        empty.Parent = CratesScroll
+        CratesScroll.CanvasSize = UDim2.new(0, 0, 0, 46)
+        return
+    end
+
+    for i, crate in ipairs(crates) do
+        CreateMiniCrateRow(crate, i)
+    end
+
+    -- wait a tick for layout to compute then set canvas size
+    task.defer(function()
+        CratesScroll.CanvasSize = UDim2.new(0, 0, 0, CratesListLayout.AbsoluteContentSize.Y + 12)
+    end)
+end
+
+-- Refresh best crate + list
+RefreshCratesUI = function()
+    local crates = GetAllCrates()
+
+    -- 1. Update BEST crate (top) card
+    local best = crates[1]
+    if best then
+        local areald = best:GetAttribute("Areald") or best.Name
+        local kg     = tonumber(best:GetAttribute("CrateKg")) or 0
+        local tier   = best:GetAttribute("CrateTier") or "Common"
+
+        ItemName.Text = tostring(areald)
+        ValueLabel.Text = FormatWeight(kg) .. " kg"
+        RarityLabel.Text = tostring(tier)
+        RarityLabel.TextColor3 = GetTierColor(tier)
+
+        SetupViewport(ItemViewport, best)
+    else
+        ItemName.Text = "No Crate Found"
+        ValueLabel.Text = "0 kg"
+        RarityLabel.Text = "N/A"
+        RarityLabel.TextColor3 = Color3.fromRGB(120, 122, 132)
+        for _, c in ipairs(ItemViewport:GetChildren()) do c:Destroy() end
+    end
+
+    -- 2. Refresh the mini list if expanded
+    if listExpanded then
+        PopulateCratesList(crates)
+    end
+end
+
+-- Initial data load
+task.defer(function()
+    RefreshCratesUI()
+end)
+
+-- Auto-refresh when workspace.Crates changes or attributes update
+local watchedCrates = {}
+local refreshQueued = false
+local function QueueRefresh()
+    if refreshQueued then return end
+    refreshQueued = true
+    task.delay(0.35, function()
+        refreshQueued = false
+        RefreshCratesUI()
+    end)
+end
+
+local function WatchCrate(crate)
+    if watchedCrates[crate] then return end
+    watchedCrates[crate] = true
+    crate.AttributeChanged:Connect(function()
+        QueueRefresh()
+    end)
+    crate.ChildAdded:Connect(QueueRefresh)
+    crate.ChildRemoved:Connect(QueueRefresh)
+end
+
+local function BindCratesFolder(folder)
+    if not folder then return end
+    for _, c in ipairs(folder:GetChildren()) do
+        WatchCrate(c)
+    end
+    folder.ChildAdded:Connect(function(c)
+        WatchCrate(c)
+        QueueRefresh()
+    end)
+    folder.ChildRemoved:Connect(QueueRefresh)
+end
+
+local existingFolder = workspace:FindFirstChild("Crates")
+if existingFolder then
+    BindCratesFolder(existingFolder)
+end
+
+workspace.ChildAdded:Connect(function(child)
+    if child.Name == "Crates" then
+        BindCratesFolder(child)
+        QueueRefresh()
+    end
+end)
+
+workspace.ChildRemoved:Connect(function(child)
+    if child.Name == "Crates" then
+        QueueRefresh()
+    end
+end)
+
+-- Periodic safety refresh (every 4 seconds)
+task.spawn(function()
+    while YanzHubUI and YanzHubUI.Parent do
+        task.wait(4)
+        RefreshCratesUI()
+    end
+end)
+
+-- -------------------------------------------------------------
+-- [ HIGH-PRECISION ZERO-LAG UNIVERSAL DRAGGING ENGINE ]
+-- -------------------------------------------------------------
+local isDragging = false
+local dragStartMouse = Vector2.new()
+local dragStartFramePos = UDim2.new()
+
+local targetPos = MainFrame.Position
+local currentVelocity = Vector2.new()
+local lastMousePos = Vector2.new()
+local tiltAngle = 0
+
+local flameWindVelocity = Vector2.new(0, 0)
+
+local function CurrentMainHeight()
+    return listExpanded and EXPANDED_HEIGHT or COLLAPSED_HEIGHT
+end
+
+local function OnDragBegan(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        isDragging = true
+        dragStartMouse = Vector2.new(input.Position.X, input.Position.Y)
+        lastMousePos = dragStartMouse
+        dragStartFramePos = MainFrame.Position
+
+        TweenService:Create(MainFrame, TWEEN_FAST, {Size = UDim2.new(0, MAIN_WIDTH - 5, 0, CurrentMainHeight() - 4)}):Play()
+        TweenService:Create(MainStroke, TWEEN_FAST, {Transparency = 0.02, Color = Color3.fromRGB(255, 255, 255)}):Play()
+
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                isDragging = false
+                TweenService:Create(MainFrame, TWEEN_SPRING, {
+                    Size = UDim2.new(0, MAIN_WIDTH, 0, CurrentMainHeight()),
+                    Rotation = 0
+                }):Play()
+                TweenService:Create(MainStroke, TWEEN_FAST, {Transparency = 0.12}):Play()
+            end
+        end)
+    end
+end
+
+Header.InputBegan:Connect(OnDragBegan)
+EggCard.InputBegan:Connect(OnDragBegan)
+ControlPanel.InputBegan:Connect(OnDragBegan)
+MainFrame.InputBegan:Connect(OnDragBegan)
+CratesScroll.InputBegan:Connect(function(input)
+    -- Only drag from empty space of scroll to avoid blocking scrolling children
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        OnDragBegan(input)
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if isDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local currentMouse = Vector2.new(input.Position.X, input.Position.Y)
+        local delta = currentMouse - dragStartMouse
+        local currentScale = UIScale.Scale
+
+        targetPos = UDim2.new(
+            dragStartFramePos.X.Scale,
+            dragStartFramePos.X.Offset + (delta.X / currentScale),
+            dragStartFramePos.Y.Scale,
+            dragStartFramePos.Y.Offset + (delta.Y / currentScale)
+        )
+
+        currentVelocity = (currentMouse - lastMousePos)
+        lastMousePos = currentMouse
+    end
+end)
 
 -- -------------------------------------------------------------
 -- [ RENDER STEPPED ENGINE LOOP (120 FPS FLAME & KINEMATICS) ]
@@ -984,7 +1331,8 @@ local clock = os.clock()
 
 RunService.RenderStepped:Connect(function(dt)
     clock = clock + dt
-    
+
+    -- 1. Position and Drag Update
     if isDragging and isGuiVisible then
         MainFrame.Position = targetPos
         local targetTilt = math.clamp(currentVelocity.X * 0.25, -6, 6)
@@ -996,6 +1344,7 @@ RunService.RenderStepped:Connect(function(dt)
         flameWindVelocity = flameWindVelocity:Lerp(Vector2.new(0, 0), math.min(dt * 10, 1))
     end
 
+    -- 2. Thermal Core Aura Pulsation
     local tSpeed = clock * 18
     local corePulse = 0.15 + math.sin(tSpeed) * 0.1 + (math.random() * 0.05)
     local auraPulse = 0.40 + math.cos(tSpeed * 1.2) * 0.12 + (math.random() * 0.08)
@@ -1005,11 +1354,12 @@ RunService.RenderStepped:Connect(function(dt)
 
     CoreGlow.Position = UDim2.new(0.5, windOffsetCoreX, 0.5, windOffsetCoreY)
     CoreGlow.BackgroundTransparency = math.clamp(corePulse, 0.05, 0.35)
-    
+
     AuraGlow.Position = UDim2.new(0.5, windOffsetCoreX * 1.2, 0.5, -4 + windOffsetCoreY * 1.2)
     AuraGlow.BackgroundTransparency = math.clamp(auraPulse, 0.2, 0.65)
     AuraGlow.Size = UDim2.new(0, 54 + math.sin(tSpeed) * 5, 0, 60 + math.cos(tSpeed * 1.5) * 6)
 
+    -- 3. Drag-Responsive Fluid Flame Tendrils
     for i = 1, TENDRIL_COUNT do
         local ft = flameTendrils[i]
         ft.Life = ft.Life + dt
@@ -1027,14 +1377,15 @@ RunService.RenderStepped:Connect(function(dt)
         end
 
         local prog = ft.Life / ft.MaxLife
+
         local totalVelX = ft.VelX + (flameWindVelocity.X * (1 + prog * 1.2))
         local totalVelY = ft.VelY + (flameWindVelocity.Y * (1 + prog * 1.2))
 
         ft.PosY = ft.PosY + (totalVelY * dt)
         ft.PosX = ft.PosX + (totalVelX * dt) + math.sin(clock * ft.SwayFreq + i) * 0.6
-        
+
         local angle = math.deg(math.atan2(totalVelX + math.cos(clock * ft.SwayFreq) * 2, -totalVelY))
-        
+
         local windStretch = math.clamp(flameWindVelocity.Magnitude * 0.015, 0, 0.8)
         local curWidth = ft.BaseWidth * (1 - prog ^ 1.4) * (1 - windStretch * 0.3)
         local curHeight = ft.BaseHeight * (1 + prog * 0.4) * (1 + windStretch)
@@ -1046,6 +1397,7 @@ RunService.RenderStepped:Connect(function(dt)
         ft.Object.BackgroundTransparency = math.clamp(fadeAlpha, 0.05, 1)
     end
 
+    -- 4. Wind-Drifting Micro Sparks
     for i = 1, SPARK_COUNT do
         local sp = sparkParticles[i]
         sp.Life = sp.Life + dt
@@ -1061,6 +1413,7 @@ RunService.RenderStepped:Connect(function(dt)
         end
 
         local spProg = sp.Life / sp.MaxLife
+
         local sparkWindX = flameWindVelocity.X * 1.5
         local sparkWindY = flameWindVelocity.Y * 1.5
 

@@ -1,4 +1,4 @@
--- [[ YANZ HUB GUI - NEXT-GEN HYPER-REALISTIC FLAME & 3D CRATE ENGINE (v3 FIXED) ]] --
+-- [[ YANZ HUB GUI - NEXT-GEN HYPER-REALISTIC FLAME & 3D CRATE ENGINE (v4 E-HOLD) ]] --
 
 local CoreGui              = game:GetService("CoreGui")
 local TweenService         = game:GetService("TweenService")
@@ -13,13 +13,9 @@ local Camera               = workspace.CurrentCamera
 -- [ EXECUTOR SAFE PARENTING ]
 -- -------------------------------------------------------------
 local ParentGui
-
 pcall(function()
-    if typeof(gethui) == "function" then
-        ParentGui = gethui()
-    end
+    if typeof(gethui) == "function" then ParentGui = gethui() end
 end)
-
 if not ParentGui then
     local ok, res = pcall(function()
         local test = Instance.new("Folder")
@@ -29,11 +25,9 @@ if not ParentGui then
     end)
     if ok then ParentGui = res end
 end
-
 if not ParentGui then
     ParentGui = LocalPlayer:WaitForChild("PlayerGui")
 end
-
 pcall(function()
     local old = ParentGui:FindFirstChild("YanzHubUI")
     if old then old:Destroy() end
@@ -63,12 +57,14 @@ local SAFE_ZONE_CFRAME   = CFrame.new(2435.00024, -12.4999971, -940,
                                       0, 1, 0,
                                       0, 0, 1)
 
--- script-level noclip (for cleanup)
 local activeNoclipConnection = nil
+local loopChecked = false
+local toggled     = false
 
--- Trigger state
-local loopChecked = false   -- จาก checkbox
-local toggled     = false   -- จาก toggle switch
+-- E-Hold states
+local E_HOLD_ACTIVE = false            -- E ถูกกดค้างอยู่หรือไม่
+local E_HOLD_CONNECTION = nil          -- watchdog connection
+local E_HOLD_SAFETY_TIME = 0           -- เวลาเผื่อปล่อย E กรณีค้าง
 
 -- -------------------------------------------------------------
 -- [ MAIN FRAME ]
@@ -255,9 +251,7 @@ local function ToggleGuiState()
         local closeAnim = TweenService:Create(UIScale, TWEEN_SPRING, {Scale = 0})
         closeAnim:Play()
         closeAnim.Completed:Connect(function()
-            if not isGuiVisible then
-                MainFrame.Visible = false
-            end
+            if not isGuiVisible then MainFrame.Visible = false end
         end)
         TweenService:Create(TopToggleButton, TWEEN_SPRING, {Size = UDim2.new(0, 38, 0, 38)}):Play()
         TweenService:Create(TopToggleStroke, TWEEN_FAST, {Transparency = 0.6}):Play()
@@ -1336,12 +1330,11 @@ task.spawn(function()
 end)
 
 -- =============================================================
--- [ STEALING ENGINE — FIXED ]
+-- [ STEALING ENGINE v4 — E-HOLD SYSTEM ]
 -- =============================================================
 local isStealingInProcess = false
-local currentTriggerSource = nil  -- "loop" | "toggle" | nil
+local currentTriggerSource = nil
 
--- ✅ FIX #1: ใช้ workspace.SpawnLocation แทน Steal Map Lobby safe zone
 local function GetSafeZoneCFrame()
     local result = SAFE_ZONE_CFRAME
     pcall(function()
@@ -1358,8 +1351,151 @@ local function GetCharacterHRP()
     return char:FindFirstChild("HumanoidRootPart") or char:WaitForChild("HumanoidRootPart", 2)
 end
 
--- ✅ FIX #2: ตรวจ trigger source เฉพาะตัวที่ start เท่านั้น
--- ✅ FIX #5: ใช้ script-level activeNoclipConnection
+-- ═════════════════════════════════════════════════════════════
+-- [ E-HOLD CORE SYSTEM ]
+-- ═════════════════════════════════════════════════════════════
+
+-- ✅ กด E ค้าง
+local function StartHoldE()
+    if E_HOLD_ACTIVE then return end
+    E_HOLD_ACTIVE = true
+    E_HOLD_SAFETY_TIME = os.clock() + 10  -- safety: 10 วิ max
+    pcall(function()
+        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+    end)
+end
+
+-- ✅ ปล่อย E
+local function StopHoldE()
+    if not E_HOLD_ACTIVE then return end
+    E_HOLD_ACTIVE = false
+    E_HOLD_SAFETY_TIME = 0
+    pcall(function()
+        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+    end)
+end
+
+-- ✅ ตรวจว่าถือหีบอยู่หรือยัง (ละเอียดสุด — 6 ระดับ)
+local function IsCarryingCrate(crateModel)
+    local char = LocalPlayer.Character
+    if not char or not char.Parent then return false end
+
+    -- 1) หีบถูกย้ายไปที่อื่นแล้ว / ไม่อยู่ใน workspace แล้ว = สำเร็จ
+    if crateModel and (not crateModel.Parent or not crateModel:IsDescendantOf(workspace)) then
+        return true
+    end
+
+    -- 2) หีบกลายเป็น descendant ของตัวละคร
+    if crateModel and crateModel:IsDescendantOf(char) then
+        return true
+    end
+
+    -- 3) ตรวจ attribute ของ Player / Character ว่ามี "holding/carrying" ไหม
+    for _, attrName in ipairs({
+        "IsHolding", "Holding", "Carrying", "IsCarrying",
+        "HasCrate", "CarryItem", "HoldingCrate", "Carry"
+    }) do
+        local pv = LocalPlayer:GetAttribute(attrName)
+        if pv == true or (type(pv) == "string" and pv ~= "" and pv ~= "None") then
+            return true
+        end
+        local cv = char:GetAttribute(attrName)
+        if cv == true or (type(cv) == "string" and cv ~= "" and cv ~= "None") then
+            return true
+        end
+    end
+
+    -- 4) ตรวจ weld / joint ระหว่างตัวละครกับหีบ
+    for _, item in ipairs(char:GetDescendants()) do
+        if item:IsA("Weld") or item:IsA("WeldConstraint") or item:IsA("Motor6D") then
+            if item.Part0 and item.Part1 then
+                local isCrate0 = crateModel and (item.Part0 == crateModel or item.Part0:IsDescendantOf(crateModel))
+                local isCrate1 = crateModel and (item.Part1 == crateModel or item.Part1:IsDescendantOf(crateModel))
+                -- ถ้าฝั่งใดฝั่งหนึ่งเป็นส่วนของหีบ และอีกฝั่งเป็นส่วนของตัวละคร
+                local isChar0  = item.Part0 and item.Part0:IsDescendantOf(char)
+                local isChar1  = item.Part1 and item.Part1:IsDescendantOf(char)
+                if (isCrate0 and isChar1) or (isCrate1 and isChar0) then
+                    return true
+                end
+            end
+        end
+    end
+
+    -- 5) ตรวจ Tool / Model ที่ชื่อตรงกับหีบในตัวละคร
+    for _, item in ipairs(char:GetChildren()) do
+        if item:IsA("Tool") or item:IsA("Model") then
+            if crateModel and item.Name == crateModel.Name then return true end
+            if item:FindFirstChild("CrateName") or item:FindFirstChild("CrateKg") then
+                return true
+            end
+        end
+    end
+
+    -- 6) ตรวจ Backpack
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
+    if backpack and crateModel then
+        for _, tool in ipairs(backpack:GetChildren()) do
+            if tool.Name == crateModel.Name then return true end
+        end
+    end
+
+    -- 7) ตรวจ Humanoid state (แขนยกของ / walking ด้วยน้ำหนัก)
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        -- ถ้า Humanoid กำลังทำอะไรบางอย่างที่บ่งบอกว่าถือ (custom state ผ่าน attributes)
+        local carryingAttr = humanoid:GetAttribute("Carrying")
+        if carryingAttr == true then return true end
+    end
+
+    return false
+end
+
+-- ✅ ตรวจว่ากำลังถูกไล่ / อยู่ในสถานะถูกคุกคามหรือยัง
+local function IsBeingChased()
+    local char = LocalPlayer.Character
+
+    -- 1) Attribute ฝั่ง Player
+    for _, attrName in ipairs({
+        "IsChased", "BeingChased", "Chased", "UnderAttack",
+        "IsBeingChased", "InCombat", "Wanted", "Threat",
+        "HasCrate", "IsCarrying", "Carrying"
+    }) do
+        local pv = LocalPlayer:GetAttribute(attrName)
+        if pv == true then return true end
+        if char then
+            local cv = char:GetAttribute(attrName)
+            if cv == true then return true end
+        end
+    end
+
+    -- 2) PlayerGui: หา ScreenGui ที่ชื่อสื่อถึงการถูกไล่
+    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+    if playerGui then
+        for _, gui in ipairs(playerGui:GetChildren()) do
+            if gui:IsA("ScreenGui") and gui.Enabled then
+                local n = gui.Name:lower()
+                if n:find("chase") or n:find("wanted")
+                    or n:find("threat") or n:find("combat")
+                    or n:find("beingchased") or n:find("being_chased") then
+                    return true
+                end
+            end
+        end
+    end
+
+    return false
+end
+
+-- ✅ ตรวจว่ามี "สถานะสำเร็จ" ใดๆ หรือยัง (carrying หรือ chased)
+local function IsPickupConfirmed(crateModel)
+    if IsCarryingCrate(crateModel) then return true end
+    if IsBeingChased() then return true end
+    return false
+end
+
+-- ═════════════════════════════════════════════════════════════
+-- [ FLY ]
+-- ═════════════════════════════════════════════════════════════
 local function FlyToTarget(targetCF, isLoopMode, triggerSource)
     local hrp = GetCharacterHRP()
     if not hrp or not targetCF then return false end
@@ -1376,7 +1512,6 @@ local function FlyToTarget(targetCF, isLoopMode, triggerSource)
         hrp.AssemblyAngularVelocity = Vector3.zero
     end)
 
-    -- Noclip
     if activeNoclipConnection then
         pcall(function() activeNoclipConnection:Disconnect() end)
         activeNoclipConnection = nil
@@ -1393,7 +1528,6 @@ local function FlyToTarget(targetCF, isLoopMode, triggerSource)
         end
     end)
 
-    -- Helper: ตรวจว่า trigger ที่ start ยังเปิดอยู่หรือไม่
     local function IsTriggerStillActive()
         if not isLoopMode then return true end
         if triggerSource == "loop"   then return loopChecked end
@@ -1445,52 +1579,9 @@ local function FlyToTarget(targetCF, isLoopMode, triggerSource)
     return completed
 end
 
-local function IsCrateSecured(crateModel)
-    local char = LocalPlayer.Character
-    if not char then return false end
-
-    if not crateModel or not crateModel.Parent or not crateModel:IsDescendantOf(workspace) then
-        return true
-    end
-
-    if crateModel:IsDescendantOf(char) then
-        return true
-    end
-
-    for _, item in ipairs(char:GetDescendants()) do
-        if item:IsA("Weld") or item:IsA("WeldConstraint") or item:IsA("Motor6D") then
-            if item.Part0 and (item.Part0:IsDescendantOf(crateModel) or item.Part0 == crateModel) then
-                return true
-            end
-            if item.Part1 and (item.Part1:IsDescendantOf(crateModel) or item.Part1 == crateModel) then
-                return true
-            end
-        end
-    end
-
-    for _, item in ipairs(char:GetChildren()) do
-        if item:IsA("Tool") or item:IsA("Model") then
-            if item.Name == crateModel.Name
-                or item:FindFirstChild("CrateName")
-                or item:FindFirstChild("CrateKg") then
-                return true
-            end
-        end
-    end
-
-    local backpack = LocalPlayer:FindFirstChild("Backpack")
-    if backpack then
-        for _, tool in ipairs(backpack:GetChildren()) do
-            if tool.Name == crateModel.Name then
-                return true
-            end
-        end
-    end
-
-    return false
-end
-
--- ✅ FIX #3: E key = tap (กด-ปล่อยสั้นๆ) + fireproximityprompt วนซ้ำ
+-- ═════════════════════════════════════════════════════════════
+-- [ E-HOLD PICKUP — กดค้างจนกว่าจะสำเร็จ ]
+-- ═════════════════════════════════════════════════════════════
 local function AttemptStealInteraction(crateModel, isLoopMode, triggerSource)
     if not crateModel then return false end
 
@@ -1503,45 +1594,49 @@ local function AttemptStealInteraction(crateModel, isLoopMode, triggerSource)
         return loopChecked or toggled
     end
 
+    -- ① Fire ProximityPrompt ก่อน 1 ครั้ง (บางเกมต้องใช้ prompt)
+    if prompt then
+        pcall(function() fireproximityprompt(prompt) end)
+    end
+
+    -- ② เริ่มกด E ค้าง
+    StartHoldE()
+
     local startTime = os.clock()
-    while (os.clock() - startTime) < 2.5 do
+    local TIMEOUT = 4.0  -- max 4 วิในการพยายามเก็บ
+
+    while (os.clock() - startTime) < TIMEOUT do
         if not IsTriggerStillActive() then
             break
         end
 
-        if IsCrateSecured(crateModel) then
+        -- ★★★ ตรวจว่าสำเร็จหรือยัง (carrying / chased)
+        if IsPickupConfirmed(crateModel) then
+            -- รอครึ่งวิเพื่อให้ state นิ่ง แล้วค่อยปล่อย
+            task.wait(0.15)
+            StopHoldE()
             return true
         end
 
-        -- Fire the prompt directly
-        if prompt then
+        -- ระหว่างถือ ค่อยๆ fire prompt เป็น backup ทุก ~0.5 วิ
+        if prompt and ((os.clock() - startTime) % 0.5) < 0.05 then
             pcall(function() fireproximityprompt(prompt) end)
         end
 
-        -- Tap E (กด - ปล่อยทันที ไม่ค้าง)
-        pcall(function()
-            VirtualInputManager:SendKeyEvent(true,  Enum.KeyCode.E, false, game)
-        end)
-        task.wait(0.02)
-        pcall(function()
-            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
-        end)
-
-        -- หน่วงเล็กน้อยก่อน tap รอบถัดไป
-        task.wait(0.08)
+        task.wait(0.05)
     end
 
-    -- Safety: ปล่อย E ให้ชัวร์ว่าไม่ค้าง
-    pcall(function()
-        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
-    end)
+    -- Timeout — ปล่อย E
+    StopHoldE()
 
-    return IsCrateSecured(crateModel)
+    -- Final check
+    return IsPickupConfirmed(crateModel)
 end
 
--- ✅ FIX #2 & #4: รับ triggerSource + ไม่รับ SwapButton trigger
+-- ═════════════════════════════════════════════════════════════
+-- [ EXECUTE STEAL SEQUENCE ]
+-- ═════════════════════════════════════════════════════════════
 local function ExecuteStealSequence(triggerSource)
-    -- triggerSource: "loop" | "toggle" เท่านั้น (SwapButton ถูกลบแล้ว)
     if isStealingInProcess then return end
     if not currentTargetCrate or not currentTargetCrate.Parent then return end
 
@@ -1568,22 +1663,26 @@ local function ExecuteStealSequence(triggerSource)
         return
     end
 
-    ShowNotification("Flying to Crate (Speed 275)...")
+    ShowNotification("Flying to Crate...")
 
     local flySuccess = FlyToTarget(targetCF, true, triggerSource)
 
-    -- ✅ ถ้าถูกปิดกลางทาง ให้ abort ทันที ไม่ไป safe zone
     if ShouldAbort() then
+        StopHoldE()
         ShowNotification("Steal Cancelled!")
         isStealingInProcess = false
         currentTriggerSource = nil
         return
     end
 
+    local pickupSuccess = false
     if flySuccess then
-        ShowNotification("Stealing Crate...")
-        AttemptStealInteraction(targetModel, true, triggerSource)
+        ShowNotification("Holding E — Pickup...")
+        pickupSuccess = AttemptStealInteraction(targetModel, true, triggerSource)
     end
+
+    -- Safety: บังคับปล่อย E
+    StopHoldE()
 
     if ShouldAbort() then
         ShowNotification("Steal Cancelled!")
@@ -1592,11 +1691,16 @@ local function ExecuteStealSequence(triggerSource)
         return
     end
 
-    ShowNotification("Returning to Safe Zone...")
+    if pickupSuccess then
+        ShowNotification("Crate Secured! Returning...")
+    else
+        ShowNotification("Returning to Safe Zone...")
+    end
+
     local safeZoneCF = GetSafeZoneCFrame()
     FlyToTarget(safeZoneCF, false, nil)
 
-    ShowNotification("Returned to Safe Zone!")
+    ShowNotification(pickupSuccess and "Steal Complete!" or "Returned (No Crate)")
     isStealingInProcess = false
     currentTriggerSource = nil
 end
@@ -1623,13 +1727,11 @@ ModeSub.BackgroundTransparency = 1
 ModeSub.Position               = UDim2.new(0, 12, 0, 48)
 ModeSub.Size                   = UDim2.new(0, 80, 0, 12)
 ModeSub.Font                   = Enum.Font.GothamMedium
-ModeSub.Text                   = "ONE SHOT"
+ModeSub.Text                   = "E-HOLD PICKUP"
 ModeSub.TextColor3             = Color3.fromRGB(110, 115, 125)
 ModeSub.TextSize               = 9
 ModeSub.TextXAlignment         = Enum.TextXAlignment.Left
 
--- ✅ FIX #4: SwapButton — ลบ click event ออกทั้ง system แล้ว
--- เหลือแค่ปุ่ม + hover effect (ยังไม่มีระบบที่ทำอะไรได้)
 local SwapButton = Instance.new("TextButton")
 SwapButton.Name             = "SwapButton"
 SwapButton.Parent           = ControlPanel
@@ -1640,7 +1742,6 @@ SwapButton.Font             = Enum.Font.GothamBold
 SwapButton.Text             = "⇄"
 SwapButton.TextColor3       = Color3.fromRGB(12, 13, 16)
 SwapButton.TextSize         = 20
--- ไม่มี .MouseButton1Click = ไม่ทำอะไรเมื่อคลิก
 
 local SwapCorner = Instance.new("UICorner")
 SwapCorner.CornerRadius = UDim.new(0, 10)
@@ -1652,7 +1753,6 @@ SwapStroke.Color       = Color3.fromRGB(255, 255, 255)
 SwapStroke.Thickness   = 2
 SwapStroke.Transparency = 0.5
 
--- คงเหลือเพียง visual hover (ไม่ rotate, ไม่ trigger อะไร)
 SwapButton.MouseEnter:Connect(function()
     TweenService:Create(SwapButton, TWEEN_SPRING, {
         Size = UDim2.new(0, 43, 0, 43),
@@ -1668,8 +1768,6 @@ SwapButton.MouseLeave:Connect(function()
     }):Play()
     TweenService:Create(SwapStroke, TWEEN_FAST, {Transparency = 0.5}):Play()
 end)
-
--- (ไม่มี MouseButton1Click แล้ว)
 
 -- -------------------------------------------------------------
 -- [ LOOP CHECKBOX ]
@@ -1720,6 +1818,8 @@ local function ToggleLoopFunc()
             Color = Color3.fromRGB(140, 145, 155),
             Transparency = 0.3
         }):Play()
+        -- ถ้าปิด loop ให้หยุด hold E ด้วย
+        if not toggled then StopHoldE() end
     end
 end
 
@@ -1782,15 +1882,14 @@ ToggleFrame.MouseButton1Click:Connect(function()
             AnchorPoint = Vector2.new(0, 0.5),
             BackgroundColor3 = Color3.fromRGB(150, 155, 165)
         }):Play()
+        -- ถ้าปิด toggle และ loop ก็ปิดด้วย ให้หยุด hold E
+        if not loopChecked then StopHoldE() end
     end
 end)
 
 -- -------------------------------------------------------------
--- [ AUTO STEAL BACKGROUND THREAD — FIXED #2 ]
+-- [ AUTO STEAL BACKGROUND THREAD ]
 -- -------------------------------------------------------------
--- ✅ แยก trigger source ชัดเจน: ถ้าเปิด loop → ใช้ "loop"
---                              ถ้าเปิด toggle → ใช้ "toggle"
---                              ถ้าเปิดทั้งคู่ → ใช้ "loop" เป็นหลัก
 task.spawn(function()
     while true do
         task.wait(0.3)
@@ -1810,6 +1909,18 @@ task.spawn(function()
                     ExecuteStealSequence("toggle")
                 end
             end)
+        end
+    end
+end)
+
+-- -------------------------------------------------------------
+-- [ E-HOLD SAFETY WATCHDOG — กันกด E ค้างเกิน 10 วิ ]
+-- -------------------------------------------------------------
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        if E_HOLD_ACTIVE and E_HOLD_SAFETY_TIME > 0 and os.clock() > E_HOLD_SAFETY_TIME then
+            StopHoldE()
         end
     end
 end)
@@ -2008,11 +2119,21 @@ end)
 -- -------------------------------------------------------------
 LocalPlayer.CharacterRemoving:Connect(function()
     pcall(function()
+        StopHoldE()
         if activeNoclipConnection then
             activeNoclipConnection:Disconnect()
             activeNoclipConnection = nil
         end
-        -- ปล่อยปุ่ม E กันค้าง
-        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+    end)
+end)
+
+-- Cleanup เมื่อ script ถูก unload
+YanzHubUI.Destroying:Connect(function()
+    pcall(function()
+        StopHoldE()
+        if activeNoclipConnection then
+            activeNoclipConnection:Disconnect()
+            activeNoclipConnection = nil
+        end
     end)
 end)

@@ -1,5 +1,3 @@
--- [[ YANZ HUB - NO CAMERA LOCK + SNAPBACK FIX EDITION ]] --
-
 local CoreGui            = game:GetService("CoreGui")
 local TweenService       = game:GetService("TweenService")
 local UserInputService   = game:GetService("UserInputService")
@@ -11,14 +9,13 @@ local VirtualInputManager= game:GetService("VirtualInputManager")
 local ReplicatedStorage  = game:GetService("ReplicatedStorage")
 
 local LocalPlayer = Players.LocalPlayer
--- ❌ ลบ Camera ออกแล้ว
+local Camera      = Workspace.CurrentCamera
 
--- Global functions for Executor Compatibility
 local firePrompt = fireproximityprompt or (debug and debug.fireproximityprompt)
 local fireTouch  = firetouchinterest or (debug and debug.firetouchinterest)
 
 -- =============================================================
--- [ FISH MODEL LIST จากไฟล์ Deobf ]
+-- [ FISH MODEL LIST ]
 -- =============================================================
 local FISH_MODELS = {
     "GoldFishModel", "ClownFishModel", "MohawkTangModel", "ButterflyFishModel",
@@ -45,10 +42,10 @@ local CONFIG = {
     SNAPBACK_DIST          = 120,
     SNAPBACK_FRAMES        = 3,
     SAFE_ZONE_RADIUS       = 20,
-    HOLD_DURATION          = 2.5, -- เพิ่มเวลา Hold-E นิดนึง
-    HOLD_VERIFY_WINDOW     = 0.5,
+    HOLD_DURATION          = 2,
+    HOLD_VERIFY_WINDOW     = 0.3,
     E_MAX_ATTEMPTS         = 2,
-    E_RETRY_DELAY          = 0.5,
+    E_RETRY_DELAY          = 0.2,
     TARGET_NAMES           = {"Fish", "FishTool", "MagicFish", "Egg", "Magic"},
     SPAWN_FOLDER_NAMES     = {"SpawnedFish", "SpawnedEggs", "SpawnedItems", "SpawnedTools"},
     MAGIC_TOOL_NAME        = "MagicFishTool",
@@ -57,6 +54,8 @@ local CONFIG = {
     DEPOSIT_CHECK_INTERVAL = 0.4,
     DEPOSIT_SETTLE_WAIT    = 0.5,
     LOOP_INTERVAL          = 0.1,
+    CAMERA_ZOOM_FOV        = 25,
+    CAMERA_FOCUS_DISTANCE  = 3,
     SPEEDBUBBLE_NAME       = "SpeedBubbleSpawn",
 }
 
@@ -124,8 +123,10 @@ DisableNoclip = function()
 end
 
 -- =============================================================
--- [ THELINE BYPASS - สำหรับยกเลิกการถูกไล่ ]
+-- [ THELINE BYPASS - ปรับปรุงประสิทธิภาพด้วย Caching ป้องกันการหน่วง ]
 -- =============================================================
+local cachedTheLinePart = nil
+
 local function TriggerTheLineTouch()
     local char = LocalPlayer.Character
     if not char then return false end
@@ -133,13 +134,17 @@ local function TriggerTheLineTouch()
     local hrp = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso")
     if not hrp then return false end
 
-    local theLine = Workspace:FindFirstChild("TheLine")
-    if not theLine then return false end
+    -- ใช้ Cache เพื่อลดการหน่วงจากการค้นหา Workspace ซ้ำๆ ทุก 0.12 วินาที
+    if not cachedTheLinePart or not cachedTheLinePart.Parent then
+        local theLine = Workspace:FindFirstChild("TheLine")
+        if theLine then
+            cachedTheLinePart = theLine:FindFirstChild("TheLinePart")
+        end
+    end
     
-    local theLinePart = theLine:FindFirstChild("TheLinePart")
-    if not theLinePart then return false end
+    if not cachedTheLinePart then return false end
 
-    local targetPart = theLinePart:FindFirstChild("RedPart") or theLinePart
+    local targetPart = cachedTheLinePart:FindFirstChild("RedPart") or cachedTheLinePart
 
     if not targetPart:IsA("BasePart") then
         for _, v in ipairs(targetPart:GetDescendants()) do
@@ -152,24 +157,38 @@ local function TriggerTheLineTouch()
 
     if not targetPart then return false end
 
-    -- ใช้ firetouchinterest ถ้ามี (PC) 
+    -- ใช้ firetouchinterest เป็นหลัก (ไม่ทำให้ภาพกระพริบหรือหน่วงเครื่อง)
     if type(fireTouch) == "function" then
         pcall(function()
             fireTouch(hrp, targetPart, 0)
-            task.wait(0.05)
             fireTouch(hrp, targetPart, 1)
         end)
+        return true
     else
-        -- Mobile Fallback: สลับ CFrame อย่างรวดเร็ว (ปลอดภัยขึ้น)
+        -- Fallback สำหรับ Mobile Executor: สลับ CFrame (อาจมีอาการกระพริบเล็กน้อยเฉพาะใน Executor ที่ไม่รองรับ firetouchinterest)
         local oldCFrame = hrp.CFrame
         pcall(function()
             hrp.CFrame = targetPart.CFrame
-            task.wait(0.05)
             hrp.CFrame = oldCFrame
         end)
+        return true
     end
-    return true
 end
+
+-- =============================================================
+-- [ ANTI-PULL / CONTINUOUS THELINE BYPASS (ป้องกันอาการดึงตัว) ]
+-- =============================================================
+task.spawn(function()
+    while true do
+        task.wait(0.12) -- ยิงทุก 0.12 วินาที (ความถี่ที่สมดุล: ตัดการดึงตัวได้จริง และไม่สร้างภาระให้ CPU)
+        if not toggled then continue end
+        
+        local char = LocalPlayer.Character
+        if char and char:FindFirstChild("HumanoidRootPart") then
+            pcall(function() TriggerTheLineTouch() end)
+        end
+    end
+end)
 
 -- =============================================================
 -- [ NIGHT RUNTIME DETECTION ]
@@ -516,16 +535,18 @@ local UIScale = Instance.new("UIScale", MainFrame)
 local targetScaleValue = 1.0
 local function UpdateAutoScaler()
     local mobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
-    if mobile then
-        targetScaleValue = math.clamp(UserInputService:GetScreenResolution().Y / 620, 0.62, 1.08)
+    if mobile and Camera then
+        targetScaleValue = math.clamp(Camera.ViewportSize.Y / 620, 0.62, 1.08)
     else
         targetScaleValue = 1.0
     end
     UIScale.Scale = targetScaleValue
 end
 
-local screenConn
-screenConn = UserInputService:GetPropertyChangedSignal("TouchEnabled"):Connect(UpdateAutoScaler)
+local cameraScaleConn
+if Camera then
+    cameraScaleConn = Camera:GetPropertyChangedSignal("ViewportSize"):Connect(UpdateAutoScaler)
+end
 UpdateAutoScaler()
 
 UIScale.Scale = 0
@@ -1288,7 +1309,7 @@ local function WaitForFishInMagicTool(timeout)
 end
 
 -- =============================================================
--- [ VIEWPORT 3D ENGINE ]
+-- [ VIEWPORT 3D ENGINE - ENHANCED CLEANUP ]
 -- =============================================================
 local activeEggClone = nil
 local egg3DRotationAngle = 0
@@ -2143,13 +2164,11 @@ end
 -- [ DEPOSIT LOGIC ]
 -- =============================================================
 TryDepositEgg = function()
-    -- ลอง TheLine Bypass ก่อน
     if TriggerTheLineTouch() then
         task.wait(0.2)
         if not IsPlayerHoldingEgg() then return true end
     end
 
-    -- Fallback: ทิ้งไข่
     local t0 = os.clock()
     while toggled and IsPlayerHoldingEgg() and (os.clock() - t0) < CONFIG.DEPOSIT_MAX_WAIT do
         TryDropTarget()
@@ -2159,7 +2178,7 @@ TryDepositEgg = function()
 end
 
 -- =============================================================
--- [ HOLD-E ENGINE - ลบการสแปม CFrame ที่ทำให้ Snapback ]
+-- [ HOLD-E ENGINE - INSTANT ESCAPE & PROXIMITY FIRE ]
 -- =============================================================
 local function AdvancedHoldE(targetObj)
     if not targetObj or not targetObj:IsDescendantOf(Workspace) then return false end
@@ -2188,7 +2207,6 @@ local function AdvancedHoldE(targetObj)
 
     if IsPlayerHoldingEgg() then return false end
 
-    -- บินไปที่ไข่ (Tween)
     if toggled then SmoothFlyTo(targetCF, CONFIG.FLY_SPEED) end
     if not toggled or not targetObj:IsDescendantOf(Workspace) then return false end
 
@@ -2200,10 +2218,9 @@ local function AdvancedHoldE(targetObj)
         prompt.MaxActivationDistance = math.huge
     end)
 
-    -- ❌ ลบ freezeConn ที่สแปม CFrame ออก เพื่อไม่ให้โดน Anti-Cheat Snapback
     pcall(function()
         hrp.AssemblyLinearVelocity = Vector3.zero
-        hrp.CFrame = targetCF -- วาร์ปแค่ครั้งเดียว
+        hrp.CFrame = targetCF
     end)
     RunService.Heartbeat:Wait()
     ResetWarpBaseline()
@@ -2216,6 +2233,18 @@ local function AdvancedHoldE(targetObj)
         end
     end
 
+    warpedFlag = false
+    local frozen = true
+    local freezeConn = RunService.Heartbeat:Connect(function()
+        if not frozen or warpedFlag then return end
+        if hrp and hrp.Parent then
+            pcall(function()
+                hrp.AssemblyLinearVelocity = Vector3.zero
+                hrp.CFrame = targetCF
+            end)
+        end
+    end)
+
     SendEDown()
     pcall(function() prompt:InputHoldBegin() end)
 
@@ -2227,6 +2256,9 @@ local function AdvancedHoldE(targetObj)
 
     pcall(function() prompt:InputHoldEnd() end)
     SendEUp()
+
+    frozen = false
+    if freezeConn then freezeConn:Disconnect() end
 
     if stealConfirmed or IsPlayerHoldingEgg() then
         return true
@@ -2249,13 +2281,6 @@ local function AdvancedHoldEWithRetry(targetObj)
 
         if not toggled then return false end
         if not targetObj or not targetObj.Parent then return false end
-
-        -- ถ้าโดน Snapback ให้รอให้หายก่อนค่อย retry
-        if warpedFlag then
-            task.wait(1.5)
-            warpedFlag = false
-            ResetWarpBaseline()
-        end
 
         warpedFlag = false
         stealConfirmed = false
@@ -2318,14 +2343,6 @@ local function StartAutoTargetAction()
 
     task.spawn(function()
         while toggled do
-            -- ✅ ตรวจสอบ Snapback ก่อนทุกรอบ
-            if snapBackDetected then
-                task.wait(1) -- รอให้เกมดึงตัวเสร็จ
-                snapBackDetected = false
-                snapCounter = 0
-                ResetWarpBaseline()
-            end
-
             if IsNightTime() then
                 WaitForDaytime()
                 if not toggled then break end
@@ -2342,9 +2359,6 @@ local function StartAutoTargetAction()
 
             if not holding then markerVisitDone = false end
 
-            -- =====================================================
-            -- CASE 1: ถือของ + อยู่ SafeZone
-            -- =====================================================
             if holding and inSafe then
                 if not markerVisitDone then
                     markerVisitDone = true
@@ -2368,12 +2382,8 @@ local function StartAutoTargetAction()
                     break
                 end
 
-            -- =====================================================
-            -- CASE 2: ถือของ + นอก SafeZone -> ยิง TheLine แล้วบินกลับ
-            -- =====================================================
             elseif holding and not inSafe then
                 TriggerTheLineTouch()
-                task.wait(0.2) -- รอให้ Touch ทำงาน
                 
                 local ret = GetReturnCFrame()
                 if ret and toggled then
@@ -2381,9 +2391,6 @@ local function StartAutoTargetAction()
                 end
                 stealConfirmed = false
 
-            -- =====================================================
-            -- CASE 3: ไม่ได้ถือของ -> บินไปขโมย
-            -- =====================================================
             else
                 local targetObj = selectedEggObject or GetBestTarget()
                 local hrp = GetCurrentHRP()
@@ -2400,7 +2407,7 @@ local function StartAutoTargetAction()
 
                     if ragdollDetected or bossAttackDetected or snapBackDetected then
                         EmergencyEscapeFromBoss()
-                        task.wait(0.5)
+                        task.wait(0.2)
                     else
                         local success = stealConfirmed or IsPlayerHoldingEgg()
                         if not success then
@@ -2409,7 +2416,6 @@ local function StartAutoTargetAction()
 
                         if success or IsPlayerHoldingEgg() then
                             TriggerTheLineTouch()
-                            task.wait(0.2)
                             
                             if not IsPlayerInSafeZone() then
                                 local ret = GetReturnCFrame()
@@ -2419,7 +2425,7 @@ local function StartAutoTargetAction()
                             end
                         else
                             RunThreeStageFallback()
-                            task.wait(0.8) -- รอให้เซิร์ฟเวอร์ settle ก่อน retry
+                            task.wait(0.5)
 
                             if not loopChecked then
                                 StopToggleUI()
@@ -2455,7 +2461,6 @@ ToggleFrame.MouseButton1Click:Connect(function()
         stealConfirmed = false
         warpedFlag     = false
         markerVisitDone= false
-        snapBackDetected = false
         StartWarpDetector()
         StartAntiBoss()
 
@@ -2480,7 +2485,7 @@ ToggleFrame.MouseButton1Click:Connect(function()
 end)
 
 -- =============================================================
--- [ DRAGGING ENGINE ]
+-- [ DRAGGING ENGINE - STABLE TOUCH & MOUSE ]
 -- =============================================================
 local isDragging = false
 local dragStartMouse = Vector2.new()
@@ -2546,7 +2551,7 @@ local renderConnection
 renderConnection = RunService.RenderStepped:Connect(function(dt)
     if not YanzHubUI or not YanzHubUI.Parent or not MainFrame or not MainFrame.Parent then
         if renderConnection then renderConnection:Disconnect(); renderConnection = nil end
-        if screenConn then screenConn:Disconnect(); screenConn = nil end
+        if cameraScaleConn then cameraScaleConn:Disconnect(); cameraScaleConn = nil end
         DisableNoclip()
         return
     end

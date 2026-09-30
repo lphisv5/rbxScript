@@ -24,7 +24,17 @@ local miniViewportConnections = {}
 local miniViewportModels = {}
 local noclipConnection = nil
 
+local originalEggCFrames = {} -- ตารางบันทึกตำแหน่งเกิดจริงของไข่บนเซิร์ฟเวอร์
 local toggleDropdown
+
+local function storeOriginalEggCFrame(eggObj)
+    if eggObj and eggObj.Parent and not originalEggCFrames[eggObj] then
+        pcall(function()
+            local cf = eggObj:IsA("Model") and eggObj:GetPivot() or eggObj.CFrame
+            originalEggCFrames[eggObj] = cf
+        end)
+    end
+end
 
 local function removeHoldTime(child)
     if child:IsA("ProximityPrompt") then
@@ -37,8 +47,15 @@ for _, v in ipairs(Workspace:GetDescendants()) do
 end
 Workspace.DescendantAdded:Connect(removeHoldTime)
 
+-- =======================================================
+-- ADVANCED EGG CLAIM ENGINE (PROXIMITY + TOUCH INTEREST)
+-- =======================================================
 local function fireEggPrompt(eggObj)
     if not eggObj or not eggObj.Parent then return end
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+
+    -- 1. Trigger Proximity Prompts
     pcall(function()
         for _, prompt in ipairs(eggObj:GetDescendants()) do
             if prompt:IsA("ProximityPrompt") then
@@ -48,20 +65,15 @@ local function fireEggPrompt(eggObj)
         end
     end)
 
-    local char = LocalPlayer.Character
-    if char and char:FindFirstChild("HumanoidRootPart") then
-        local hrpPos = char.HumanoidRootPart.Position
+    -- 2. Trigger Touch Interests (จำลองการเดินชนไข่แบบ FE)
+    if hrp then
         pcall(function()
-            local renderedEggs = Workspace:FindFirstChild("RenderedEggs")
-            local searchFolder = renderedEggs or Workspace
-            for _, obj in ipairs(searchFolder:GetChildren()) do
-                local part = obj:IsA("BasePart") and obj or obj:FindFirstChildWhichIsA("BasePart", true)
-                if part and (part.Position - hrpPos).Magnitude <= 30 then
-                    for _, prompt in ipairs(obj:GetDescendants()) do
-                        if prompt:IsA("ProximityPrompt") then
-                            prompt.HoldDuration = 0
-                            if fireproximityprompt then fireproximityprompt(prompt) end
-                        end
+            for _, part in ipairs(eggObj:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    if firetouchinterest then
+                        firetouchinterest(hrp, part, 0)
+                        task.wait(0.02)
+                        firetouchinterest(hrp, part, 1)
                     end
                 end
             end
@@ -1221,7 +1233,8 @@ local function updateESP()
 
         local char = LocalPlayer.Character
         if char and char:FindFirstChild("HumanoidRootPart") then
-            local dist = math.floor((char.HumanoidRootPart.Position - targetPart.Position).Magnitude)
+            local realTargetCF = originalEggCFrames[selectedEggInstance] or targetPart.CFrame
+            local dist = math.floor((char.HumanoidRootPart.Position - realTargetCF.Position).Magnitude)
             distTxt.Text = "ระยะทาง: " .. tostring(dist) .. " Studs"
         else
             distTxt.Text = "ระยะทาง: -- Studs"
@@ -1325,6 +1338,7 @@ end
 local function selectEgg(eggObj)
     if not eggObj or not eggObj.Parent then return end
     selectedEggInstance = eggObj
+    storeOriginalEggCFrame(eggObj)
     local rarity = getEggRarity(eggObj)
 
     EggCategory.Text = isManualSelect and "SELECTED EGG" or "BEST EGG"
@@ -1404,6 +1418,7 @@ local function refreshEggDropdownList()
 
     if renderedEggs then
         for _, egg in pairs(renderedEggs:GetChildren()) do
+            storeOriginalEggCFrame(egg)
             local rarity = getEggRarity(egg)
             local weight = RarityWeights[rarity] or 1
             local luckNum = getEggLuckNumeric(egg)
@@ -1530,10 +1545,12 @@ end
 -- =======================================================
 local renderedEggsContainer = Workspace:FindFirstChild("RenderedEggs")
 if renderedEggsContainer then
-    renderedEggsContainer.ChildAdded:Connect(function()
+    renderedEggsContainer.ChildAdded:Connect(function(child)
+        storeOriginalEggCFrame(child)
         task.defer(function() refreshEggDropdownList() end)
     end)
     renderedEggsContainer.ChildRemoved:Connect(function(removedChild)
+        originalEggCFrames[removedChild] = nil
         task.defer(function()
             if selectedEggInstance == removedChild or not selectedEggInstance or not selectedEggInstance.Parent then
                 selectedEggInstance = nil
@@ -1684,27 +1701,25 @@ local function getVolcanoEntranceCFrame()
 end
 
 local function getEggCFrame()
-    local baseCF = nil
     if selectedEggInstance and selectedEggInstance.Parent then
-        baseCF = selectedEggInstance:IsA("Model") and selectedEggInstance:GetPivot() or selectedEggInstance.CFrame
-    else
-        local renderedEggs = Workspace:FindFirstChild("RenderedEggs")
-        if renderedEggs and #renderedEggs:GetChildren() > 0 then
-            refreshEggDropdownList()
-            if selectedEggInstance and selectedEggInstance.Parent then
-                baseCF = selectedEggInstance:IsA("Model") and selectedEggInstance:GetPivot() or selectedEggInstance.CFrame
-            end
+        local realCF = originalEggCFrames[selectedEggInstance] or (selectedEggInstance:IsA("Model") and selectedEggInstance:GetPivot() or selectedEggInstance.CFrame)
+        return realCF + Vector3.new(0, 3.5, 0)
+    end
+
+    local renderedEggs = Workspace:FindFirstChild("RenderedEggs")
+    if renderedEggs and #renderedEggs:GetChildren() > 0 then
+        refreshEggDropdownList()
+        if selectedEggInstance and selectedEggInstance.Parent then
+            local realCF = originalEggCFrames[selectedEggInstance] or (selectedEggInstance:IsA("Model") and selectedEggInstance:GetPivot() or selectedEggInstance.CFrame)
+            return realCF + Vector3.new(0, 3.5, 0)
         end
     end
 
-    if baseCF then
-        return baseCF + Vector3.new(0, 3.5, 0)
-    end
     return nil
 end
 
 -- =======================================================
--- BRING EGG ENGINE (ดึงไข่มาหาตัวผู้ใช้)
+-- BRING EGG ENGINE
 -- =======================================================
 local function bringEggToPlayer(eggObj)
     if not isToggled or not eggObj or not eggObj.Parent then return end

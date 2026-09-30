@@ -1,4 +1,4 @@
--- [[ YANZ HUB GUI - NEXT-GEN HYPER-REALISTIC FLAME & 3D CRATE ENGINE ]] --
+-- [[ YANZ HUB GUI - NEXT-GEN HYPER-REALISTIC FLAME & 3D CRATE ENGINE + STEAL ENGINE ]] --
 
 local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
@@ -6,26 +6,9 @@ local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Camera = workspace.CurrentCamera
 local Players = game:GetService("Players")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 
--- -------------------------------------------------------------
--- [ INSTANT PROXIMITY PROMPT ENGINE ]
--- -------------------------------------------------------------
-local function HookPrompt(prom)
-    if prom:IsA("ProximityPrompt") then
-        prom.PromptButtonHoldBegan:Connect(function()
-            if prom.HoldDuration <= 0 then return end
-            fireproximityprompt(prom, 0)
-        end)
-    end
-end
-
-for _, prom in next, workspace:GetDescendants() do
-    HookPrompt(prom)
-end
-
-workspace.DescendantAdded:Connect(function(class)
-    HookPrompt(class)
-end)
+local LocalPlayer = Players.LocalPlayer
 
 -- -------------------------------------------------------------
 -- [ DELTA & EXECUTOR SAFE PARENTING SYSTEM ]
@@ -36,17 +19,17 @@ if gethui then
 elseif CoreGui:FindFirstChildOfClass("ScreenGui") then
     ParentGui = CoreGui
 else
-    ParentGui = Players.LocalPlayer:WaitForChild("PlayerGui")
+    ParentGui = LocalPlayer:WaitForChild("PlayerGui")
 end
 
--- Clear existing UI instances safely
+-- 1. Clear existing UI instances safely
 pcall(function()
     if ParentGui:FindFirstChild("YanzHubUI") then
         ParentGui.YanzHubUI:Destroy()
     end
 end)
 
--- Create Main ScreenGui
+-- 2. Create Main ScreenGui
 local YanzHubUI = Instance.new("ScreenGui")
 YanzHubUI.Name = "YanzHubUI"
 YanzHubUI.Parent = ParentGui
@@ -59,6 +42,8 @@ YanzHubUI.ResetOnSpawn = false
 local TWEEN_SPRING = TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 local TWEEN_ELASTIC = TweenInfo.new(0.5, Enum.EasingStyle.Elastic, Enum.EasingDirection.Out)
 local TWEEN_FAST = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+local FLY_SPEED = 275 -- Speed 275 studs/s
 
 -- -------------------------------------------------------------
 -- [ MAIN CONTAINER & SMART AUTO-SCALE ]
@@ -163,7 +148,7 @@ local function ShowNotification(text)
     if notifDebounce then return end
     notifDebounce = true
     
-    NotifText.Text = text or "Discord Link Copied to Clipboard!"
+    NotifText.Text = text or "Notification"
     NotifFrame.Position = UDim2.new(0, 12, 0, 10)
     NotifFrame.BackgroundTransparency = 1
     NotifStroke.Transparency = 1
@@ -725,6 +710,7 @@ local function GetRarityColor(rarityStr)
     return Color3.fromHSV(hash / 360, 0.75, 1)
 end
 
+-- FORMAT VALUE WITH ALWAYS "Kg" AT THE END
 local function FormatCrateValue(val)
     if val == nil then return "0 Kg" end
     local num = tonumber(val)
@@ -752,12 +738,13 @@ end
 
 local currentPreviewModel = nil
 local currentTargetCrate = nil
-local selectedCrateModel = nil
+local selectedCrateModel = nil -- Selected lock crate
 local previewCenter = Vector3.new()
 local previewRotation = 0
 
+-- Table to store dropdown mini 3D models for live 360 sync
 local dropdownPreviewModels = {}
-local populateSessionId = 0
+local populateSessionId = 0 -- Session token for async batch canceling
 
 local function Setup3DModelPreview(crateModel)
     if not crateModel or not ViewportWorldModel then return end
@@ -821,6 +808,7 @@ local function ScanCrateData(crate)
         ValueText = "0 Kg"
     }
     
+    -- 1. SCAN CRATE NAME
     local rawName = crate:GetAttribute("CrateName") 
         or crate:GetAttribute("RealName") 
         or crate:GetAttribute("ItemName") 
@@ -845,6 +833,7 @@ local function ScanCrateData(crate)
     end
     data.Name = rawName
     
+    -- 2. SCAN RARITY / TIER
     local rawRarity = crate:GetAttribute("CrateTier")
         or crate:GetAttribute("Rarity")
         or crate:GetAttribute("Tier")
@@ -872,6 +861,7 @@ local function ScanCrateData(crate)
     
     local baseRarity = (rawRarity and rawRarity ~= "") and rawRarity or "Common"
 
+    -- 3. SCAN CRATE SIZE
     local rawSize = crate:GetAttribute("CrateSize")
         or crate:GetAttribute("Size")
         or crate:GetAttribute("EggSize")
@@ -893,6 +883,7 @@ local function ScanCrateData(crate)
         data.Rarity = baseRarity
     end
     
+    -- 4. SCAN VALUE / KG
     local rawValue = crate:GetAttribute("CrateKg")
         or crate:GetAttribute("Kg")
         or crate:GetAttribute("Weight")
@@ -920,138 +911,205 @@ local PopulateCrateList
 local ScanAndUpdateBestCrate
 
 -- -------------------------------------------------------------
--- [ FLY / TWEEN & STEAL CHEST ENGINE (SPEED 275) ]
+-- [ ADVANCED FLY & STEAL ENGINE - SPEED 275 ]
 -- -------------------------------------------------------------
-local FLY_SPEED = 275
-local isStealingInProcess = false
+local isStealingActive = false
 
-local function FlyTweenTo(targetCFrame)
-    local char = Players.LocalPlayer.Character
-    if not char then return false end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return false end
-
-    local distance = (targetCFrame.Position - hrp.Position).Magnitude
-    local duration = distance / FLY_SPEED
-    if duration <= 0.01 then duration = 0.01 end
-
-    -- Enable Noclip during FlyTween
-    local noclipConn
-    noclipConn = RunService.Stepped:Connect(function()
-        if char then
-            for _, p in ipairs(char:GetDescendants()) do
-                if p:IsA("BasePart") then
-                    p.CanCollide = false
+-- Get Safe Zone Target CFrame
+local function GetSafeZoneCFrame()
+    local stealMap = workspace:FindFirstChild("Steal Map")
+    if stealMap then
+        local lobby = stealMap:FindFirstChild("Lobby")
+        if lobby then
+            local safeZone = lobby:FindFirstChild("safe zone")
+            if safeZone then
+                if safeZone:IsA("BasePart") then
+                    return safeZone.CFrame + Vector3.new(0, 3, 0)
+                elseif safeZone:IsA("Model") then
+                    return safeZone:GetPivot() + Vector3.new(0, 3, 0)
                 end
             end
-        end
-    end)
-
-    local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear)
-    local tween = TweenService:Create(hrp, tweenInfo, {CFrame = targetCFrame})
-    tween:Play()
-    tween.Completed:Wait()
-
-    if noclipConn then noclipConn:Disconnect() end
-    return true
-end
-
-local function CheckCharacterHasCrate()
-    local char = Players.LocalPlayer.Character
-    if not char then return false end
-
-    -- Detect tools, attached crate models, or welds in character
-    for _, obj in ipairs(char:GetChildren()) do
-        if obj:IsA("Tool") or obj:IsA("Model") or obj:IsA("Weld") or obj:IsA("WeldConstraint") then
-            return true
-        end
-        local objName = obj.Name:lower()
-        if objName:find("crate") or objName:find("egg") or objName:find("box") or objName:find("chest") then
-            return true
         end
     end
-    return false
-end
-
-local function GetSafeZoneCFrame()
-    pcall(function()
-        local stealMap = workspace:FindFirstChild("Steal Map")
-        if stealMap then
-            local lobby = stealMap:FindFirstChild("Lobby")
-            if lobby then
-                local safeZone = lobby:FindFirstChild("safe zone")
-                if safeZone then
-                    if safeZone:IsA("BasePart") then
-                        return safeZone.CFrame + Vector3.new(0, 3, 0)
-                    elseif safeZone:IsA("Model") then
-                        return safeZone:GetPivot() + Vector3.new(0, 3, 0)
-                    end
-                end
-            end
-        end
-    end)
     return nil
 end
 
-local function ExecuteStealCrateProcess(crateModel)
-    if isStealingInProcess or not crateModel or not crateModel.Parent then return end
-    isStealingInProcess = true
+-- Get CFrame Target of Crate Model
+local function GetCrateTargetCFrame(crateModel)
+    if not crateModel then return nil end
+    if crateModel:IsA("Model") then
+        local cf, sz = crateModel:GetBoundingBox()
+        return cf
+    elseif crateModel:IsA("BasePart") then
+        return crateModel.CFrame
+    end
+    return nil
+end
 
-    local char = Players.LocalPlayer.Character
-    if not char or not char:FindFirstChild("HumanoidRootPart") then
-        isStealingInProcess = false
+-- High-Precision Fly Engine at Speed 275
+local function FlyToCFrame(targetCFrame)
+    if not targetCFrame then return end
+    local char = LocalPlayer.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    -- Noclip Connection During Flight
+    local noclipConnection = RunService.Stepped:Connect(function()
+        if char then
+            for _, part in ipairs(char:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.CanCollide = false
+                end
+            end
+        end
+    end)
+
+    local startPos = hrp.Position
+    local targetPos = targetCFrame.Position
+    local distance = (targetPos - startPos).Magnitude
+    local duration = math.clamp(distance / FLY_SPEED, 0.05, 10)
+
+    local startTime = os.clock()
+
+    while (os.clock() - startTime) < duration do
+        if not LocalPlayer.Character or not hrp or not hrp.Parent then break end
+        local elapsed = os.clock() - startTime
+        local alpha = math.clamp(elapsed / duration, 0, 1)
+        
+        local currentPos = startPos:Lerp(targetPos, alpha)
+        hrp.CFrame = CFrame.new(currentPos) * targetCFrame.Rotation
+        hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        
+        RunService.RenderStepped:Wait()
+    end
+
+    if hrp then
+        hrp.CFrame = targetCFrame
+        hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+    end
+
+    noclipConnection:Disconnect()
+end
+
+-- Check if Character is currently holding or equipped with crate
+local function IsHoldingCrate(crateModel)
+    local char = LocalPlayer.Character
+    if not char then return false end
+
+    -- 1. Check if original crate model is destroyed/removed from Workspace Crates
+    if crateModel and (not crateModel.Parent or crateModel.Parent == char or crateModel:IsDescendantOf(char)) then
+        return true
+    end
+
+    -- 2. Check joints and welds attached to Character
+    for _, item in ipairs(char:GetDescendants()) do
+        if item:IsA("Weld") or item:IsA("WeldConstraint") or item:IsA("Motor6D") then
+            if (item.Part0 and item.Part0:IsDescendantOf(crateModel)) or (item.Part1 and item.Part1:IsDescendantOf(crateModel)) then
+                return true
+            end
+        end
+        if item:IsA("Tool") or item:IsA("Model") or item:IsA("BasePart") then
+            local n = item.Name:lower()
+            if n:find("crate") or n:find("egg") or n:find("box") then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
+-- Simulate ProximityPrompt / E key press & Hold Until Secured
+local function TriggerStealInteraction(crateModel)
+    if not crateModel or not crateModel.Parent then return end
+
+    -- Attempt 1: Fire ProximityPrompts if available
+    for _, prompt in ipairs(crateModel:GetDescendants()) do
+        if prompt:IsA("ProximityPrompt") then
+            pcall(function()
+                fireproximityprompt(prompt, 0)
+                fireproximityprompt(prompt, 1)
+            end)
+        end
+    end
+
+    -- Attempt 2: Double Tap 'E'
+    pcall(function()
+        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+        task.wait(0.04)
+        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+        task.wait(0.04)
+        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+        task.wait(0.04)
+        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+    end)
+
+    -- Retry Loop: Hold 'E' Key Until Held or Timeout
+    local maxHoldTime = 3.5
+    local startHold = os.clock()
+
+    pcall(function()
+        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+    end)
+
+    while (os.clock() - startHold) < maxHoldTime do
+        if IsHoldingCrate(crateModel) then break end
+
+        -- Retrigger ProximityPrompts
+        for _, prompt in ipairs(crateModel:GetDescendants()) do
+            if prompt:IsA("ProximityPrompt") then
+                pcall(function() fireproximityprompt(prompt, 0) end)
+            end
+        end
+        task.wait(0.08)
+    end
+
+    pcall(function()
+        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+    end)
+end
+
+-- Full Steal & Safe Return Execution Sequence
+local function ExecuteStealSequence()
+    if isStealingActive then return end
+    isStealingActive = true
+
+    local crateToSteal = currentTargetCrate or selectedCrateModel
+    if not crateToSteal or not crateToSteal.Parent then
+        ShowNotification("No Crate Target Selected!")
+        isStealingActive = false
         return
     end
 
-    local crateCF = nil
-    if crateModel:IsA("Model") then
-        crateCF = crateModel:GetPivot()
-    elseif crateModel:IsA("BasePart") then
-        crateCF = crateModel.CFrame
-    end
+    local crateCF = GetCrateTargetCFrame(crateToSteal)
+    local safeZoneCF = GetSafeZoneCFrame()
 
     if not crateCF then
-        isStealingInProcess = false
+        ShowNotification("Invalid Crate CFrame!")
+        isStealingActive = false
         return
     end
 
-    ShowNotification("Flying to Crate...")
+    ShowNotification("Flying to Crate (Speed 275)...")
 
-    -- 1. Fly to Crate Position (Speed 275)
-    FlyTweenTo(crateCF + Vector3.new(0, 2, 0))
+    -- 1. Fly Speed 275 to Crate
+    FlyToCFrame(crateCF + Vector3.new(0, 2.5, 0))
 
-    -- 2. Interact with ProximityPrompt
-    local prompt = crateModel:FindFirstChildOfClass("ProximityPrompt") 
-        or crateModel:FindFirstChildWhichIsA("ProximityPrompt", true)
+    -- 2. Steal Interaction & Double Tap / Hold 'E'
+    ShowNotification("Stealing Crate...")
+    TriggerStealInteraction(crateToSteal)
 
-    if prompt then
-        -- Attempt rapid presses (2-3 times)
-        for attempt = 1, 3 do
-            if CheckCharacterHasCrate() then break end
-            fireproximityprompt(prompt, 0)
-            task.wait(0.1)
-        end
-
-        -- If still not in inventory, hold/retry until obtained or timeout
-        local holdTimer = os.clock()
-        while not CheckCharacterHasCrate() and (os.clock() - holdTimer < 3) and crateModel.Parent do
-            fireproximityprompt(prompt, prompt.HoldDuration or 0)
-            task.wait(0.08)
-        end
-    end
-
-    task.wait(0.1)
-
-    -- 3. Check character state and return to Safe Zone immediately
-    local safeCF = GetSafeZoneCFrame()
-    if safeCF then
+    -- 3. Fly Speed 275 Back to Safe Zone Immediately
+    if safeZoneCF then
         ShowNotification("Returning to Safe Zone...")
-        FlyTweenTo(safeCF)
+        FlyToCFrame(safeZoneCF)
+        ShowNotification("Steal Complete!")
     else
         ShowNotification("Safe Zone Not Found!")
     end
 
-    isStealingInProcess = false
+    isStealingActive = false
 end
 
 -- -------------------------------------------------------------
@@ -1125,6 +1183,7 @@ PopulateCrateList = function()
     local cratesFolder = workspace:FindFirstChild("Crates")
     if not cratesFolder then return end
 
+    -- 1. Collect and Scan All Crates Data
     local crateItems = {}
     local children = cratesFolder:GetChildren()
     for _, child in ipairs(children) do
@@ -1136,10 +1195,12 @@ PopulateCrateList = function()
         end
     end
 
+    -- 2. Sort Crates from Highest to Lowest Kg (มากไปน้อย)
     table.sort(crateItems, function(a, b)
         return a.ValueNum > b.ValueNum
     end)
 
+    -- 3. Filter out currently displayed/selected EggCard
     local filteredItems = {}
     for _, data in ipairs(crateItems) do
         if data.Model ~= currentTargetCrate then
@@ -1147,6 +1208,7 @@ PopulateCrateList = function()
         end
     end
 
+    -- 4. Fast UI Frame Creation
     local pending3DTasks = {}
 
     for index, data in ipairs(filteredItems) do
@@ -1172,6 +1234,7 @@ PopulateCrateList = function()
         miniCardStroke.Thickness = 1
         miniCardStroke.Transparency = 0.88
 
+        -- Mini ItemFrame Background
         local mItemFrame = Instance.new("Frame")
         mItemFrame.Name = "MiniItemFrame"
         mItemFrame.Parent = miniCard
@@ -1190,6 +1253,7 @@ PopulateCrateList = function()
         mItemStroke.Thickness = 1
         mItemStroke.Transparency = 0.88
 
+        -- Mini Viewport Preview Setup
         local miniVpFrame = Instance.new("ViewportFrame")
         miniVpFrame.Name = "Mini3DViewport"
         miniVpFrame.Parent = mItemFrame
@@ -1207,12 +1271,14 @@ PopulateCrateList = function()
         local miniWorld = Instance.new("WorldModel")
         miniWorld.Parent = miniVpFrame
 
+        -- Store for background async 3D model cloning queue
         table.insert(pending3DTasks, {
             CrateModel = child,
             WorldModel = miniWorld,
             Camera = miniCam
         })
 
+        -- Mini Tag Label
         local mTag = Instance.new("TextLabel")
         mTag.Name = "MiniTag"
         mTag.Parent = miniCard
@@ -1225,6 +1291,7 @@ PopulateCrateList = function()
         mTag.TextSize = 8
         mTag.TextXAlignment = Enum.TextXAlignment.Left
 
+        -- Mini Item Name Label
         local mName = Instance.new("TextLabel")
         mName.Name = "MiniName"
         mName.Parent = miniCard
@@ -1237,6 +1304,7 @@ PopulateCrateList = function()
         mName.TextSize = 12
         mName.TextXAlignment = Enum.TextXAlignment.Left
 
+        -- Mini Rarity Label
         local mRarity = Instance.new("TextLabel")
         mRarity.Name = "MiniRarity"
         mRarity.Parent = miniCard
@@ -1249,6 +1317,7 @@ PopulateCrateList = function()
         mRarity.TextSize = 10
         mRarity.TextXAlignment = Enum.TextXAlignment.Left
 
+        -- Mini Value Label
         local mValue = Instance.new("TextLabel")
         mValue.Name = "MiniValue"
         mValue.Parent = miniCard
@@ -1261,6 +1330,7 @@ PopulateCrateList = function()
         mValue.TextSize = 11
         mValue.TextXAlignment = Enum.TextXAlignment.Right
 
+        -- Hover Effect
         miniCard.MouseEnter:Connect(function()
             TweenService:Create(miniCardStroke, TWEEN_FAST, {Transparency = 0.3}):Play()
         end)
@@ -1268,6 +1338,7 @@ PopulateCrateList = function()
             TweenService:Create(miniCardStroke, TWEEN_FAST, {Transparency = 0.88}):Play()
         end)
 
+        -- Selection Event
         miniCard.MouseButton1Click:Connect(function()
             selectedCrateModel = child
             SetCardExpandedState(false)
@@ -1275,6 +1346,7 @@ PopulateCrateList = function()
         end)
     end
 
+    -- 5. Progressive Async 3D Loader Thread
     task.spawn(function()
         for _, loadTask in ipairs(pending3DTasks) do
             if currentSession ~= populateSessionId or not isEggExpanded then return end
@@ -1385,7 +1457,7 @@ ScanAndUpdateBestCrate = function()
     end
 end
 
--- Refresh Engine
+-- Debounce engine to safely handle rapid child added/removed events
 local updatePending = false
 local function RequestSystemRefresh()
     if updatePending then return end
@@ -1430,7 +1502,7 @@ ModeTitle.BackgroundTransparency = 1
 ModeTitle.Position = UDim2.new(0, 12, 0, 18)
 ModeTitle.Size = UDim2.new(0, 100, 0, 16)
 ModeTitle.Font = Enum.Font.GothamBold
-ModeTitle.Text = "STEAL ENGINE"
+ModeTitle.Text = "TELEGUIADO"
 ModeTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
 ModeTitle.TextSize = 11
 ModeTitle.TextXAlignment = Enum.TextXAlignment.Left
@@ -1442,12 +1514,11 @@ ModeSub.BackgroundTransparency = 1
 ModeSub.Position = UDim2.new(0, 12, 0, 48)
 ModeSub.Size = UDim2.new(0, 80, 0, 12)
 ModeSub.Font = Enum.Font.GothamMedium
-ModeSub.Text = "SPEED 275"
+ModeSub.Text = "ONE SHOT"
 ModeSub.TextColor3 = Color3.fromRGB(110, 115, 125)
 ModeSub.TextSize = 9
 ModeSub.TextXAlignment = Enum.TextXAlignment.Left
 
--- SWAP BUTTON (TRIGGERS ONE SHOT STEAL)
 local SwapButton = Instance.new("TextButton")
 SwapButton.Name = "SwapButton"
 SwapButton.Parent = ControlPanel
@@ -1480,18 +1551,14 @@ SwapButton.MouseLeave:Connect(function()
     TweenService:Create(SwapStroke, TWEEN_FAST, {Transparency = 0.5}):Play()
 end)
 
+-- Click Swap Button to execute ONE SHOT Steal Sequence
 SwapButton.MouseButton1Click:Connect(function()
     swapRotation = swapRotation + 180
     TweenService:Create(SwapButton, TWEEN_ELASTIC, {Rotation = swapRotation}):Play()
     
-    -- Trigger One-Shot Steal Function
-    if currentTargetCrate then
-        task.spawn(function()
-            ExecuteStealCrateProcess(currentTargetCrate)
-        end)
-    else
-        ShowNotification("No Crate Available!")
-    end
+    task.spawn(function()
+        ExecuteStealSequence()
+    end)
 end)
 
 -- LOOP CHECKBOX & LOOP PROCESSOR
@@ -1550,19 +1617,7 @@ LoopLabel.TextXAlignment = Enum.TextXAlignment.Left
 
 LoopLabel.MouseButton1Click:Connect(ToggleLoopFunc)
 
--- Background Refresh Loop Routine
-task.spawn(function()
-    while true do
-        task.wait(0.5)
-        if loopChecked then
-            pcall(function()
-                RequestSystemRefresh()
-            end)
-        end
-    end
-end)
-
--- AUTO STEAL TOGGLE SWITCH
+-- Neon Toggle Switch (Clean Pure Toggle UI State)
 local ToggleFrame = Instance.new("TextButton")
 ToggleFrame.Name = "ToggleFrame"
 ToggleFrame.Parent = ControlPanel
@@ -1597,7 +1652,6 @@ ToggleFrame.MouseButton1Click:Connect(function()
             AnchorPoint = Vector2.new(1, 0.5),
             BackgroundColor3 = Color3.fromRGB(12, 13, 16)
         }):Play()
-        ShowNotification("Auto Steal Enabled!")
     else
         TweenService:Create(ToggleFrame, TWEEN_FAST, {BackgroundColor3 = Color3.fromRGB(32, 35, 44)}):Play()
         TweenService:Create(ToggleCircle, TWEEN_ELASTIC, {
@@ -1605,17 +1659,19 @@ ToggleFrame.MouseButton1Click:Connect(function()
             AnchorPoint = Vector2.new(0, 0.5),
             BackgroundColor3 = Color3.fromRGB(150, 155, 165)
         }):Play()
-        ShowNotification("Auto Steal Disabled!")
     end
 end)
 
--- AUTO STEAL CONTINUOUS LOOP THREAD
+-- Background Continuous Loop Steal Routine
 task.spawn(function()
     while true do
         task.wait(0.5)
-        if toggled and not isStealingInProcess and currentTargetCrate then
+        if (loopChecked or toggled) and not isStealingActive then
             pcall(function()
-                ExecuteStealCrateProcess(currentTargetCrate)
+                RequestSystemRefresh()
+                if currentTargetCrate or selectedCrateModel then
+                    ExecuteStealSequence()
+                end
             end)
         end
     end
@@ -1690,6 +1746,7 @@ local clock = os.clock()
 RunService.RenderStepped:Connect(function(dt)
     clock = clock + dt
     
+    -- 1. Position Update (No Tilt Rotation)
     MainFrame.Rotation = 0
     if isDragging and isGuiVisible then
         MainFrame.Position = targetPos
@@ -1698,12 +1755,14 @@ RunService.RenderStepped:Connect(function(dt)
         flameWindVelocity = flameWindVelocity:Lerp(Vector2.new(0, 0), math.min(dt * 10, 1))
     end
 
+    -- 2. 3D Model Continuous 360 Rotation Engine for Main & Dropdown Cards
     previewRotation = (previewRotation + dt * 45) % 360
 
     if currentPreviewModel and currentPreviewModel.Parent then
         currentPreviewModel:PivotTo(CFrame.new(previewCenter) * CFrame.Angles(0, math.rad(previewRotation), 0))
     end
 
+    -- Safe Loop with Dead Reference Garbage Cleaning
     for i = #dropdownPreviewModels, 1, -1 do
         local item = dropdownPreviewModels[i]
         if item and item.Model and item.Model.Parent then
@@ -1713,6 +1772,7 @@ RunService.RenderStepped:Connect(function(dt)
         end
     end
 
+    -- 3. Thermal Core Aura Pulsation
     local tSpeed = clock * 18
     local corePulse = 0.15 + math.sin(tSpeed) * 0.1 + (math.random() * 0.05)
     local auraPulse = 0.40 + math.cos(tSpeed * 1.2) * 0.12 + (math.random() * 0.08)
@@ -1727,6 +1787,7 @@ RunService.RenderStepped:Connect(function(dt)
     AuraGlow.BackgroundTransparency = math.clamp(auraPulse, 0.2, 0.65)
     AuraGlow.Size = UDim2.new(0, 54 + math.sin(tSpeed) * 5, 0, 60 + math.cos(tSpeed * 1.5) * 6)
 
+    -- 4. Dynamic Flame Tendrils
     for i = 1, TENDRIL_COUNT do
         local ft = flameTendrils[i]
         ft.Life = ft.Life + dt
@@ -1762,6 +1823,7 @@ RunService.RenderStepped:Connect(function(dt)
         ft.Object.BackgroundTransparency = math.clamp(fadeAlpha, 0.05, 1)
     end
 
+    -- 5. Micro Spark Particles
     for i = 1, SPARK_COUNT do
         local sp = sparkParticles[i]
         sp.Life = sp.Life + dt

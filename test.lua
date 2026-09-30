@@ -540,7 +540,7 @@ EggCardStroke.Color = Color3.fromRGB(255, 255, 255)
 EggCardStroke.Thickness = 1
 EggCardStroke.Transparency = 0.88
 
--- ItemFrame with Sleek Minimal Dark Background (No Dynamic Tinting)
+-- ItemFrame with Sleek Minimal Dark Background
 local ItemFrame = Instance.new("Frame")
 ItemFrame.Name = "ItemFrame"
 ItemFrame.Parent = EggCard
@@ -917,7 +917,7 @@ ArrowBtn.MouseButton1Click:Connect(function()
 end)
 
 -- -------------------------------------------------------------
--- [ MINI EGGCARD BUILDER FOR DROPDOWN (FULL EGGCARD STYLE) ]
+-- [ MINI EGGCARD BUILDER FOR DROPDOWN (SORTED DESCENDING BY KG) ]
 -- -------------------------------------------------------------
 local function PopulateCrateList()
     dropdownPreviewModels = {}
@@ -930,169 +930,182 @@ local function PopulateCrateList()
     local cratesFolder = workspace:FindFirstChild("Crates")
     if not cratesFolder then return end
 
-    -- Populate All Crates in workspace.Crates as Full EggCards
+    -- 1. Collect and Scan All Crates Data
+    local crateItems = {}
     local children = cratesFolder:GetChildren()
-    for index, child in ipairs(children) do
+    for _, child in ipairs(children) do
         if child:IsA("Model") or child:IsA("BasePart") then
             local data = ScanCrateData(child)
             if data then
-                local miniCard = Instance.new("TextButton")
-                miniCard.Name = "MiniCard_" .. index
-                miniCard.Parent = CrateListScroll
-                miniCard.BackgroundColor3 = Color3.fromRGB(16, 18, 22)
-                miniCard.Size = UDim2.new(1, -6, 0, 68)
-                miniCard.Text = ""
-                miniCard.AutoButtonColor = false
-                miniCard.ClipsDescendants = true
-
-                local miniCardCorner = Instance.new("UICorner")
-                miniCardCorner.CornerRadius = UDim.new(0, 10)
-                miniCardCorner.Parent = miniCard
-
-                local miniCardStroke = Instance.new("UIStroke")
-                miniCardStroke.Parent = miniCard
-                miniCardStroke.Color = Color3.fromRGB(255, 255, 255)
-                miniCardStroke.Thickness = 1
-                miniCardStroke.Transparency = 0.88
-
-                -- Mini ItemFrame Background
-                local mItemFrame = Instance.new("Frame")
-                mItemFrame.Name = "MiniItemFrame"
-                mItemFrame.Parent = miniCard
-                mItemFrame.BackgroundColor3 = Color3.fromRGB(22, 25, 32)
-                mItemFrame.Position = UDim2.new(0, 8, 0, 8)
-                mItemFrame.Size = UDim2.new(0, 52, 0, 52)
-                mItemFrame.ClipsDescendants = true
-
-                local mItemCorner = Instance.new("UICorner")
-                mItemCorner.CornerRadius = UDim.new(0, 8)
-                mItemCorner.Parent = mItemFrame
-
-                local mItemStroke = Instance.new("UIStroke")
-                mItemStroke.Parent = mItemFrame
-                mItemStroke.Color = Color3.fromRGB(255, 255, 255)
-                mItemStroke.Thickness = 1
-                mItemStroke.Transparency = 0.88
-
-                -- Mini Viewport Preview
-                local miniVpFrame = Instance.new("ViewportFrame")
-                miniVpFrame.Name = "Mini3DViewport"
-                miniVpFrame.Parent = mItemFrame
-                miniVpFrame.BackgroundTransparency = 1
-                miniVpFrame.Size = UDim2.new(1, 0, 1, 0)
-                miniVpFrame.Ambient = Color3.fromRGB(200, 200, 200)
-                miniVpFrame.LightColor = Color3.fromRGB(255, 255, 255)
-                miniVpFrame.LightDirection = Vector3.new(-1, -2, -1)
-
-                local miniCam = Instance.new("Camera")
-                miniCam.FieldOfView = 45
-                miniCam.Parent = miniVpFrame
-                miniVpFrame.CurrentCamera = miniCam
-
-                local miniWorld = Instance.new("WorldModel")
-                miniWorld.Parent = miniVpFrame
-
-                pcall(function()
-                    local origArch = child.Archivable
-                    child.Archivable = true
-                    local cloned = child:Clone()
-                    child.Archivable = origArch
-                    if cloned then
-                        for _, item in ipairs(cloned:GetDescendants()) do
-                            if item:IsA("LuaSourceContainer") or item:IsA("Sound") or item:IsA("ParticleEmitter") or item:IsA("Highlight") then
-                                item:Destroy()
-                            end
-                        end
-                        cloned.Parent = miniWorld
-                        local cf, sz
-                        if cloned:IsA("Model") then
-                            cf, sz = cloned:GetBoundingBox()
-                        elseif cloned:IsA("BasePart") then
-                            cf, sz = cloned.CFrame, cloned.Size
-                        end
-                        if cf and sz then
-                            local maxDim = math.max(sz.X, sz.Y, sz.Z)
-                            if maxDim <= 0.1 then maxDim = 2 end
-                            local dist = (maxDim / 2) / math.tan(math.rad(22.5)) * 1.5
-                            miniCam.CFrame = CFrame.new(cf.Position + Vector3.new(0, sz.Y * 0.15, dist), cf.Position)
-                            
-                            table.insert(dropdownPreviewModels, {
-                                Model = cloned,
-                                Center = cf.Position
-                            })
-                        end
-                    end
-                end)
-
-                -- Mini Tag Label
-                local mTag = Instance.new("TextLabel")
-                mTag.Name = "MiniTag"
-                mTag.Parent = miniCard
-                mTag.BackgroundTransparency = 1
-                mTag.Position = UDim2.new(0, 68, 0, 10)
-                mTag.Size = UDim2.new(0, 100, 0, 10)
-                mTag.Font = Enum.Font.GothamBold
-                mTag.Text = "EGG / CRATE"
-                mTag.TextColor3 = Color3.fromRGB(110, 115, 125)
-                mTag.TextSize = 8
-                mTag.TextXAlignment = Enum.TextXAlignment.Left
-
-                -- Mini Item Name Label
-                local mName = Instance.new("TextLabel")
-                mName.Name = "MiniName"
-                mName.Parent = miniCard
-                mName.BackgroundTransparency = 1
-                mName.Position = UDim2.new(0, 68, 0, 22)
-                mName.Size = UDim2.new(0, 120, 0, 16)
-                mName.Font = Enum.Font.GothamBold
-                mName.Text = data.Name
-                mName.TextColor3 = Color3.fromRGB(255, 255, 255)
-                mName.TextSize = 12
-                mName.TextXAlignment = Enum.TextXAlignment.Left
-
-                -- Mini Rarity Label
-                local mRarity = Instance.new("TextLabel")
-                mRarity.Name = "MiniRarity"
-                mRarity.Parent = miniCard
-                mRarity.BackgroundTransparency = 1
-                mRarity.Position = UDim2.new(0, 68, 0, 42)
-                mRarity.Size = UDim2.new(0, 100, 0, 14)
-                mRarity.Font = Enum.Font.GothamBold
-                mRarity.Text = data.Rarity
-                mRarity.TextColor3 = GetRarityColor(data.Rarity)
-                mRarity.TextSize = 10
-                mRarity.TextXAlignment = Enum.TextXAlignment.Left
-
-                -- Mini Value Label
-                local mValue = Instance.new("TextLabel")
-                mValue.Name = "MiniValue"
-                mValue.Parent = miniCard
-                mValue.BackgroundTransparency = 1
-                mValue.Position = UDim2.new(1, -110, 0, 26)
-                mValue.Size = UDim2.new(0, 98, 0, 16)
-                mValue.Font = Enum.Font.GothamBold
-                mValue.Text = data.ValueText
-                mValue.TextColor3 = Color3.fromRGB(255, 255, 255)
-                mValue.TextSize = 11
-                mValue.TextXAlignment = Enum.TextXAlignment.Right
-
-                -- Hover Effect
-                miniCard.MouseEnter:Connect(function()
-                    TweenService:Create(miniCardStroke, TWEEN_FAST, {Transparency = 0.3}):Play()
-                end)
-                miniCard.MouseLeave:Connect(function()
-                    TweenService:Create(miniCardStroke, TWEEN_FAST, {Transparency = 0.88}):Play()
-                end)
-
-                -- Selection Event
-                miniCard.MouseButton1Click:Connect(function()
-                    selectedCrateModel = child
-                    TagLabel.Text = "SELECTED EGG"
-                    SetCardExpandedState(false)
-                    pcall(ScanAndUpdateBestCrate)
-                end)
+                table.insert(crateItems, data)
             end
         end
+    end
+
+    -- 2. Sort Crates from Highest to Lowest Kg (มากไปน้อย)
+    table.sort(crateItems, function(a, b)
+        return a.ValueNum > b.ValueNum
+    end)
+
+    -- 3. Populate All Sorted Crates as Full EggCards
+    for index, data in ipairs(crateItems) do
+        local child = data.Model
+
+        local miniCard = Instance.new("TextButton")
+        miniCard.Name = "MiniCard_" .. index
+        miniCard.Parent = CrateListScroll
+        miniCard.BackgroundColor3 = Color3.fromRGB(16, 18, 22)
+        miniCard.Size = UDim2.new(1, -6, 0, 68)
+        miniCard.Text = ""
+        miniCard.AutoButtonColor = false
+        miniCard.ClipsDescendants = true
+
+        local miniCardCorner = Instance.new("UICorner")
+        miniCardCorner.CornerRadius = UDim.new(0, 10)
+        miniCardCorner.Parent = miniCard
+
+        local miniCardStroke = Instance.new("UIStroke")
+        miniCardStroke.Parent = miniCard
+        miniCardStroke.Color = Color3.fromRGB(255, 255, 255)
+        miniCardStroke.Thickness = 1
+        miniCardStroke.Transparency = 0.88
+
+        -- Mini ItemFrame Background
+        local mItemFrame = Instance.new("Frame")
+        mItemFrame.Name = "MiniItemFrame"
+        mItemFrame.Parent = miniCard
+        mItemFrame.BackgroundColor3 = Color3.fromRGB(22, 25, 32)
+        mItemFrame.Position = UDim2.new(0, 8, 0, 8)
+        mItemFrame.Size = UDim2.new(0, 52, 0, 52)
+        mItemFrame.ClipsDescendants = true
+
+        local mItemCorner = Instance.new("UICorner")
+        mItemCorner.CornerRadius = UDim.new(0, 8)
+        mItemCorner.Parent = mItemFrame
+
+        local mItemStroke = Instance.new("UIStroke")
+        mItemStroke.Parent = mItemFrame
+        mItemStroke.Color = Color3.fromRGB(255, 255, 255)
+        mItemStroke.Thickness = 1
+        mItemStroke.Transparency = 0.88
+
+        -- Mini Viewport Preview
+        local miniVpFrame = Instance.new("ViewportFrame")
+        miniVpFrame.Name = "Mini3DViewport"
+        miniVpFrame.Parent = mItemFrame
+        miniVpFrame.BackgroundTransparency = 1
+        miniVpFrame.Size = UDim2.new(1, 0, 1, 0)
+        miniVpFrame.Ambient = Color3.fromRGB(200, 200, 200)
+        miniVpFrame.LightColor = Color3.fromRGB(255, 255, 255)
+        miniVpFrame.LightDirection = Vector3.new(-1, -2, -1)
+
+        local miniCam = Instance.new("Camera")
+        miniCam.FieldOfView = 45
+        miniCam.Parent = miniVpFrame
+        miniVpFrame.CurrentCamera = miniCam
+
+        local miniWorld = Instance.new("WorldModel")
+        miniWorld.Parent = miniVpFrame
+
+        pcall(function()
+            local origArch = child.Archivable
+            child.Archivable = true
+            local cloned = child:Clone()
+            child.Archivable = origArch
+            if cloned then
+                for _, item in ipairs(cloned:GetDescendants()) do
+                    if item:IsA("LuaSourceContainer") or item:IsA("Sound") or item:IsA("ParticleEmitter") or item:IsA("Highlight") then
+                        item:Destroy()
+                    end
+                end
+                cloned.Parent = miniWorld
+                local cf, sz
+                if cloned:IsA("Model") then
+                    cf, sz = cloned:GetBoundingBox()
+                elseif cloned:IsA("BasePart") then
+                    cf, sz = cloned.CFrame, cloned.Size
+                end
+                if cf and sz then
+                    local maxDim = math.max(sz.X, sz.Y, sz.Z)
+                    if maxDim <= 0.1 then maxDim = 2 end
+                    local dist = (maxDim / 2) / math.tan(math.rad(22.5)) * 1.5
+                    miniCam.CFrame = CFrame.new(cf.Position + Vector3.new(0, sz.Y * 0.15, dist), cf.Position)
+                    
+                    table.insert(dropdownPreviewModels, {
+                        Model = cloned,
+                        Center = cf.Position
+                    })
+                end
+            end
+        end)
+
+        -- Mini Tag Label
+        local mTag = Instance.new("TextLabel")
+        mTag.Name = "MiniTag"
+        mTag.Parent = miniCard
+        mTag.BackgroundTransparency = 1
+        mTag.Position = UDim2.new(0, 68, 0, 10)
+        mTag.Size = UDim2.new(0, 100, 0, 10)
+        mTag.Font = Enum.Font.GothamBold
+        mTag.Text = "EGG / CRATE"
+        mTag.TextColor3 = Color3.fromRGB(110, 115, 125)
+        mTag.TextSize = 8
+        mTag.TextXAlignment = Enum.TextXAlignment.Left
+
+        -- Mini Item Name Label
+        local mName = Instance.new("TextLabel")
+        mName.Name = "MiniName"
+        mName.Parent = miniCard
+        mName.BackgroundTransparency = 1
+        mName.Position = UDim2.new(0, 68, 0, 22)
+        mName.Size = UDim2.new(0, 120, 0, 16)
+        mName.Font = Enum.Font.GothamBold
+        mName.Text = data.Name
+        mName.TextColor3 = Color3.fromRGB(255, 255, 255)
+        mName.TextSize = 12
+        mName.TextXAlignment = Enum.TextXAlignment.Left
+
+        -- Mini Rarity Label
+        local mRarity = Instance.new("TextLabel")
+        mRarity.Name = "MiniRarity"
+        mRarity.Parent = miniCard
+        mRarity.BackgroundTransparency = 1
+        mRarity.Position = UDim2.new(0, 68, 0, 42)
+        mRarity.Size = UDim2.new(0, 100, 0, 14)
+        mRarity.Font = Enum.Font.GothamBold
+        mRarity.Text = data.Rarity
+        mRarity.TextColor3 = GetRarityColor(data.Rarity)
+        mRarity.TextSize = 10
+        mRarity.TextXAlignment = Enum.TextXAlignment.Left
+
+        -- Mini Value Label
+        local mValue = Instance.new("TextLabel")
+        mValue.Name = "MiniValue"
+        mValue.Parent = miniCard
+        mValue.BackgroundTransparency = 1
+        mValue.Position = UDim2.new(1, -110, 0, 26)
+        mValue.Size = UDim2.new(0, 98, 0, 16)
+        mValue.Font = Enum.Font.GothamBold
+        mValue.Text = data.ValueText
+        mValue.TextColor3 = Color3.fromRGB(255, 255, 255)
+        mValue.TextSize = 11
+        mValue.TextXAlignment = Enum.TextXAlignment.Right
+
+        -- Hover Effect
+        miniCard.MouseEnter:Connect(function()
+            TweenService:Create(miniCardStroke, TWEEN_FAST, {Transparency = 0.3}):Play()
+        end)
+        miniCard.MouseLeave:Connect(function()
+            TweenService:Create(miniCardStroke, TWEEN_FAST, {Transparency = 0.88}):Play()
+        end)
+
+        -- Selection Event
+        miniCard.MouseButton1Click:Connect(function()
+            selectedCrateModel = child
+            TagLabel.Text = "SELECTED EGG"
+            SetCardExpandedState(false)
+            pcall(ScanAndUpdateBestCrate)
+        end)
     end
 end
 

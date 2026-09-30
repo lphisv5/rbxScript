@@ -189,7 +189,7 @@ MainFrame.BackgroundTransparency = 0.05
 MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 MainFrame.Size = UDim2.new(0, MAIN_WIDTH, 0, COLLAPSED_HEIGHT)
-MainFrame.ClipsDescendants = false
+MainFrame.ClipsDescendants = true
 
 local MainCorner = Instance.new("UICorner")
 MainCorner.CornerRadius = UDim.new(0, 14)
@@ -252,10 +252,10 @@ NotifFrame.Name = "NotifFrame"
 NotifFrame.Parent = MainFrame
 NotifFrame.BackgroundColor3 = Color3.fromRGB(16, 18, 22)
 NotifFrame.BackgroundTransparency = 1
-NotifFrame.Position = UDim2.new(0, 12, 0, 10)
+NotifFrame.Position = UDim2.new(0, 12, 0, 9)
 NotifFrame.Size = UDim2.new(1, -24, 0, 34)
 NotifFrame.Visible = false
-NotifFrame.ZIndex = 0
+NotifFrame.ZIndex = 6
 
 local NotifCorner = Instance.new("UICorner")
 NotifCorner.CornerRadius = UDim.new(0, 9)
@@ -278,7 +278,7 @@ NotifIcon.Size = UDim2.new(0, 18, 0, 18)
 NotifIcon.Image = "rbxassetid://89581158158297"
 NotifIcon.ScaleType = Enum.ScaleType.Fit
 NotifIcon.ImageTransparency = 1
-NotifIcon.ZIndex = 1
+NotifIcon.ZIndex = 7
 
 local NotifText = Instance.new("TextLabel")
 NotifText.Name = "NotifText"
@@ -292,7 +292,7 @@ NotifText.TextColor3 = Color3.fromRGB(255, 255, 255)
 NotifText.TextSize = 10
 NotifText.TextXAlignment = Enum.TextXAlignment.Left
 NotifText.TextTransparency = 1
-NotifText.ZIndex = 1
+NotifText.ZIndex = 7
 
 local notifDebounce = false
 
@@ -301,7 +301,7 @@ local function ShowNotification(text)
     notifDebounce = true
 
     NotifText.Text = text or "Discord Link Copied to Clipboard!"
-    NotifFrame.Position = UDim2.new(0, 12, 0, 10)
+    NotifFrame.Position = UDim2.new(0, 12, 0, 9)
     NotifFrame.BackgroundTransparency = 1
     NotifStroke.Transparency = 1
     NotifText.TextTransparency = 1
@@ -309,7 +309,6 @@ local function ShowNotification(text)
     NotifFrame.Visible = true
 
     TweenService:Create(NotifFrame, TWEEN_SPRING, {
-        Position = UDim2.new(0, 12, 0, -38),
         BackgroundTransparency = 0.05
     }):Play()
     TweenService:Create(NotifStroke, TWEEN_FAST, {Transparency = 0.25}):Play()
@@ -318,7 +317,6 @@ local function ShowNotification(text)
 
     task.delay(3, function()
         local slideDown = TweenService:Create(NotifFrame, TWEEN_SPRING, {
-            Position = UDim2.new(0, 12, 0, 10),
             BackgroundTransparency = 1
         })
         TweenService:Create(NotifStroke, TWEEN_FAST, {Transparency = 1}):Play()
@@ -1330,14 +1328,12 @@ local function OnDragBegan(input)
         lastMousePos = dragStartMouse
         dragStartFramePos = MainFrame.Position
 
-        TweenService:Create(MainFrame, TWEEN_FAST, {Size = UDim2.new(0, MAIN_WIDTH - 5, 0, CurrentMainHeight() - 4)}):Play()
         TweenService:Create(MainStroke, TWEEN_FAST, {Transparency = 0.02, Color = Color3.fromRGB(255, 255, 255)}):Play()
 
         input.Changed:Connect(function()
             if input.UserInputState == Enum.UserInputState.End then
                 isDragging = false
                 TweenService:Create(MainFrame, TWEEN_SPRING, {
-                    Size = UDim2.new(0, MAIN_WIDTH, 0, CurrentMainHeight()),
                     Rotation = 0
                 }):Play()
                 TweenService:Create(MainStroke, TWEEN_FAST, {Transparency = 0.12}):Play()

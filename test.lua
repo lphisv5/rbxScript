@@ -5,9 +5,6 @@ local RunService = game:GetService("RunService")
 local Camera = workspace.CurrentCamera
 local Players = game:GetService("Players")
 
--- -------------------------------------------------------------
--- [ DELTA & EXECUTOR SAFE PARENTING SYSTEM ]
--- -------------------------------------------------------------
 local ParentGui
 if gethui then
     ParentGui = gethui()

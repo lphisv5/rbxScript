@@ -1,4 +1,4 @@
--- [[ YANZ HUB + BANKROLL THELINE BYPASS - ULTIMATE FAST ESCAPE BUILD ]] --
+-- [[ YANZ HUB - THELINE BYPASS FOR BLUESTACKS/MOBILE - FULL CODE ]] --
 
 local CoreGui            = game:GetService("CoreGui")
 local TweenService       = game:GetService("TweenService")
@@ -41,37 +41,27 @@ local FISH_MODELS = {
 -- [ CONSTANTS ]
 -- =============================================================
 local CONFIG = {
-    -- Movement
     FLY_SPEED              = 250,
     LANDING_DISTANCE       = 85,
     LANDING_SPEED          = 75,
-    -- Warp detection
     WARP_DETECT_THRESHOLD  = 65,
-    -- Snap-back
     SNAPBACK_DIST          = 120,
     SNAPBACK_FRAMES        = 3,
-    -- SafeZone
     SAFE_ZONE_RADIUS       = 20,
-    -- Hold-E
     HOLD_DURATION          = 2,
     HOLD_VERIFY_WINDOW     = 0.3,
     E_MAX_ATTEMPTS         = 2,
     E_RETRY_DELAY          = 0.2,
-    -- Target Names & Folder
     TARGET_NAMES           = {"Fish", "FishTool", "MagicFish", "Egg", "Magic"},
     SPAWN_FOLDER_NAMES     = {"SpawnedFish", "SpawnedEggs", "SpawnedItems", "SpawnedTools"},
     MAGIC_TOOL_NAME        = "MagicFishTool",
     MAGIC_POLL_INTERVAL    = 0.05,
-    -- Deposit
     DEPOSIT_MAX_WAIT       = 8,
     DEPOSIT_CHECK_INTERVAL = 0.4,
     DEPOSIT_SETTLE_WAIT    = 0.5,
-    -- Main loop
     LOOP_INTERVAL          = 0.1,
-    -- Camera
     CAMERA_ZOOM_FOV        = 25,
     CAMERA_FOCUS_DISTANCE  = 3,
-    -- SpeedBubble
     SPEEDBUBBLE_NAME       = "SpeedBubbleSpawn",
 }
 
@@ -111,9 +101,6 @@ local GetBaseplateCFrame
 local EnableNoclip
 local DisableNoclip
 
--- =============================================================
--- [ SHARED STATE ]
--- =============================================================
 local stealConfirmed = false
 local noclipConnection = nil
 
@@ -142,7 +129,7 @@ DisableNoclip = function()
 end
 
 -- =============================================================
--- [ THELINE BYPASS (จากไฟล์ Deobf) - ใช้ฝากไข่โดยไม่โดนดึงตัว ]
+-- [ THELINE BYPASS - แก้ไขให้ทำงานบน BlueStacks/Mobile ]
 -- =============================================================
 local function TriggerTheLineTouch()
     local char = LocalPlayer.Character
@@ -151,37 +138,28 @@ local function TriggerTheLineTouch()
     local hrp = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso")
     if not hrp then return false end
 
-    local targetPart = nil
     local theLine = Workspace:FindFirstChild("TheLine")
-    local theLinePart = theLine and theLine:FindFirstChild("TheLinePart")
+    if not theLine then return false end
     
-    if theLinePart then
-        local children = theLinePart:GetChildren()
-        targetPart = children[2] or children[1] or theLinePart
-    end
+    local theLinePart = theLine:FindFirstChild("TheLinePart")
+    if not theLinePart then return false end
 
-    if not targetPart then
-        for _, v in ipairs(Workspace:GetDescendants()) do
-            if v.Name == "TheLinePart" or v.Name == "TheLine" then
-                local children = v:GetChildren()
-                targetPart = children[2] or children[1] or v
+    -- ตามภาพ Explorer: TheLinePart มี TouchInterest อยู่ข้างใน
+    -- เราสามารถใช้ TheLinePart ได้เลย หรือถ้ามี RedPart ก็ใช้ RedPart
+    local targetPart = theLinePart:FindFirstChild("RedPart") or theLinePart
+
+    if not targetPart:IsA("BasePart") then
+        for _, v in ipairs(targetPart:GetDescendants()) do
+            if v:IsA("BasePart") then
+                targetPart = v
                 break
             end
         end
     end
 
     if not targetPart then return false end
-    
-    -- ตรวจสอบให้แน่ใจว่าเป็น BasePart
-    if not targetPart:IsA("BasePart") then
-        if targetPart.Parent and targetPart.Parent:IsA("BasePart") then
-            targetPart = targetPart.Parent
-        else
-            return false
-        end
-    end
 
-    -- ใช้ firetouchinterest เพื่อ bypass การตรวจจับการเคลื่อนไหว
+    -- ถ้ามี firetouchinterest (PC Executor)
     if type(fireTouch) == "function" then
         pcall(function()
             fireTouch(hrp, targetPart, 0)
@@ -189,7 +167,7 @@ local function TriggerTheLineTouch()
             fireTouch(hrp, targetPart, 1)
         end)
     else
-        -- Fallback: ถ้า Executor ไม่รองรับ firetouchinterest ให้ใช้การสลับ CFrame
+        -- Fallback สำหรับ Mobile Executor (BlueStacks): สลับ CFrame ไปแตะแล้วกลับมา
         local oldCFrame = hrp.CFrame
         pcall(function()
             hrp.CFrame = targetPart.CFrame
@@ -1194,7 +1172,6 @@ IsPlayerHoldingEgg = function()
     local character = LocalPlayer.Character
     if not character then return false end
 
-    -- 1. ตรวจหา MagicFishTool โดยตรง
     for _, child in ipairs(character:GetChildren()) do
         if child:IsA("Tool") then
             local low = string.lower(child.Name)
@@ -1204,7 +1181,6 @@ IsPlayerHoldingEgg = function()
         end
     end
 
-    -- 2. ตรวจหา Tool ที่มีคำว่า Fish หรือ Egg
     for _, child in ipairs(character:GetChildren()) do
         if child:IsA("Tool") then
             local low = string.lower(child.Name)
@@ -1214,7 +1190,6 @@ IsPlayerHoldingEgg = function()
         end
     end
 
-    -- 3. ตรวจหา Model ที่ตรงกับ FISH_MODELS
     for _, child in ipairs(character:GetChildren()) do
         if child:IsA("Model") or child:IsA("BasePart") then
             for _, modelName in ipairs(FISH_MODELS) do
@@ -1229,7 +1204,6 @@ IsPlayerHoldingEgg = function()
         end
     end
 
-    -- 4. ตรวจสอบผ่าน Joint/Weld (โมเดลที่ติดอยู่กับตัว)
     local parts = {
         character:FindFirstChild("RightHand"),
         character:FindFirstChild("LeftHand"),
@@ -1261,7 +1235,6 @@ IsPlayerHoldingEgg = function()
         end
     end
 
-    -- 5. ตรวจสอบ Attributes ของตัวละคร
     if character:GetAttribute("HasEgg") or character:GetAttribute("CarryingEgg") or character:GetAttribute("HasFish") or character:GetAttribute("CarryingFish")
         or LocalPlayer:GetAttribute("CarryingEgg") or LocalPlayer:GetAttribute("CarryingFish") then
         return true
@@ -2411,7 +2384,6 @@ local function StartAutoTargetAction()
             if holding and inSafe then
                 if not markerVisitDone then
                     markerVisitDone = true
-                    -- ไม่ต้องบินไป Marker แล้ว! ใช้ TheLine Bypass แทน
                     local markerCF = GetIgnoreMarkerCFrame()
                     if markerCF and toggled then
                         SmoothFlyToWithLanding(markerCF, CONFIG.FLY_SPEED)
@@ -2436,6 +2408,9 @@ local function StartAutoTargetAction()
             -- CASE 2: ถือของ + นอก SafeZone -> บินกลับ SafeZone ทันที
             -- =====================================================
             elseif holding and not inSafe then
+                -- ✅ ยิง TheLine Touch ทันทีเพื่อยกเลิกการถูกไล่ (Anti-Chase)
+                TriggerTheLineTouch()
+                
                 local ret = GetReturnCFrame()
                 if ret and toggled then
                     SmoothFlyToWithLanding(ret, CONFIG.FLY_SPEED)
@@ -2469,6 +2444,9 @@ local function StartAutoTargetAction()
                         end
 
                         if success or IsPlayerHoldingEgg() then
+                            -- ✅ ยิง TheLine Touch ทันทีเพื่อยกเลิกการถูกไล่ (Anti-Chase)
+                            TriggerTheLineTouch()
+                            
                             -- ✅ บินกลับ SafeZone ทันที!
                             if not IsPlayerInSafeZone() then
                                 local ret = GetReturnCFrame()

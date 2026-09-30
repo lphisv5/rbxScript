@@ -1330,108 +1330,95 @@ task.spawn(function()
 end)
 
 -- =============================================================
--- [ STEALING ENGINE v4 — E-HOLD SYSTEM ]
+-- [ STEALING ENGINE v5 — CANCEL TOKEN + SAFE E-HOLD ]
 -- =============================================================
 local isStealingInProcess = false
 local currentTriggerSource = nil
 
-local function GetSafeZoneCFrame()
-    local result = SAFE_ZONE_CFRAME
-    pcall(function()
-        local spawnLocation = workspace:FindFirstChild("SpawnLocation")
-        if spawnLocation and spawnLocation:IsA("BasePart") then
-            result = spawnLocation.CFrame
-        end
-    end)
-    return result
-end
+-- ★ CANCEL TOKEN — ทุกครั้งที่ปิด จะ +1 ทำให้ loop เก่ายกเลิกทันที
+local cancelToken = 0
 
-local function GetCharacterHRP()
-    local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-    return char:FindFirstChild("HumanoidRootPart") or char:WaitForChild("HumanoidRootPart", 2)
-end
+-- ★ กด E ค้าง / ปล่อย (pcall ครอบทั้งหมด)
+local eHoldActive = false
+local eSafetyDeadline = 0
 
--- ═════════════════════════════════════════════════════════════
--- [ E-HOLD CORE SYSTEM ]
--- ═════════════════════════════════════════════════════════════
-
--- ✅ กด E ค้าง
 local function StartHoldE()
-    if E_HOLD_ACTIVE then return end
-    E_HOLD_ACTIVE = true
-    E_HOLD_SAFETY_TIME = os.clock() + 10  -- safety: 10 วิ max
+    if eHoldActive then return end
+    eHoldActive = true
+    eSafetyDeadline = os.clock() + 8   -- safety 8 วิ
     pcall(function()
         VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
     end)
 end
 
--- ✅ ปล่อย E
 local function StopHoldE()
-    if not E_HOLD_ACTIVE then return end
-    E_HOLD_ACTIVE = false
-    E_HOLD_SAFETY_TIME = 0
+    if not eHoldActive then return end
+    eHoldActive = false
+    eSafetyDeadline = 0
     pcall(function()
         VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
     end)
 end
 
--- ✅ ตรวจว่าถือหีบอยู่หรือยัง (ละเอียดสุด — 6 ระดับ)
+-- ★ ปุ่มหยุดทุกอย่าง — ใช้ทุกที่ (X, toggle off, loop off)
+local function StopEverything(reason)
+    cancelToken = cancelToken + 1
+    StopHoldE()
+    isStealingInProcess = false
+    currentTriggerSource = nil
+    if activeNoclipConnection then
+        pcall(function() activeNoclipConnection:Disconnect() end)
+        activeNoclipConnection = nil
+    end
+    if reason then
+        ShowNotification(reason)
+    end
+end
+
+-- ★ ตรวจว่าถือหีบผ่านตัวละคร (ตรวจแบบกระชับ)
 local function IsCarryingCrate(crateModel)
     local char = LocalPlayer.Character
     if not char or not char.Parent then return false end
 
-    -- 1) หีบถูกย้ายไปที่อื่นแล้ว / ไม่อยู่ใน workspace แล้ว = สำเร็จ
+    -- 1) หีบไม่อยู่ใน workspace แล้ว
     if crateModel and (not crateModel.Parent or not crateModel:IsDescendantOf(workspace)) then
         return true
     end
 
-    -- 2) หีบกลายเป็น descendant ของตัวละคร
+    -- 2) หีบอยู่ในตัวละคร
     if crateModel and crateModel:IsDescendantOf(char) then
         return true
     end
 
-    -- 3) ตรวจ attribute ของ Player / Character ว่ามี "holding/carrying" ไหม
-    for _, attrName in ipairs({
-        "IsHolding", "Holding", "Carrying", "IsCarrying",
-        "HasCrate", "CarryItem", "HoldingCrate", "Carry"
-    }) do
-        local pv = LocalPlayer:GetAttribute(attrName)
-        if pv == true or (type(pv) == "string" and pv ~= "" and pv ~= "None") then
-            return true
-        end
-        local cv = char:GetAttribute(attrName)
-        if cv == true or (type(cv) == "string" and cv ~= "" and cv ~= "None") then
-            return true
-        end
-    end
-
-    -- 4) ตรวจ weld / joint ระหว่างตัวละครกับหีบ
-    for _, item in ipairs(char:GetDescendants()) do
-        if item:IsA("Weld") or item:IsA("WeldConstraint") or item:IsA("Motor6D") then
-            if item.Part0 and item.Part1 then
-                local isCrate0 = crateModel and (item.Part0 == crateModel or item.Part0:IsDescendantOf(crateModel))
-                local isCrate1 = crateModel and (item.Part1 == crateModel or item.Part1:IsDescendantOf(crateModel))
-                -- ถ้าฝั่งใดฝั่งหนึ่งเป็นส่วนของหีบ และอีกฝั่งเป็นส่วนของตัวละคร
-                local isChar0  = item.Part0 and item.Part0:IsDescendantOf(char)
-                local isChar1  = item.Part1 and item.Part1:IsDescendantOf(char)
-                if (isCrate0 and isChar1) or (isCrate1 and isChar0) then
-                    return true
+    -- 3) Weld/Joint ระหว่าง char กับหีบ
+    if crateModel then
+        for _, item in ipairs(char:GetDescendants()) do
+            if item:IsA("Weld") or item:IsA("WeldConstraint") or item:IsA("Motor6D") then
+                local p0, p1 = item.Part0, item.Part1
+                if p0 and p1 then
+                    local crate0 = (p0 == crateModel) or p0:IsDescendantOf(crateModel)
+                    local crate1 = (p1 == crateModel) or p1:IsDescendantOf(crateModel)
+                    local char0  = p0:IsDescendantOf(char)
+                    local char1  = p1:IsDescendantOf(char)
+                    if (crate0 and char1) or (crate1 and char0) then
+                        return true
+                    end
                 end
             end
         end
     end
 
-    -- 5) ตรวจ Tool / Model ที่ชื่อตรงกับหีบในตัวละคร
+    -- 4) Tool/Model ใน char ที่ชื่อตรงกับหีบ
     for _, item in ipairs(char:GetChildren()) do
         if item:IsA("Tool") or item:IsA("Model") then
             if crateModel and item.Name == crateModel.Name then return true end
-            if item:FindFirstChild("CrateName") or item:FindFirstChild("CrateKg") then
+            if item:FindFirstChild("CrateKg") or item:FindFirstChild("Weight") then
                 return true
             end
         end
     end
 
-    -- 6) ตรวจ Backpack
+    -- 5) Backpack
     local backpack = LocalPlayer:FindFirstChild("Backpack")
     if backpack and crateModel then
         for _, tool in ipairs(backpack:GetChildren()) do
@@ -1439,44 +1426,29 @@ local function IsCarryingCrate(crateModel)
         end
     end
 
-    -- 7) ตรวจ Humanoid state (แขนยกของ / walking ด้วยน้ำหนัก)
-    local humanoid = char:FindFirstChildOfClass("Humanoid")
-    if humanoid then
-        -- ถ้า Humanoid กำลังทำอะไรบางอย่างที่บ่งบอกว่าถือ (custom state ผ่าน attributes)
-        local carryingAttr = humanoid:GetAttribute("Carrying")
-        if carryingAttr == true then return true end
-    end
-
     return false
 end
 
--- ✅ ตรวจว่ากำลังถูกไล่ / อยู่ในสถานะถูกคุกคามหรือยัง
+-- ★ ตรวจว่ากำลังถูกไล่ (เฉพาะ attribute ที่ชัดเจนเท่านั้น)
 local function IsBeingChased()
     local char = LocalPlayer.Character
-
-    -- 1) Attribute ฝั่ง Player
-    for _, attrName in ipairs({
+    local attrList = {
         "IsChased", "BeingChased", "Chased", "UnderAttack",
-        "IsBeingChased", "InCombat", "Wanted", "Threat",
-        "HasCrate", "IsCarrying", "Carrying"
-    }) do
-        local pv = LocalPlayer:GetAttribute(attrName)
-        if pv == true then return true end
-        if char then
-            local cv = char:GetAttribute(attrName)
-            if cv == true then return true end
-        end
+        "IsBeingChased", "IsWanted", "Wanted"
+    }
+    for _, name in ipairs(attrList) do
+        if LocalPlayer:GetAttribute(name) == true then return true end
+        if char and char:GetAttribute(name) == true then return true end
     end
 
-    -- 2) PlayerGui: หา ScreenGui ที่ชื่อสื่อถึงการถูกไล่
+    -- ScreenGui ที่ชื่อสื่อถึงการถูกไล่ (เข้มงวดกว่าเดิม)
     local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
     if playerGui then
         for _, gui in ipairs(playerGui:GetChildren()) do
             if gui:IsA("ScreenGui") and gui.Enabled then
                 local n = gui.Name:lower()
-                if n:find("chase") or n:find("wanted")
-                    or n:find("threat") or n:find("combat")
-                    or n:find("beingchased") or n:find("being_chased") then
+                if n == "chase" or n == "wanted" or n == "chaseui"
+                    or n:find("chasing") or n:find("beingchased") then
                     return true
                 end
             end
@@ -1486,17 +1458,106 @@ local function IsBeingChased()
     return false
 end
 
--- ✅ ตรวจว่ามี "สถานะสำเร็จ" ใดๆ หรือยัง (carrying หรือ chased)
-local function IsPickupConfirmed(crateModel)
-    if IsCarryingCrate(crateModel) then return true end
-    if IsBeingChased() then return true end
-    return false
+-- ★ ตรวจว่าหีบ "ตาม" ตัวละครอยู่หรือไม่ (positional tracking)
+local function IsCrateFollowing(crateModel, minFollowTime)
+    if not crateModel or not crateModel.Parent then return false end
+
+    local char = LocalPlayer.Character
+    if not char then return false end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return false end
+
+    local function getPos(model)
+        if model:IsA("Model") then
+            local ok, cf = pcall(function() return model:GetBoundingBox() end)
+            if ok then return cf.Position end
+        elseif model:IsA("BasePart") then
+            return model.Position
+        end
+        return nil
+    end
+
+    local cratePos = getPos(crateModel)
+    if not cratePos then return false end
+
+    local dist = (cratePos - hrp.Position).Magnitude
+    return dist < 12  -- อยู่ในระยะถือ
 end
 
 -- ═════════════════════════════════════════════════════════════
--- [ FLY ]
+-- [ SAFE PICKUP — E-HOLD + Position Track + Auto Abort ]
 -- ═════════════════════════════════════════════════════════════
-local function FlyToTarget(targetCF, isLoopMode, triggerSource)
+local function AttemptStealInteraction(crateModel, myToken)
+    if not crateModel then return false end
+
+    local prompt = crateModel:FindFirstChildOfClass("ProximityPrompt", true)
+    local ok, result = pcall(function()
+        -- Fire prompt ครั้งแรก
+        if prompt then
+            pcall(function() fireproximityprompt(prompt) end)
+        end
+
+        -- ★ เริ่มกด E ค้าง
+        StartHoldE()
+
+        local startTime       = os.clock()
+        local TIMEOUT         = 4.5
+        local followStart     = nil
+        local lastPromptTime  = 0
+
+        while (os.clock() - startTime) < TIMEOUT do
+            -- ★ ตรวจ token ทุกเฟรม — ถ้า token เปลี่ยน = ถูกยกเลิก
+            if myToken ~= cancelToken then
+                return false
+            end
+
+            -- ★ ตรวจ state ถือหีบ
+            if IsCarryingCrate(crateModel) then
+                task.wait(0.1)
+                return true
+            end
+
+            -- ★ ตรวจ "หีบตามตัว" ต่อเนื่อง 0.4 วิ
+            if IsCrateFollowing(crateModel) then
+                followStart = followStart or os.clock()
+                if (os.clock() - followStart) > 0.4 then
+                    return true
+                end
+            else
+                followStart = nil
+            end
+
+            -- ★ ตรวจ "ถูกไล่" (แต่ต้องผ่านไปแล้ว 0.6 วิ)
+            if (os.clock() - startTime) > 0.6 and IsBeingChased() then
+                task.wait(0.15)
+                return true
+            end
+
+            -- ★ Fire prompt ทุก 300ms เป็น backup
+            if prompt and (os.clock() - lastPromptTime) > 0.3 then
+                lastPromptTime = os.clock()
+                pcall(function() fireproximityprompt(prompt) end)
+            end
+
+            task.wait(0.04)
+        end
+
+        return IsCarryingCrate(crateModel)
+    end)
+
+    -- ★ ปล่อย E เสมอ ไม่ว่า pcall สำเร็จหรือไม่
+    StopHoldE()
+
+    if not ok then
+        return false
+    end
+    return result
+end
+
+-- ═════════════════════════════════════════════════════════════
+-- [ FLY — ตรวจ token ทุกเฟรม ]
+-- ═════════════════════════════════════════════════════════════
+local function FlyToTarget(targetCF, myToken, canAbort)
     local hrp = GetCharacterHRP()
     if not hrp or not targetCF then return false end
 
@@ -1514,9 +1575,7 @@ local function FlyToTarget(targetCF, isLoopMode, triggerSource)
 
     if activeNoclipConnection then
         pcall(function() activeNoclipConnection:Disconnect() end)
-        activeNoclipConnection = nil
     end
-
     activeNoclipConnection = RunService.Stepped:Connect(function()
         local char = LocalPlayer.Character
         if char then
@@ -1528,16 +1587,10 @@ local function FlyToTarget(targetCF, isLoopMode, triggerSource)
         end
     end)
 
-    local function IsTriggerStillActive()
-        if not isLoopMode then return true end
-        if triggerSource == "loop"   then return loopChecked end
-        if triggerSource == "toggle" then return toggled     end
-        return loopChecked or toggled
-    end
-
     local completed = true
     while (os.clock() - startTime) < travelTime do
-        if not IsTriggerStillActive() then
+        -- ★ Cancel token check
+        if canAbort and myToken ~= cancelToken then
             completed = false
             break
         end
@@ -1567,10 +1620,8 @@ local function FlyToTarget(targetCF, isLoopMode, triggerSource)
         local char = LocalPlayer.Character
         if char then
             for _, part in ipairs(char:GetDescendants()) do
-                if part:IsA("BasePart") then
-                    if part.Name == "HumanoidRootPart" or part.Name == "Torso" then
-                        part.CanCollide = true
-                    end
+                if part:IsA("BasePart") and (part.Name == "HumanoidRootPart" or part.Name == "Torso") then
+                    part.CanCollide = true
                 end
             end
         end
@@ -1580,61 +1631,7 @@ local function FlyToTarget(targetCF, isLoopMode, triggerSource)
 end
 
 -- ═════════════════════════════════════════════════════════════
--- [ E-HOLD PICKUP — กดค้างจนกว่าจะสำเร็จ ]
--- ═════════════════════════════════════════════════════════════
-local function AttemptStealInteraction(crateModel, isLoopMode, triggerSource)
-    if not crateModel then return false end
-
-    local prompt = crateModel:FindFirstChildOfClass("ProximityPrompt", true)
-
-    local function IsTriggerStillActive()
-        if not isLoopMode then return true end
-        if triggerSource == "loop"   then return loopChecked end
-        if triggerSource == "toggle" then return toggled     end
-        return loopChecked or toggled
-    end
-
-    -- ① Fire ProximityPrompt ก่อน 1 ครั้ง (บางเกมต้องใช้ prompt)
-    if prompt then
-        pcall(function() fireproximityprompt(prompt) end)
-    end
-
-    -- ② เริ่มกด E ค้าง
-    StartHoldE()
-
-    local startTime = os.clock()
-    local TIMEOUT = 4.0  -- max 4 วิในการพยายามเก็บ
-
-    while (os.clock() - startTime) < TIMEOUT do
-        if not IsTriggerStillActive() then
-            break
-        end
-
-        -- ★★★ ตรวจว่าสำเร็จหรือยัง (carrying / chased)
-        if IsPickupConfirmed(crateModel) then
-            -- รอครึ่งวิเพื่อให้ state นิ่ง แล้วค่อยปล่อย
-            task.wait(0.15)
-            StopHoldE()
-            return true
-        end
-
-        -- ระหว่างถือ ค่อยๆ fire prompt เป็น backup ทุก ~0.5 วิ
-        if prompt and ((os.clock() - startTime) % 0.5) < 0.05 then
-            pcall(function() fireproximityprompt(prompt) end)
-        end
-
-        task.wait(0.05)
-    end
-
-    -- Timeout — ปล่อย E
-    StopHoldE()
-
-    -- Final check
-    return IsPickupConfirmed(crateModel)
-end
-
--- ═════════════════════════════════════════════════════════════
--- [ EXECUTE STEAL SEQUENCE ]
+-- [ EXECUTE SEQUENCE ]
 -- ═════════════════════════════════════════════════════════════
 local function ExecuteStealSequence(triggerSource)
     if isStealingInProcess then return end
@@ -1642,12 +1639,7 @@ local function ExecuteStealSequence(triggerSource)
 
     isStealingInProcess = true
     currentTriggerSource = triggerSource
-
-    local function ShouldAbort()
-        if triggerSource == "loop"   then return not loopChecked end
-        if triggerSource == "toggle" then return not toggled     end
-        return not (loopChecked or toggled)
-    end
+    local myToken = cancelToken  -- ★ capture token ตอนเริ่ม
 
     local targetModel = currentTargetCrate
     local targetCF
@@ -1658,51 +1650,68 @@ local function ExecuteStealSequence(triggerSource)
     end
 
     if not targetCF then
-        isStealingInProcess = false
-        currentTriggerSource = nil
+        StopEverything()
         return
     end
 
     ShowNotification("Flying to Crate...")
 
-    local flySuccess = FlyToTarget(targetCF, true, triggerSource)
+    local flySuccess = FlyToTarget(targetCF, myToken, true)
 
-    if ShouldAbort() then
-        StopHoldE()
-        ShowNotification("Steal Cancelled!")
-        isStealingInProcess = false
-        currentTriggerSource = nil
+    -- ★ ตรวจ token หลัง fly
+    if myToken ~= cancelToken then
+        StopEverything()
         return
     end
 
     local pickupSuccess = false
     if flySuccess then
-        ShowNotification("Holding E — Pickup...")
-        pickupSuccess = AttemptStealInteraction(targetModel, true, triggerSource)
+        ShowNotification("Holding E...")
+        pickupSuccess = AttemptStealInteraction(targetModel, myToken)
     end
 
-    -- Safety: บังคับปล่อย E
     StopHoldE()
 
-    if ShouldAbort() then
-        ShowNotification("Steal Cancelled!")
-        isStealingInProcess = false
-        currentTriggerSource = nil
+    -- ★ ตรวจ token อีกครั้ง
+    if myToken ~= cancelToken then
+        StopEverything()
         return
     end
 
     if pickupSuccess then
         ShowNotification("Crate Secured! Returning...")
     else
-        ShowNotification("Returning to Safe Zone...")
+        ShowNotification("Returning (no crate)...")
     end
 
     local safeZoneCF = GetSafeZoneCFrame()
-    FlyToTarget(safeZoneCF, false, nil)
+    FlyToTarget(safeZoneCF, myToken, false)  -- กลับ safe zone ไม่ต้อง abort
 
-    ShowNotification(pickupSuccess and "Steal Complete!" or "Returned (No Crate)")
-    isStealingInProcess = false
-    currentTriggerSource = nil
+    -- ★ Final token check
+    if myToken == cancelToken then
+        ShowNotification(pickupSuccess and "Steal Complete!" or "Returned")
+        isStealingInProcess = false
+        currentTriggerSource = nil
+    end
+end
+
+-- ═════════════════════════════════════════════════════════════
+-- [ SAFE ZONE ]
+-- ═════════════════════════════════════════════════════════════
+local function GetSafeZoneCFrame()
+    local result = SAFE_ZONE_CFRAME
+    pcall(function()
+        local spawnLocation = workspace:FindFirstChild("SpawnLocation")
+        if spawnLocation and spawnLocation:IsA("BasePart") then
+            result = spawnLocation.CFrame
+        end
+    end)
+    return result
+end
+
+local function GetCharacterHRP()
+    local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    return char:FindFirstChild("HumanoidRootPart") or char:WaitForChild("HumanoidRootPart", 2)
 end
 
 -- -------------------------------------------------------------

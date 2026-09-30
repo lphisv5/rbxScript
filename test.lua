@@ -1,4 +1,4 @@
--- [[ YANZ HUB GUI - NEXT-GEN HYPER-REALISTIC FLAME & 3D CRATE ENGINE (FIXED) ]] --
+-- [[ YANZ HUB GUI - NEXT-GEN HYPER-REALISTIC FLAME & 3D CRATE ENGINE (v3 FIXED) ]] --
 
 local CoreGui              = game:GetService("CoreGui")
 local TweenService         = game:GetService("TweenService")
@@ -10,21 +10,18 @@ local LocalPlayer          = Players.LocalPlayer
 local Camera               = workspace.CurrentCamera
 
 -- -------------------------------------------------------------
--- [ DELTA & EXECUTOR SAFE PARENTING SYSTEM — FIXED ]
+-- [ EXECUTOR SAFE PARENTING ]
 -- -------------------------------------------------------------
 local ParentGui
 
--- 1) ลองใช้ gethui() ก่อน (Delta / Synapse / Codex)
 pcall(function()
     if typeof(gethui) == "function" then
         ParentGui = gethui()
     end
 end)
 
--- 2) ถ้าไม่มี ใช้ CoreGui (ตรวจแบบปลอดภัย)
 if not ParentGui then
     local ok, res = pcall(function()
-        -- ทดสอบเขียนเข้า CoreGui จริง
         local test = Instance.new("Folder")
         test.Parent = CoreGui
         test:Destroy()
@@ -33,12 +30,10 @@ if not ParentGui then
     if ok then ParentGui = res end
 end
 
--- 3) Fallback สุดท้าย: PlayerGui
 if not ParentGui then
     ParentGui = LocalPlayer:WaitForChild("PlayerGui")
 end
 
--- ล้าง UI เก่าอย่างปลอดภัย
 pcall(function()
     local old = ParentGui:FindFirstChild("YanzHubUI")
     if old then old:Destroy() end
@@ -56,7 +51,7 @@ YanzHubUI.IgnoreGuiInset   = true
 YanzHubUI.DisplayOrder     = 999
 
 -- -------------------------------------------------------------
--- [ CONFIG & TWEEN PROFILES ]
+-- [ CONFIG ]
 -- -------------------------------------------------------------
 local TWEEN_SPRING  = TweenInfo.new(0.40, Enum.EasingStyle.Back,    Enum.EasingDirection.Out)
 local TWEEN_ELASTIC = TweenInfo.new(0.50, Enum.EasingStyle.Elastic, Enum.EasingDirection.Out)
@@ -68,8 +63,12 @@ local SAFE_ZONE_CFRAME   = CFrame.new(2435.00024, -12.4999971, -940,
                                       0, 1, 0,
                                       0, 0, 1)
 
-local loopChecked = false
-local toggled     = false
+-- script-level noclip (for cleanup)
+local activeNoclipConnection = nil
+
+-- Trigger state
+local loopChecked = false   -- จาก checkbox
+local toggled     = false   -- จาก toggle switch
 
 -- -------------------------------------------------------------
 -- [ MAIN FRAME ]
@@ -95,7 +94,6 @@ MainStroke.Thickness        = 1.5
 MainStroke.ApplyStrokeMode  = Enum.ApplyStrokeMode.Border
 MainStroke.Transparency     = 0.12
 
--- Responsive Auto-Scale
 local UIScale = Instance.new("UIScale")
 UIScale.Parent = MainFrame
 
@@ -114,12 +112,11 @@ end
 Camera:GetPropertyChangedSignal("ViewportSize"):Connect(UpdateAutoScaler)
 UpdateAutoScaler()
 
--- Entrance animation
 UIScale.Scale = 0
 TweenService:Create(UIScale, TWEEN_SPRING, {Scale = targetScaleValue}):Play()
 
 -- -------------------------------------------------------------
--- [ SLIDING NOTIFICATION BANNER ]
+-- [ NOTIFICATION BANNER ]
 -- -------------------------------------------------------------
 local NotifFrame = Instance.new("Frame")
 NotifFrame.Name                   = "NotifFrame"
@@ -208,7 +205,7 @@ local function ShowNotification(text)
 end
 
 -- -------------------------------------------------------------
--- [ TOP CENTER LOGO TOGGLE BUTTON ]
+-- [ TOP TOGGLE BUTTON ]
 -- -------------------------------------------------------------
 local TopToggleButton = Instance.new("ImageButton")
 TopToggleButton.Name             = "TopToggleButton"
@@ -280,7 +277,7 @@ TopToggleButton.MouseLeave:Connect(function()
 end)
 
 -- -------------------------------------------------------------
--- [ HEADER SECTION ]
+-- [ HEADER + FLAME ]
 -- -------------------------------------------------------------
 local Header = Instance.new("Frame")
 Header.Name                   = "Header"
@@ -290,7 +287,6 @@ Header.Size                   = UDim2.new(1, 0, 0, 52)
 Header.ClipsDescendants       = false
 Header.ZIndex                 = 2
 
--- Dynamic White Flame Engine
 local FireContainer = Instance.new("Frame")
 FireContainer.Name                   = "FireContainer"
 FireContainer.Parent                 = Header
@@ -346,7 +342,6 @@ AuraGrad.Transparency = NumberSequence.new({
 })
 AuraGrad.Parent = AuraGlow
 
--- Flame Tendrils
 local flameTendrils = {}
 local TENDRIL_COUNT = 16
 
@@ -386,7 +381,6 @@ for i = 1, TENDRIL_COUNT do
     }
 end
 
--- Micro sparks
 local sparkParticles = {}
 local SPARK_COUNT = 18
 
@@ -415,7 +409,6 @@ for i = 1, SPARK_COUNT do
     }
 end
 
--- Hub Logo
 local HubLogo = Instance.new("ImageLabel")
 HubLogo.Name             = "HubLogo"
 HubLogo.Parent           = Header
@@ -579,7 +572,7 @@ CloseButton.MouseButton1Click:Connect(function()
 end)
 
 -- -------------------------------------------------------------
--- [ CARD 1: BEST EGG CONTAINER ]
+-- [ EGG CARD ]
 -- -------------------------------------------------------------
 local EggCard = Instance.new("Frame")
 EggCard.Name             = "EggCard"
@@ -626,7 +619,6 @@ ItemIcon.Image                  = "rbxassetid://76833458893034"
 ItemIcon.ScaleType              = Enum.ScaleType.Fit
 ItemIcon.ZIndex                 = 1
 
--- 3D VIEWPORT
 local ViewportFrame = Instance.new("ViewportFrame")
 ViewportFrame.Name                   = "3DPreviewViewport"
 ViewportFrame.Parent                 = ItemFrame
@@ -646,7 +638,6 @@ ViewportFrame.CurrentCamera = ViewportCamera
 local ViewportWorldModel = Instance.new("WorldModel")
 ViewportWorldModel.Parent = ViewportFrame
 
--- Labels
 local TagLabel = Instance.new("TextLabel")
 TagLabel.Name                   = "TagLabel"
 TagLabel.Parent                 = EggCard
@@ -707,7 +698,7 @@ ArrowBtn.TextColor3             = Color3.fromRGB(255, 255, 255)
 ArrowBtn.TextSize               = 11
 
 -- -------------------------------------------------------------
--- [ DROPDOWN SCROLL CONTAINER ]
+-- [ DROPDOWN SCROLL ]
 -- -------------------------------------------------------------
 local CrateListScroll = Instance.new("ScrollingFrame")
 CrateListScroll.Name                  = "CrateListScroll"
@@ -790,7 +781,6 @@ local function FormatCrateValue(val)
     return "0 Kg"
 end
 
--- State
 local currentPreviewModel   = nil
 local currentTargetCrate    = nil
 local selectedCrateModel    = nil
@@ -871,7 +861,6 @@ local function ScanCrateData(crate)
         ValueText = "0 Kg"
     }
 
-    -- Name
     local rawName = crate:GetAttribute("CrateName")
         or crate:GetAttribute("RealName")
         or crate:GetAttribute("ItemName")
@@ -896,7 +885,6 @@ local function ScanCrateData(crate)
     end
     data.Name = rawName
 
-    -- Rarity
     local rawRarity = crate:GetAttribute("CrateTier")
         or crate:GetAttribute("Rarity")
         or crate:GetAttribute("Tier")
@@ -924,7 +912,6 @@ local function ScanCrateData(crate)
 
     local baseRarity = (rawRarity and rawRarity ~= "") and rawRarity or "Common"
 
-    -- Size
     local rawSize = crate:GetAttribute("CrateSize")
         or crate:GetAttribute("Size")
         or crate:GetAttribute("EggSize")
@@ -946,7 +933,6 @@ local function ScanCrateData(crate)
         data.Rarity = baseRarity
     end
 
-    -- Value
     local rawValue = crate:GetAttribute("CrateKg")
         or crate:GetAttribute("Kg")
         or crate:GetAttribute("Weight")
@@ -969,7 +955,6 @@ local function ScanCrateData(crate)
     return data
 end
 
--- Forward declarations
 local PopulateCrateList
 local ScanAndUpdateBestCrate
 
@@ -997,10 +982,10 @@ local isEggExpanded = false
 
 local function SetCardExpandedState(expanded)
     isEggExpanded = expanded
-    local targetRot     = isEggExpanded and 180 or 0
-    local targetEggH    = isEggExpanded and 280 or 82
+    local targetRot      = isEggExpanded and 180 or 0
+    local targetEggH     = isEggExpanded and 280 or 82
     local targetControlY = isEggExpanded and 342 or 144
-    local targetMainH   = isEggExpanded and 440 or 242
+    local targetMainH    = isEggExpanded and 440 or 242
 
     CrateListScroll.Visible = isEggExpanded
 
@@ -1026,7 +1011,7 @@ ArrowBtn.MouseButton1Click:Connect(function()
 end)
 
 -- -------------------------------------------------------------
--- [ MINI EGGCARD BUILDER ]
+-- [ MINI CARD BUILDER ]
 -- -------------------------------------------------------------
 PopulateCrateList = function()
     if not isEggExpanded then return end
@@ -1044,7 +1029,6 @@ PopulateCrateList = function()
     local cratesFolder = workspace:FindFirstChild("Crates")
     if not cratesFolder then return end
 
-    -- 1) Collect & scan
     local crateItems = {}
     for _, child in ipairs(cratesFolder:GetChildren()) do
         if child:IsA("Model") or child:IsA("BasePart") then
@@ -1053,12 +1037,10 @@ PopulateCrateList = function()
         end
     end
 
-    -- 2) Sort high → low
     table.sort(crateItems, function(a, b)
         return a.ValueNum > b.ValueNum
     end)
 
-    -- 3) Filter out currently displayed
     local filteredItems = {}
     for _, data in ipairs(crateItems) do
         if data.Model ~= currentTargetCrate then
@@ -1066,7 +1048,6 @@ PopulateCrateList = function()
         end
     end
 
-    -- 4) Fast UI build
     local pending3DTasks = {}
 
     for index, data in ipairs(filteredItems) do
@@ -1092,7 +1073,6 @@ PopulateCrateList = function()
         miniCardStroke.Thickness   = 1
         miniCardStroke.Transparency = 0.88
 
-        -- Mini icon frame
         local mItemFrame = Instance.new("Frame")
         mItemFrame.Name             = "MiniItemFrame"
         mItemFrame.Parent           = miniCard
@@ -1111,7 +1091,6 @@ PopulateCrateList = function()
         mItemStroke.Thickness   = 1
         mItemStroke.Transparency = 0.88
 
-        -- Mini viewport
         local miniVpFrame = Instance.new("ViewportFrame")
         miniVpFrame.Name                   = "Mini3DViewport"
         miniVpFrame.Parent                 = mItemFrame
@@ -1135,7 +1114,6 @@ PopulateCrateList = function()
             Camera     = miniCam
         })
 
-        -- Labels
         local mTag = Instance.new("TextLabel")
         mTag.Name                   = "MiniTag"
         mTag.Parent                 = miniCard
@@ -1184,7 +1162,6 @@ PopulateCrateList = function()
         mValue.TextSize               = 11
         mValue.TextXAlignment         = Enum.TextXAlignment.Right
 
-        -- Hover
         miniCard.MouseEnter:Connect(function()
             TweenService:Create(miniCardStroke, TWEEN_FAST, {Transparency = 0.3}):Play()
         end)
@@ -1192,7 +1169,6 @@ PopulateCrateList = function()
             TweenService:Create(miniCardStroke, TWEEN_FAST, {Transparency = 0.88}):Play()
         end)
 
-        -- Selection
         miniCard.MouseButton1Click:Connect(function()
             selectedCrateModel = child
             SetCardExpandedState(false)
@@ -1200,7 +1176,6 @@ PopulateCrateList = function()
         end)
     end
 
-    -- 5) Progressive async 3D loading
     task.spawn(function()
         for _, loadTask in ipairs(pending3DTasks) do
             if currentSession ~= populateSessionId or not isEggExpanded then return end
@@ -1256,7 +1231,7 @@ PopulateCrateList = function()
 end
 
 -- -------------------------------------------------------------
--- [ SCAN & UPDATE BEST CRATE ]
+-- [ SCAN & UPDATE ]
 -- -------------------------------------------------------------
 ScanAndUpdateBestCrate = function()
     local cratesFolder = workspace:FindFirstChild("Crates")
@@ -1320,7 +1295,6 @@ ScanAndUpdateBestCrate = function()
     end
 end
 
--- Debounce
 local updatePending = false
 local function RequestSystemRefresh()
     if updatePending then return end
@@ -1361,26 +1335,19 @@ task.spawn(function()
     end
 end)
 
--- -------------------------------------------------------------
--- [ HIGH-SPEED FLY & CRATE STEALING ENGINE ]
--- -------------------------------------------------------------
+-- =============================================================
+-- [ STEALING ENGINE — FIXED ]
+-- =============================================================
 local isStealingInProcess = false
+local currentTriggerSource = nil  -- "loop" | "toggle" | nil
 
+-- ✅ FIX #1: ใช้ workspace.SpawnLocation แทน Steal Map Lobby safe zone
 local function GetSafeZoneCFrame()
     local result = SAFE_ZONE_CFRAME
     pcall(function()
-        local stealMap = workspace:FindFirstChild("Steal Map")
-        if not stealMap then return end
-        local lobby = stealMap:FindFirstChild("Lobby")
-        if not lobby then return end
-        local safeZone = lobby:FindFirstChild("safe zone")
-        if not safeZone then return end
-
-        if safeZone:IsA("BasePart") then
-            result = safeZone.CFrame
-        elseif safeZone:IsA("Model") then
-            local cf = safeZone:GetBoundingBox()
-            result = cf
+        local spawnLocation = workspace:FindFirstChild("SpawnLocation")
+        if spawnLocation and spawnLocation:IsA("BasePart") then
+            result = spawnLocation.CFrame
         end
     end)
     return result
@@ -1391,7 +1358,9 @@ local function GetCharacterHRP()
     return char:FindFirstChild("HumanoidRootPart") or char:WaitForChild("HumanoidRootPart", 2)
 end
 
-local function FlyToTarget(targetCF, isLoopMode)
+-- ✅ FIX #2: ตรวจ trigger source เฉพาะตัวที่ start เท่านั้น
+-- ✅ FIX #5: ใช้ script-level activeNoclipConnection
+local function FlyToTarget(targetCF, isLoopMode, triggerSource)
     local hrp = GetCharacterHRP()
     if not hrp or not targetCF then return false end
 
@@ -1407,9 +1376,13 @@ local function FlyToTarget(targetCF, isLoopMode)
         hrp.AssemblyAngularVelocity = Vector3.zero
     end)
 
-    -- Active Noclip during flight
-    local noclipConnection
-    noclipConnection = RunService.Stepped:Connect(function()
+    -- Noclip
+    if activeNoclipConnection then
+        pcall(function() activeNoclipConnection:Disconnect() end)
+        activeNoclipConnection = nil
+    end
+
+    activeNoclipConnection = RunService.Stepped:Connect(function()
         local char = LocalPlayer.Character
         if char then
             for _, part in ipairs(char:GetDescendants()) do
@@ -1420,9 +1393,17 @@ local function FlyToTarget(targetCF, isLoopMode)
         end
     end)
 
+    -- Helper: ตรวจว่า trigger ที่ start ยังเปิดอยู่หรือไม่
+    local function IsTriggerStillActive()
+        if not isLoopMode then return true end
+        if triggerSource == "loop"   then return loopChecked end
+        if triggerSource == "toggle" then return toggled     end
+        return loopChecked or toggled
+    end
+
     local completed = true
     while (os.clock() - startTime) < travelTime do
-        if isLoopMode and not loopChecked and not toggled then
+        if not IsTriggerStillActive() then
             completed = false
             break
         end
@@ -1443,11 +1424,11 @@ local function FlyToTarget(targetCF, isLoopMode)
         hrp.CFrame = targetCF
     end
 
-    if noclipConnection then
-        noclipConnection:Disconnect()
+    if activeNoclipConnection then
+        pcall(function() activeNoclipConnection:Disconnect() end)
+        activeNoclipConnection = nil
     end
 
-    -- Restore collision safely (ทุกกรณี)
     pcall(function()
         local char = LocalPlayer.Character
         if char then
@@ -1509,14 +1490,22 @@ local function IsCrateSecured(crateModel)
     return false
 end
 
-local function AttemptStealInteraction(crateModel, isLoopMode)
+-- ✅ FIX #3: E key = tap (กด-ปล่อยสั้นๆ) + fireproximityprompt วนซ้ำ
+local function AttemptStealInteraction(crateModel, isLoopMode, triggerSource)
     if not crateModel then return false end
 
     local prompt = crateModel:FindFirstChildOfClass("ProximityPrompt", true)
 
+    local function IsTriggerStillActive()
+        if not isLoopMode then return true end
+        if triggerSource == "loop"   then return loopChecked end
+        if triggerSource == "toggle" then return toggled     end
+        return loopChecked or toggled
+    end
+
     local startTime = os.clock()
     while (os.clock() - startTime) < 2.5 do
-        if isLoopMode and not loopChecked and not toggled then
+        if not IsTriggerStillActive() then
             break
         end
 
@@ -1524,27 +1513,46 @@ local function AttemptStealInteraction(crateModel, isLoopMode)
             return true
         end
 
+        -- Fire the prompt directly
         if prompt then
             pcall(function() fireproximityprompt(prompt) end)
         end
 
+        -- Tap E (กด - ปล่อยทันที ไม่ค้าง)
         pcall(function()
             VirtualInputManager:SendKeyEvent(true,  Enum.KeyCode.E, false, game)
-            task.wait(0.03)
+        end)
+        task.wait(0.02)
+        pcall(function()
             VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
         end)
 
-        task.wait(0.05)
+        -- หน่วงเล็กน้อยก่อน tap รอบถัดไป
+        task.wait(0.08)
     end
+
+    -- Safety: ปล่อย E ให้ชัวร์ว่าไม่ค้าง
+    pcall(function()
+        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+    end)
 
     return IsCrateSecured(crateModel)
 end
 
-local function ExecuteStealSequence(isLoopTrigger)
+-- ✅ FIX #2 & #4: รับ triggerSource + ไม่รับ SwapButton trigger
+local function ExecuteStealSequence(triggerSource)
+    -- triggerSource: "loop" | "toggle" เท่านั้น (SwapButton ถูกลบแล้ว)
     if isStealingInProcess then return end
     if not currentTargetCrate or not currentTargetCrate.Parent then return end
 
     isStealingInProcess = true
+    currentTriggerSource = triggerSource
+
+    local function ShouldAbort()
+        if triggerSource == "loop"   then return not loopChecked end
+        if triggerSource == "toggle" then return not toggled     end
+        return not (loopChecked or toggled)
+    end
 
     local targetModel = currentTargetCrate
     local targetCF
@@ -1556,30 +1564,41 @@ local function ExecuteStealSequence(isLoopTrigger)
 
     if not targetCF then
         isStealingInProcess = false
+        currentTriggerSource = nil
         return
     end
 
     ShowNotification("Flying to Crate (Speed 275)...")
 
-    local flySuccess = FlyToTarget(targetCF, isLoopTrigger)
+    local flySuccess = FlyToTarget(targetCF, true, triggerSource)
 
-    if isLoopTrigger and not loopChecked and not toggled then
+    -- ✅ ถ้าถูกปิดกลางทาง ให้ abort ทันที ไม่ไป safe zone
+    if ShouldAbort() then
         ShowNotification("Steal Cancelled!")
         isStealingInProcess = false
+        currentTriggerSource = nil
         return
     end
 
     if flySuccess then
         ShowNotification("Stealing Crate...")
-        AttemptStealInteraction(targetModel, isLoopTrigger)
+        AttemptStealInteraction(targetModel, true, triggerSource)
+    end
+
+    if ShouldAbort() then
+        ShowNotification("Steal Cancelled!")
+        isStealingInProcess = false
+        currentTriggerSource = nil
+        return
     end
 
     ShowNotification("Returning to Safe Zone...")
     local safeZoneCF = GetSafeZoneCFrame()
-    FlyToTarget(safeZoneCF, false)
+    FlyToTarget(safeZoneCF, false, nil)
 
     ShowNotification("Returned to Safe Zone!")
     isStealingInProcess = false
+    currentTriggerSource = nil
 end
 
 -- -------------------------------------------------------------
@@ -1609,6 +1628,8 @@ ModeSub.TextColor3             = Color3.fromRGB(110, 115, 125)
 ModeSub.TextSize               = 9
 ModeSub.TextXAlignment         = Enum.TextXAlignment.Left
 
+-- ✅ FIX #4: SwapButton — ลบ click event ออกทั้ง system แล้ว
+-- เหลือแค่ปุ่ม + hover effect (ยังไม่มีระบบที่ทำอะไรได้)
 local SwapButton = Instance.new("TextButton")
 SwapButton.Name             = "SwapButton"
 SwapButton.Parent           = ControlPanel
@@ -1619,20 +1640,19 @@ SwapButton.Font             = Enum.Font.GothamBold
 SwapButton.Text             = "⇄"
 SwapButton.TextColor3       = Color3.fromRGB(12, 13, 16)
 SwapButton.TextSize         = 20
+-- ไม่มี .MouseButton1Click = ไม่ทำอะไรเมื่อคลิก
 
 local SwapCorner = Instance.new("UICorner")
 SwapCorner.CornerRadius = UDim.new(0, 10)
 SwapCorner.Parent       = SwapButton
 
--- ✅ FIX: Stroke ควร parent อยู่ที่ SwapButton ไม่ใช่ ControlPanel
 local SwapStroke = Instance.new("UIStroke")
 SwapStroke.Parent      = SwapButton
 SwapStroke.Color       = Color3.fromRGB(255, 255, 255)
 SwapStroke.Thickness   = 2
 SwapStroke.Transparency = 0.5
 
-local swapRotation = 0
-
+-- คงเหลือเพียง visual hover (ไม่ rotate, ไม่ trigger อะไร)
 SwapButton.MouseEnter:Connect(function()
     TweenService:Create(SwapButton, TWEEN_SPRING, {
         Size = UDim2.new(0, 43, 0, 43),
@@ -1649,15 +1669,11 @@ SwapButton.MouseLeave:Connect(function()
     TweenService:Create(SwapStroke, TWEEN_FAST, {Transparency = 0.5}):Play()
 end)
 
-SwapButton.MouseButton1Click:Connect(function()
-    swapRotation = swapRotation + 180
-    TweenService:Create(SwapButton, TWEEN_ELASTIC, {Rotation = swapRotation}):Play()
-    task.spawn(function()
-        ExecuteStealSequence(false)
-    end)
-end)
+-- (ไม่มี MouseButton1Click แล้ว)
 
--- LOOP CHECKBOX
+-- -------------------------------------------------------------
+-- [ LOOP CHECKBOX ]
+-- -------------------------------------------------------------
 local LoopBox = Instance.new("TextButton")
 LoopBox.Name             = "LoopBox"
 LoopBox.Parent           = ControlPanel
@@ -1723,7 +1739,9 @@ LoopLabel.TextXAlignment         = Enum.TextXAlignment.Left
 
 LoopLabel.MouseButton1Click:Connect(ToggleLoopFunc)
 
--- Toggle Switch
+-- -------------------------------------------------------------
+-- [ TOGGLE SWITCH ]
+-- -------------------------------------------------------------
 local ToggleFrame = Instance.new("TextButton")
 ToggleFrame.Name             = "ToggleFrame"
 ToggleFrame.Parent           = ControlPanel
@@ -1767,15 +1785,29 @@ ToggleFrame.MouseButton1Click:Connect(function()
     end
 end)
 
--- Auto steal background thread
+-- -------------------------------------------------------------
+-- [ AUTO STEAL BACKGROUND THREAD — FIXED #2 ]
+-- -------------------------------------------------------------
+-- ✅ แยก trigger source ชัดเจน: ถ้าเปิด loop → ใช้ "loop"
+--                              ถ้าเปิด toggle → ใช้ "toggle"
+--                              ถ้าเปิดทั้งคู่ → ใช้ "loop" เป็นหลัก
 task.spawn(function()
     while true do
         task.wait(0.3)
-        if (loopChecked or toggled) and not isStealingInProcess then
+        if isStealingInProcess then
+            -- skip
+        elseif loopChecked then
             pcall(function()
                 RequestSystemRefresh()
                 if currentTargetCrate and currentTargetCrate.Parent then
-                    ExecuteStealSequence(true)
+                    ExecuteStealSequence("loop")
+                end
+            end)
+        elseif toggled then
+            pcall(function()
+                RequestSystemRefresh()
+                if currentTargetCrate and currentTargetCrate.Parent then
+                    ExecuteStealSequence("toggle")
                 end
             end)
         end
@@ -1792,8 +1824,6 @@ local targetPos         = MainFrame.Position
 local currentVelocity   = Vector2.new()
 local lastMousePos      = Vector2.new()
 local flameWindVelocity = Vector2.new(0, 0)
-
-local dragConnections = {}
 
 local function OnDragBegan(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1
@@ -1826,7 +1856,6 @@ local function OnDragBegan(input)
                 if conn then conn:Disconnect() end
             end
         end)
-        table.insert(dragConnections, conn)
     end
 end
 
@@ -1856,14 +1885,13 @@ UserInputService.InputChanged:Connect(function(input)
 end)
 
 -- -------------------------------------------------------------
--- [ RENDER STEPPED ENGINE ]
+-- [ RENDER LOOP ]
 -- -------------------------------------------------------------
 local clock = os.clock()
 
 RunService.RenderStepped:Connect(function(dt)
     clock = clock + dt
 
-    -- Position update
     MainFrame.Rotation = 0
     if isDragging and isGuiVisible then
         MainFrame.Position = targetPos
@@ -1872,7 +1900,6 @@ RunService.RenderStepped:Connect(function(dt)
         flameWindVelocity = flameWindVelocity:Lerp(Vector2.new(0, 0), math.min(dt * 10, 1))
     end
 
-    -- 3D preview rotation
     previewRotation = (previewRotation + dt * 45) % 360
 
     if currentPreviewModel and currentPreviewModel.Parent then
@@ -1881,7 +1908,6 @@ RunService.RenderStepped:Connect(function(dt)
         )
     end
 
-    -- Dropdown previews with dead-ref cleanup
     for i = #dropdownPreviewModels, 1, -1 do
         local item = dropdownPreviewModels[i]
         if item and item.Model and item.Model.Parent then
@@ -1893,7 +1919,6 @@ RunService.RenderStepped:Connect(function(dt)
         end
     end
 
-    -- Thermal Core Aura Pulsation
     local tSpeed    = clock * 18
     local corePulse = 0.15 + math.sin(tSpeed) * 0.1 + (math.random() * 0.05)
     local auraPulse = 0.40 + math.cos(tSpeed * 1.2) * 0.12 + (math.random() * 0.08)
@@ -1911,7 +1936,6 @@ RunService.RenderStepped:Connect(function(dt)
         0, 60 + math.cos(tSpeed * 1.5) * 6
     )
 
-    -- Flame Tendrils
     for i = 1, TENDRIL_COUNT do
         local ft = flameTendrils[i]
         ft.Life = ft.Life + dt
@@ -1949,7 +1973,6 @@ RunService.RenderStepped:Connect(function(dt)
         ft.Object.BackgroundTransparency = math.clamp(fadeAlpha, 0.05, 1)
     end
 
-    -- Micro Sparks
     for i = 1, SPARK_COUNT do
         local sp = sparkParticles[i]
         sp.Life = sp.Life + dt
@@ -1981,12 +2004,15 @@ RunService.RenderStepped:Connect(function(dt)
 end)
 
 -- -------------------------------------------------------------
--- [ CLEANUP ON UNLOAD ]
+-- [ CLEANUP ]
 -- -------------------------------------------------------------
 LocalPlayer.CharacterRemoving:Connect(function()
     pcall(function()
-        if noclipConnection then
-            noclipConnection:Disconnect()
+        if activeNoclipConnection then
+            activeNoclipConnection:Disconnect()
+            activeNoclipConnection = nil
         end
+        -- ปล่อยปุ่ม E กันค้าง
+        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
     end)
 end)

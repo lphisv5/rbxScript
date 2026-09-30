@@ -34,6 +34,27 @@ YanzHubUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 YanzHubUI.ResetOnSpawn = false
 
 -- -------------------------------------------------------------
+-- [ INSTANT PROXIMITY PROMPT SYSTEM ]
+-- -------------------------------------------------------------
+for _, prom in next, workspace:GetDescendants() do
+    if prom:IsA("ProximityPrompt") then
+        prom.PromptButtonHoldBegan:Connect(function()
+            if prom.HoldDuration <= 0 then return end
+            fireproximityprompt(prom, 0)
+        end)
+    end
+end
+
+workspace.DescendantAdded:Connect(function(class)
+    if class:IsA("ProximityPrompt") then
+        class.PromptButtonHoldBegan:Connect(function()
+            if class.HoldDuration <= 0 then return end
+            fireproximityprompt(class, 0)
+        end)
+    end
+end)
+
+-- -------------------------------------------------------------
 -- [ CONFIG & TWEEN PROFILES ]
 -- -------------------------------------------------------------
 local TWEEN_SPRING = TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
@@ -872,7 +893,6 @@ local function ScanCrateData(crate)
         end
     end
 
-    -- Combine Rarity and Size (e.g. "Cosmic - Huge" or "Cosmic")
     if rawSize and tostring(rawSize) ~= "" then
         data.Rarity = baseRarity .. " - " .. tostring(rawSize)
     else
@@ -1287,8 +1307,107 @@ task.spawn(function()
 end)
 
 -- -------------------------------------------------------------
--- [ CONTROL PANEL DETAILS & LOOP ENGINE ]
+-- [ CONTROL PANEL DETAILS & STEAL CRATE ENGINE (FLY SPEED 275) ]
 -- -------------------------------------------------------------
+local FLY_SPEED = 275
+local isStealingActive = false
+
+local function SetNoclip(enabled)
+    local char = Players.LocalPlayer.Character
+    if not char then return end
+    for _, part in ipairs(char:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = not enabled
+        end
+    end
+end
+
+local function TweenFlyTo(targetCF)
+    local char = Players.LocalPlayer.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    local hrp = char.HumanoidRootPart
+
+    local distance = (hrp.Position - targetCF.Position).Magnitude
+    if distance <= 0.5 then return end
+
+    local flyTime = distance / FLY_SPEED
+    local tweenInfo = TweenInfo.new(flyTime, Enum.EasingStyle.Linear)
+    local tween = TweenService:Create(hrp, tweenInfo, {CFrame = targetCF})
+
+    local noclipConnection
+    noclipConnection = RunService.Stepped:Connect(function()
+        SetNoclip(true)
+    end)
+
+    tween:Play()
+    tween.Completed:Wait()
+
+    if noclipConnection then
+        noclipConnection:Disconnect()
+    end
+    SetNoclip(false)
+end
+
+local function ExecuteStealRoutine()
+    if isStealingActive or not currentTargetCrate or not currentTargetCrate.Parent then return end
+    isStealingActive = true
+
+    local char = Players.LocalPlayer.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then 
+        isStealingActive = false
+        return 
+    end
+
+    local hrp = char.HumanoidRootPart
+    local originalCFrame = hrp.CFrame
+
+    -- Target CFrame setup
+    local targetCF
+    if currentTargetCrate:IsA("Model") then
+        targetCF = currentTargetCrate:GetPivot()
+    elseif currentTargetCrate:IsA("BasePart") then
+        targetCF = currentTargetCrate.CFrame
+    end
+
+    if targetCF then
+        -- 1. Fly / Tween Speed 275 ไปยังตำแหน่งหีบ
+        TweenFlyTo(targetCF + Vector3.new(0, 3, 0))
+
+        -- 2. กดย้ำ 2-3 รอบกรณีหยิบไม่ติด
+        for i = 1, 3 do
+            if not currentTargetCrate or not currentTargetCrate.Parent then break end
+
+            local prompt = currentTargetCrate:FindFirstChildOfClass("ProximityPrompt")
+                or currentTargetCrate:FindFirstChildWhichIsA("ProximityPrompt", true)
+
+            if not prompt then
+                for _, p in ipairs(workspace:GetDescendants()) do
+                    if p:IsA("ProximityPrompt") and p.Parent and p.Parent:IsA("BasePart") then
+                        if (p.Parent.Position - hrp.Position).Magnitude < 15 then
+                            prompt = p
+                            break
+                        end
+                    end
+                end
+            end
+
+            if prompt then
+                pcall(function()
+                    fireproximityprompt(prompt, 0)
+                end)
+            end
+            task.wait(0.15)
+        end
+
+        task.wait(0.1)
+
+        -- 3. Fly / Tween Speed 275 บินกลับตำแหน่งเดิม
+        TweenFlyTo(originalCFrame)
+    end
+
+    isStealingActive = false
+end
+
 local ModeTitle = Instance.new("TextLabel")
 ModeTitle.Name = "ModeTitle"
 ModeTitle.Parent = ControlPanel
@@ -1406,18 +1525,6 @@ LoopLabel.TextXAlignment = Enum.TextXAlignment.Left
 
 LoopLabel.MouseButton1Click:Connect(ToggleLoopFunc)
 
--- Background Continuous Loop Routine
-task.spawn(function()
-    while true do
-        task.wait(0.5)
-        if loopChecked then
-            pcall(function()
-                RequestSystemRefresh()
-            end)
-        end
-    end
-end)
-
 -- Neon Toggle Switch (Clean Pure Toggle UI State)
 local ToggleFrame = Instance.new("TextButton")
 ToggleFrame.Name = "ToggleFrame"
@@ -1453,6 +1560,9 @@ ToggleFrame.MouseButton1Click:Connect(function()
             AnchorPoint = Vector2.new(1, 0.5),
             BackgroundColor3 = Color3.fromRGB(12, 13, 16)
         }):Play()
+
+        -- สั่งขโมยหีบทันทีเมื่อเปิดใช้งาน
+        task.spawn(ExecuteStealRoutine)
     else
         TweenService:Create(ToggleFrame, TWEEN_FAST, {BackgroundColor3 = Color3.fromRGB(32, 35, 44)}):Play()
         TweenService:Create(ToggleCircle, TWEEN_ELASTIC, {
@@ -1460,6 +1570,21 @@ ToggleFrame.MouseButton1Click:Connect(function()
             AnchorPoint = Vector2.new(0, 0.5),
             BackgroundColor3 = Color3.fromRGB(150, 155, 165)
         }):Play()
+    end
+end)
+
+-- Background Continuous Loop Routine for Steal Crate
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        if toggled or loopChecked then
+            pcall(function()
+                RequestSystemRefresh()
+                if toggled then
+                    ExecuteStealRoutine()
+                end
+            end)
+        end
     end
 end)
 

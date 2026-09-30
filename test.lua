@@ -739,6 +739,7 @@ local previewRotation = 0
 
 -- Table to store dropdown mini 3D models for live 360 sync
 local dropdownPreviewModels = {}
+local populateSessionId = 0 -- Session token for async batch canceling
 
 local function Setup3DModelPreview(crateModel)
     if not crateModel or not ViewportWorldModel then return end
@@ -875,6 +876,10 @@ local function ScanCrateData(crate)
     return data
 end
 
+-- Forward declaration
+local PopulateCrateList
+local ScanAndUpdateBestCrate
+
 -- -------------------------------------------------------------
 -- [ CONTROL PANEL & AUTO EXPAND / COLLAPSE SYSTEM ]
 -- -------------------------------------------------------------
@@ -917,9 +922,12 @@ ArrowBtn.MouseButton1Click:Connect(function()
 end)
 
 -- -------------------------------------------------------------
--- [ MINI EGGCARD BUILDER FOR DROPDOWN (SORTED DESCENDING BY KG) ]
+-- [ MINI EGGCARD BUILDER WITH PROGRESSIVE ASYNC 3D LOADING & FILTERING ]
 -- -------------------------------------------------------------
-local function PopulateCrateList()
+PopulateCrateList = function()
+    populateSessionId = populateSessionId + 1
+    local currentSession = populateSessionId
+
     dropdownPreviewModels = {}
     for _, child in ipairs(CrateListScroll:GetChildren()) do
         if child:IsA("Frame") or child:IsA("TextButton") then
@@ -947,8 +955,19 @@ local function PopulateCrateList()
         return a.ValueNum > b.ValueNum
     end)
 
-    -- 3. Populate All Sorted Crates as Full EggCards
-    for index, data in ipairs(crateItems) do
+    -- 3. Filter out currently displayed/selected EggCard (ไม่แสดงในการ์ดรายการเมื่อถูกเลือกไปแสดงในการ์ดหลัก)
+    local filteredItems = {}
+    for _, data in ipairs(crateItems) do
+        if data.Model ~= currentTargetCrate then
+            table.insert(filteredItems, data)
+        end
+    end
+
+    -- 4. Fast UI Frame Creation (สร้างกรอบและข้อความขึ้นมาทันทีโดยไม่ต้องรอโหลด 3D)
+    local pending3DTasks = {}
+
+    for index, data in ipairs(filteredItems) do
+        if currentSession ~= populateSessionId then return end
         local child = data.Model
 
         local miniCard = Instance.new("TextButton")
@@ -989,7 +1008,7 @@ local function PopulateCrateList()
         mItemStroke.Thickness = 1
         mItemStroke.Transparency = 0.88
 
-        -- Mini Viewport Preview
+        -- Mini Viewport Preview Setup
         local miniVpFrame = Instance.new("ViewportFrame")
         miniVpFrame.Name = "Mini3DViewport"
         miniVpFrame.Parent = mItemFrame
@@ -1007,37 +1026,12 @@ local function PopulateCrateList()
         local miniWorld = Instance.new("WorldModel")
         miniWorld.Parent = miniVpFrame
 
-        pcall(function()
-            local origArch = child.Archivable
-            child.Archivable = true
-            local cloned = child:Clone()
-            child.Archivable = origArch
-            if cloned then
-                for _, item in ipairs(cloned:GetDescendants()) do
-                    if item:IsA("LuaSourceContainer") or item:IsA("Sound") or item:IsA("ParticleEmitter") or item:IsA("Highlight") then
-                        item:Destroy()
-                    end
-                end
-                cloned.Parent = miniWorld
-                local cf, sz
-                if cloned:IsA("Model") then
-                    cf, sz = cloned:GetBoundingBox()
-                elseif cloned:IsA("BasePart") then
-                    cf, sz = cloned.CFrame, cloned.Size
-                end
-                if cf and sz then
-                    local maxDim = math.max(sz.X, sz.Y, sz.Z)
-                    if maxDim <= 0.1 then maxDim = 2 end
-                    local dist = (maxDim / 2) / math.tan(math.rad(22.5)) * 1.5
-                    miniCam.CFrame = CFrame.new(cf.Position + Vector3.new(0, sz.Y * 0.15, dist), cf.Position)
-                    
-                    table.insert(dropdownPreviewModels, {
-                        Model = cloned,
-                        Center = cf.Position
-                    })
-                end
-            end
-        end)
+        -- Store for background async 3D model cloning queue
+        table.insert(pending3DTasks, {
+            CrateModel = child,
+            WorldModel = miniWorld,
+            Camera = miniCam
+        })
 
         -- Mini Tag Label
         local mTag = Instance.new("TextLabel")
@@ -1102,14 +1096,60 @@ local function PopulateCrateList()
         -- Selection Event
         miniCard.MouseButton1Click:Connect(function()
             selectedCrateModel = child
-            TagLabel.Text = "SELECTED EGG"
             SetCardExpandedState(false)
-            pcall(ScanAndUpdateBestCrate)
+            ScanAndUpdateBestCrate()
         end)
     end
+
+    -- 5. Progressive Async 3D Loader Thread (โหลดโมเดล 3D ทีละการ์ดพร้อมการเว้นจังหวะเพื่อป้องกันการกระตุก/ค้าง)
+    task.spawn(function()
+        for _, loadTask in ipairs(pending3DTasks) do
+            if currentSession ~= populateSessionId then return end -- Abort if newer scan started
+
+            local child = loadTask.CrateModel
+            local miniWorld = loadTask.WorldModel
+            local miniCam = loadTask.Camera
+
+            if child and child.Parent and miniWorld and miniWorld.Parent then
+                pcall(function()
+                    local origArch = child.Archivable
+                    child.Archivable = true
+                    local cloned = child:Clone()
+                    child.Archivable = origArch
+
+                    if cloned then
+                        for _, item in ipairs(cloned:GetDescendants()) do
+                            if item:IsA("LuaSourceContainer") or item:IsA("Sound") or item:IsA("ParticleEmitter") or item:IsA("Highlight") then
+                                item:Destroy()
+                            end
+                        end
+                        cloned.Parent = miniWorld
+                        local cf, sz
+                        if cloned:IsA("Model") then
+                            cf, sz = cloned:GetBoundingBox()
+                        elseif cloned:IsA("BasePart") then
+                            cf, sz = cloned.CFrame, cloned.Size
+                        end
+                        if cf and sz then
+                            local maxDim = math.max(sz.X, sz.Y, sz.Z)
+                            if maxDim <= 0.1 then maxDim = 2 end
+                            local dist = (maxDim / 2) / math.tan(math.rad(22.5)) * 1.5
+                            miniCam.CFrame = CFrame.new(cf.Position + Vector3.new(0, sz.Y * 0.15, dist), cf.Position)
+                            
+                            table.insert(dropdownPreviewModels, {
+                                Model = cloned,
+                                Center = cf.Position
+                            })
+                        end
+                    end
+                end)
+            end
+            task.wait(0.01) -- Yield microsecond per card to prevent freezing
+        end
+    end)
 end
 
-function ScanAndUpdateBestCrate()
+ScanAndUpdateBestCrate = function()
     local cratesFolder = workspace:FindFirstChild("Crates")
     if not cratesFolder then
         ItemName.Text = "No Crates"
@@ -1120,16 +1160,22 @@ function ScanAndUpdateBestCrate()
         currentPreviewModel = nil
         currentTargetCrate = nil
         ItemIcon.Visible = true
+        PopulateCrateList()
         return
+    end
+
+    -- Safety Check: Validate if manually selected model still exists in workspace
+    if selectedCrateModel and selectedCrateModel.Parent ~= cratesFolder then
+        selectedCrateModel = nil
     end
     
     local targetCrateData = nil
 
     -- Check if user manually selected a crate
-    if selectedCrateModel and selectedCrateModel.Parent == cratesFolder then
+    if selectedCrateModel then
         targetCrateData = ScanCrateData(selectedCrateModel)
+        TagLabel.Text = "SELECTED EGG"
     else
-        selectedCrateModel = nil
         TagLabel.Text = "BEST EGG"
         local bestVal = -1
         local children = cratesFolder:GetChildren()
@@ -1144,6 +1190,8 @@ function ScanAndUpdateBestCrate()
         end
     end
     
+    local previousTarget = currentTargetCrate
+
     if targetCrateData then
         ItemName.Text = targetCrateData.Name
         RarityLabel.Text = targetCrateData.Rarity
@@ -1164,37 +1212,43 @@ function ScanAndUpdateBestCrate()
         currentTargetCrate = nil
         ItemIcon.Visible = true
     end
+
+    -- Regenerate ArrowBtn list so the active card moves to main EggCard and vanishes from ArrowBtn list
+    PopulateCrateList()
+end
+
+-- Debounce engine to safely handle rapid child added/removed events
+local updatePending = false
+local function RequestSystemRefresh()
+    if updatePending then return end
+    updatePending = true
+    task.defer(function()
+        pcall(ScanAndUpdateBestCrate)
+        updatePending = false
+    end)
 end
 
 local function HookCratesFolder()
     local cratesFolder = workspace:FindFirstChild("Crates")
     if cratesFolder then
-        cratesFolder.ChildAdded:Connect(function()
-            task.defer(PopulateCrateList)
-            task.defer(ScanAndUpdateBestCrate)
-        end)
-        cratesFolder.ChildRemoved:Connect(function()
-            task.defer(PopulateCrateList)
-            task.defer(ScanAndUpdateBestCrate)
-        end)
+        cratesFolder.ChildAdded:Connect(RequestSystemRefresh)
+        cratesFolder.ChildRemoved:Connect(RequestSystemRefresh)
     end
 end
 
 workspace.ChildAdded:Connect(function(child)
     if child.Name == "Crates" then
         HookCratesFolder()
-        PopulateCrateList()
-        ScanAndUpdateBestCrate()
+        RequestSystemRefresh()
     end
 end)
 
 HookCratesFolder()
-PopulateCrateList()
 ScanAndUpdateBestCrate()
 
 task.spawn(function()
     while task.wait(2) do
-        pcall(ScanAndUpdateBestCrate)
+        RequestSystemRefresh()
     end
 end)
 
@@ -1324,8 +1378,7 @@ task.spawn(function()
         task.wait(0.5)
         if loopChecked then
             pcall(function()
-                -- Continuous background cycle / sync
-                ScanAndUpdateBestCrate()
+                RequestSystemRefresh()
             end)
         end
     end
@@ -1461,9 +1514,13 @@ RunService.RenderStepped:Connect(function(dt)
         currentPreviewModel:PivotTo(CFrame.new(previewCenter) * CFrame.Angles(0, math.rad(previewRotation), 0))
     end
 
-    for _, item in ipairs(dropdownPreviewModels) do
-        if item.Model and item.Model.Parent then
+    -- Safe Loop with Dead Reference Garbage Cleaning
+    for i = #dropdownPreviewModels, 1, -1 do
+        local item = dropdownPreviewModels[i]
+        if item and item.Model and item.Model.Parent then
             item.Model:PivotTo(CFrame.new(item.Center) * CFrame.Angles(0, math.rad(previewRotation), 0))
+        else
+            table.remove(dropdownPreviewModels, i)
         end
     end
 

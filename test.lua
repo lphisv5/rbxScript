@@ -1,6 +1,6 @@
 -- [[ YANZ HUB GUI - NEXT-GEN HYPER-REALISTIC FLAME & PHYSICS ENGINE ]] --
--- [ V2.3 : AUTO STEAL + PROTECTION + FLY/TWEEN + ANTI-TRAP + ARENA RESET ] --
--- [ REMOVED: Drag tilt / squish effect. Single-toggle master switch. ] --
+-- [ V2.4 : SINGLE TOGGLE + FAST STEAL + SMART SAFE ZONE + ANTI-TRAP OPTIMIZED ] --
+-- [ Consolidated master switch. Faster pickup. Protection-zone aware. ]
 
 local CoreGui            = game:GetService("CoreGui")
 local TweenService       = game:GetService("TweenService")
@@ -42,10 +42,14 @@ local CONTROL_TOP_EXPANDED  = 144 + LIST_HEIGHT + 8                         -- 3
 local FEATURES_TOP_EXPANDED = FEATURES_TOP_COLLAPSED + LIST_HEIGHT + 8      -- 414
 
 -- -------------------------------------------------------------
--- [ FEATURE STATE & SPEED CONFIG ]
+-- [ SPEED & STEAL CONFIG ]
 -- -------------------------------------------------------------
-local FLY_SPEED = 300
-local STEAL_SPEED = 300
+local FLY_SPEED            = 300
+local STEAL_APPROACH_DIST  = 3.5      -- closer pickup
+local PROMPT_HOLD_WAIT     = 0.35     -- wait after firing prompt (was 3s)
+local HOLD_CHECK_INTERVAL  = 0.03     -- check holding faster
+local HOLD_TIMEOUT         = 1.2      -- max time to wait for pickup
+local SAFE_ZONE_PADDING    = 4        -- extra studs inside safe zone
 
 local stealEnabled      = false
 local protectionEnabled = false
@@ -237,10 +241,74 @@ local function SetupViewport(viewport, crate)
 end
 
 -- -------------------------------------------------------------
--- [ STEAL / FLY / PROTECTION / ANTI-TRAP CORE LOGIC ]
+-- [ PROTECTION ZONE : protected NPC names (used both for
+--   anti-chase and to make auto-steal avoid those zones) ]
+-- -------------------------------------------------------------
+local PROTECTED_NPC_NAMES = {
+    "Jeweler", "Archeologist", "Astronaut", "Mafia Boss",
+    "Bodyguard 1", "Bodyguard 2",
+    "Fan 1", "Fan 2", "Fan 3", "Fan 4", "Fan 5",
+    "Gold Tycoon", "Museum Worker", "Pirate",
+    "Angel Beast (chaser)", "Angel Queen",
+    "Demon Dragon", "demon king", "dinosaur (active)",
+}
+local PROTECTION_RADIUS = 20
+local PROTECTION_ZONE_FOR_STEAL = 34  -- bigger buffer so we don't path near them
+
+local function GatherProtectedNPCs()
+    local list = {}
+    for _, name in ipairs(PROTECTED_NPC_NAMES) do
+        local npc = workspace:FindFirstChild(name)
+        if npc then table.insert(list, { name = name, obj = npc }) end
+    end
+    local areaNPCs = workspace:FindFirstChild("AreaNPCs")
+    if areaNPCs then
+        local grandpa = areaNPCs:FindFirstChild("Grandpa")
+        if grandpa then
+            table.insert(list, { name = "Grandpa", obj = grandpa })
+        end
+    end
+    return list
+end
+
+-- Cache of protected npc positions, refreshed periodically (avoid heavy calls)
+local protectedPositionsCache = {}
+local lastProtectedRefresh = 0
+local function RefreshProtectedPositions()
+    local now = tick()
+    if now - lastProtectedRefresh < 1.5 then return protectedPositionsCache end
+    lastProtectedRefresh = now
+
+    local result = {}
+    local list = GatherProtectedNPCs()
+    for _, entry in ipairs(list) do
+        local ok, cf = pcall(function() return SafeBoundingBox(entry.obj) end)
+        if ok and cf then
+            table.insert(result, { name = entry.name, pos = cf.Position })
+        end
+    end
+    protectedPositionsCache = result
+    return result
+end
+
+-- Return true if a position is inside any protection zone
+local function IsPositionInProtectionZone(pos, extraRadius)
+    extraRadius = extraRadius or 0
+    local cache = RefreshProtectedPositions()
+    for _, p in ipairs(cache) do
+        local d = (p.pos - pos).Magnitude
+        if d <= (PROTECTION_ZONE_FOR_STEAL + extraRadius) then
+            return true, p.name, d
+        end
+    end
+    return false, nil, math.huge
+end
+
+-- -------------------------------------------------------------
+-- [ STEAL / FLY / ANTI-TRAP CORE LOGIC ]
 -- -------------------------------------------------------------
 
--- Fly/Tween movement helper (default 300)
+-- Fly/Tween movement helper (default 300) — smooth and cancelable
 local function FlyToPosition(targetPos, speed, cancelFn)
     speed = tonumber(speed) or FLY_SPEED
     if speed <= 0 then speed = FLY_SPEED end
@@ -279,7 +347,7 @@ local function FlyToPosition(targetPos, speed, cancelFn)
     return true
 end
 
--- Safe zone lookup
+-- Safe zone lookup — returns a position safely INSIDE the safe zone
 local function GetSafeZonePosition()
     local stealMap = workspace:FindFirstChild("Steal Map")
     if not stealMap then return nil end
@@ -292,12 +360,14 @@ local function GetSafeZonePosition()
         return SafeBoundingBox(safeZone)
     end)
     if ok and cf then
-        return cf.Position + Vector3.new(0, (size and size.Y or 4) / 2 + 3, 0)
+        local halfY = (size and size.Y or 4) / 2
+        -- Slightly above ground, well inside the zone so we land safely
+        return cf.Position + Vector3.new(0, halfY + SAFE_ZONE_PADDING, 0)
     end
     return nil
 end
 
--- Find closest crate within range
+-- Find closest crate that is NOT inside a protection zone
 local function FindStealTarget(maxRange)
     maxRange = maxRange or 5000
     local root = GetRoot()
@@ -310,10 +380,14 @@ local function FindStealTarget(maxRange)
     for _, crate in ipairs(cratesFolder:GetChildren()) do
         local ok, cf = pcall(function() return SafeBoundingBox(crate) end)
         if ok and cf then
-            local dist = (cf.Position - root.Position).Magnitude
-            if dist < closestDist and dist <= maxRange then
-                closestDist = dist
-                closest = crate
+            -- Skip if crate sits inside a protection zone
+            local inZone = IsPositionInProtectionZone(cf.Position)
+            if not inZone then
+                local dist = (cf.Position - root.Position).Magnitude
+                if dist < closestDist and dist <= maxRange then
+                    closestDist = dist
+                    closest = crate
+                end
             end
         end
     end
@@ -366,11 +440,11 @@ local function IsHoldingCrate()
     return false
 end
 
--- Full steal cycle
+-- Full steal cycle (fast version)
 local function PerformStealCycle()
     if not stealEnabled then return false end
 
-    -- 1. Find nearest crate
+    -- 1. Find nearest crate NOT in protection zone
     local crate = FindStealTarget(5000)
     if not crate then return false end
 
@@ -380,21 +454,28 @@ local function PerformStealCycle()
     local ok, cf = pcall(function() return SafeBoundingBox(crate) end)
     if not ok or not cf then return false end
 
+    -- Re-check protection zone at the last moment (NPC may have moved)
+    if IsPositionInProtectionZone(cf.Position) then
+        return false
+    end
+
     local root = GetRoot()
     if not root then return false end
     local offset = (root.Position - cf.Position)
-    if offset.Magnitude < 0.01 then offset = Vector3.new(0,0,1) end
-    local approachPos = cf.Position + offset.Unit * 4
+    if offset.Magnitude < 0.01 then offset = Vector3.new(0, 0, 1) end
+    -- Approach closer than before (3.5 studs) for faster pickup
+    local approachPos = cf.Position + offset.Unit * STEAL_APPROACH_DIST
 
     FlyToPosition(approachPos, FLY_SPEED, function() return not stealEnabled end)
     if not stealEnabled then return false end
-    task.wait(0.15)
+    task.wait(0.05)
 
-    -- 3. Fire proximity prompt
+    -- 3. Fire proximity prompt immediately
     local prompt = FindProximityPrompt(crate)
     if prompt then
         FirePrompt(prompt)
     else
+        -- fallback to click detector
         local cd
         for _, d in ipairs(crate:GetDescendants()) do
             if d:IsA("ClickDetector") then cd = d; break end
@@ -404,31 +485,40 @@ local function PerformStealCycle()
         end
     end
 
-    -- 4. Wait & verify holding
-    local deadline = tick() + 3
-    while tick() < deadline do
+    -- 4. Fast holding check (was 3s, now ~1.2s max, checking every 30ms)
+    local startWait = tick()
+    local holding = false
+    -- Give prompt a small initial grace
+    task.wait(PROMPT_HOLD_WAIT)
+    while tick() - startWait < HOLD_TIMEOUT do
         if not stealEnabled then return false end
-        if IsHoldingCrate() then break end
-        task.wait(0.1)
+        if IsHoldingCrate() then
+            holding = true
+            break
+        end
+        task.wait(HOLD_CHECK_INTERVAL)
     end
 
-    if not IsHoldingCrate() then
+    if not holding and not IsHoldingCrate() then
         return false
     end
 
-    -- 5. Fly to safe zone
+    -- 5. Immediately fly to safe zone
     local safePos = GetSafeZonePosition()
     if not safePos then
-        task.wait(0.3)
+        -- Fallback: go to origin of Steal Map if safe zone not found
+        task.wait(0.1)
     else
-        FlyToPosition(safePos, FLY_SPEED, function() return not stealEnabled end)
+        -- Fly to safe zone with slightly boosted speed so we escape fast
+        FlyToPosition(safePos, FLY_SPEED * 1.15, function() return not stealEnabled end)
         if not stealEnabled then return false end
-        task.wait(0.35)
+        -- Small settle time so character is inside zone when we fire remotes
+        task.wait(0.15)
     end
 
     -- 6. Fire confirmation remotes
     FireClientRemote("rev_STEAL_ESCAPED")
-    task.wait(0.1)
+    task.wait(0.05)
     FireClientRemote("rev_STEAL_SUCCESS", crateName)
 
     return true
@@ -440,42 +530,17 @@ local function StartStealLoop()
 
     task.spawn(function()
         while stealEnabled and YanzHubUI and YanzHubUI.Parent do
-            local ok, err = pcall(PerformStealCycle)
+            local ok = pcall(PerformStealCycle)
             if not ok then
-                task.wait(0.5)
+                task.wait(0.3)
             end
-            task.wait(0.25)
+            task.wait(0.1)  -- faster loop (was 0.25)
         end
         stealLoopRunning = false
     end)
 end
 
--- Protection system
-local PROTECTED_NPC_NAMES = {
-    "Jeweler", "Archeologist", "Astronaut", "Mafia Boss",
-    "Bodyguard 1", "Bodyguard 2",
-    "Fan 1", "Fan 2", "Fan 3", "Fan 4", "Fan 5",
-    "Gold Tycoon", "Museum Worker", "Pirate",
-    "Angel Beast (chaser)", "Angel Queen",
-    "Demon Dragon", "demon king", "dinosaur (active)",
-}
-
-local function GatherProtectedNPCs()
-    local list = {}
-    for _, name in ipairs(PROTECTED_NPC_NAMES) do
-        local npc = workspace:FindFirstChild(name)
-        if npc then table.insert(list, { name = name, obj = npc }) end
-    end
-    local areaNPCs = workspace:FindFirstChild("AreaNPCs")
-    if areaNPCs then
-        local grandpa = areaNPCs:FindFirstChild("Grandpa")
-        if grandpa then
-            table.insert(list, { name = "Grandpa", obj = grandpa })
-        end
-    end
-    return list
-end
-
+-- Protection tick (fires rev_ChaseCaught for nearby protected NPCs)
 local lastProtectionFire = {}
 
 local function ProtectionTick()
@@ -488,7 +553,7 @@ local function ProtectionTick()
         local ok, cf = pcall(function() return SafeBoundingBox(entry.obj) end)
         if ok and cf then
             local dist = (cf.Position - root.Position).Magnitude
-            if dist < 20 then
+            if dist < PROTECTION_RADIUS then
                 local now = tick()
                 if not lastProtectionFire[entry.name] or (now - lastProtectionFire[entry.name]) > 1.5 then
                     lastProtectionFire[entry.name] = now
@@ -512,32 +577,48 @@ local function DoArenaReset()
     end)
 end
 
--- Anti-Trap
-local TRAP_KEYWORDS = {"trap", "kill", "damage", "lava", "spike", "poison", "death", "hazard"}
+-- -------------------------------------------------------------
+-- [ ANTI-TRAP (OPTIMIZED) : scan only nearby region, lightweight ]
+-- -------------------------------------------------------------
+local ANTI_TRAP_RADIUS    = 60     -- only scan things near the player
+local ANTI_TRAP_KEYWORDS  = {
+    "trap", "kill", "damage", "lava", "spike", "poison", "death", "hazard",
+}
+local antiTrapTouched = {}
 
-local function IsTrapPart(part)
-    local n = part.Name:lower()
-    for _, kw in ipairs(TRAP_KEYWORDS) do
+local function IsTrapName(name)
+    local n = name:lower()
+    for _, kw in ipairs(ANTI_TRAP_KEYWORDS) do
         if n:find(kw) then return true end
     end
     return false
 end
 
-local antiTrapTouched = {}
-
+-- Only touch things that are within ANTI_TRAP_RADIUS studs of the player
 local function AntiTrapTick()
     if not antiTrapEnabled then return end
     local root = GetRoot()
     if not root then return end
 
+    local myPos = root.Position
+    local radiusSq = ANTI_TRAP_RADIUS * ANTI_TRAP_RADIUS
+
+    -- Scan workspace folder structure lightly
+    local scanned = 0
     for _, obj in ipairs(workspace:GetDescendants()) do
+        scanned = scanned + 1
+        -- Safety limit per tick to avoid CPU spikes
+        if scanned > 800 then break end
         if obj:IsA("BasePart") and not antiTrapTouched[obj] then
-            if IsTrapPart(obj) then
-                antiTrapTouched[obj] = true
-                pcall(function()
-                    obj.CanTouch = false
-                    obj.CanQuery = false
-                end)
+            if IsTrapName(obj.Name) then
+                -- Only neutralize nearby ones
+                if (obj.Position - myPos).Magnitude <= math.sqrt(radiusSq) then
+                    antiTrapTouched[obj] = true
+                    pcall(function()
+                        obj.CanTouch = false
+                        obj.CanQuery = false
+                    end)
+                end
             end
         end
     end
@@ -1269,60 +1350,7 @@ SwapButton.MouseButton1Click:Connect(function()
 end)
 
 -- -------------------------------------------------------------
--- [ INTERACTIVE LOOP CHECKBOX ]
--- -------------------------------------------------------------
-local LoopBox = Instance.new("TextButton")
-LoopBox.Name = "LoopBox"
-LoopBox.Parent = ControlPanel
-LoopBox.BackgroundColor3 = Color3.fromRGB(22, 25, 32)
-LoopBox.BackgroundTransparency = 0.3
-LoopBox.Position = UDim2.new(0, 172, 0, 30)
-LoopBox.Size = UDim2.new(0, 24, 0, 24)
-LoopBox.Font = Enum.Font.GothamBold
-LoopBox.Text = ""
-LoopBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-LoopBox.TextSize = 14
-
-local LoopBoxCorner = Instance.new("UICorner")
-LoopBoxCorner.CornerRadius = UDim.new(0, 6)
-LoopBoxCorner.Parent = LoopBox
-
-local LoopBoxStroke = Instance.new("UIStroke")
-LoopBoxStroke.Parent = LoopBox
-LoopBoxStroke.Color = Color3.fromRGB(140, 145, 155)
-LoopBoxStroke.Thickness = 1.2
-LoopBoxStroke.Transparency = 0.3
-
-local loopChecked = false
-local function ToggleLoopFunc()
-    loopChecked = not loopChecked
-    if loopChecked then
-        LoopBox.Text = "✓"
-        TweenService:Create(LoopBoxStroke, TWEEN_FAST, {Color = Color3.fromRGB(255, 255, 255), Transparency = 0}):Play()
-    else
-        LoopBox.Text = ""
-        TweenService:Create(LoopBoxStroke, TWEEN_FAST, {Color = Color3.fromRGB(140, 145, 155), Transparency = 0.3}):Play()
-    end
-end
-
-LoopBox.MouseButton1Click:Connect(ToggleLoopFunc)
-
-local LoopLabel = Instance.new("TextButton")
-LoopLabel.Name = "LoopLabel"
-LoopLabel.Parent = ControlPanel
-LoopLabel.BackgroundTransparency = 1
-LoopLabel.Position = UDim2.new(0, 202, 0, 33)
-LoopLabel.Size = UDim2.new(0, 42, 0, 18)
-LoopLabel.Font = Enum.Font.GothamBold
-LoopLabel.Text = "LOOP"
-LoopLabel.TextColor3 = Color3.fromRGB(210, 215, 225)
-LoopLabel.TextSize = 11
-LoopLabel.TextXAlignment = Enum.TextXAlignment.Left
-
-LoopLabel.MouseButton1Click:Connect(ToggleLoopFunc)
-
--- -------------------------------------------------------------
--- [ MASTER TOGGLE SWITCH (runs ALL features together) ]
+-- [ MASTER TOGGLE SWITCH (single control : all features) ]
 -- -------------------------------------------------------------
 local MasterToggleFrame = Instance.new("TextButton")
 MasterToggleFrame.Name = "MasterToggleFrame"
@@ -1375,7 +1403,7 @@ MasterToggleFrame.MouseButton1Click:Connect(function()
 end)
 
 -- -------------------------------------------------------------
--- [ FEATURES PANEL : AUTO-STEAL / PROTECTION / ANTI-TRAP / RESET ]
+-- [ FEATURES PANEL : status indicators + arena reset ]
 -- -------------------------------------------------------------
 local FeaturesPanel = Instance.new("Frame")
 FeaturesPanel.Name = "FeaturesPanel"
@@ -1406,7 +1434,6 @@ FeaturesTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
 FeaturesTitle.TextSize = 11
 FeaturesTitle.TextXAlignment = Enum.TextXAlignment.Left
 
--- Helper to build feature row (status-only indicator now, no toggle switch)
 local function CreateFeatureRow(yPos, titleText, subtitleText)
     local row = Instance.new("Frame")
     row.Name = titleText:gsub("%s", "") .. "Row"
@@ -1451,7 +1478,6 @@ local function CreateFeatureRow(yPos, titleText, subtitleText)
     subLbl.TextSize = 8
     subLbl.TextXAlignment = Enum.TextXAlignment.Left
 
-    -- Status pill (ON/OFF)
     local statusPill = Instance.new("TextLabel")
     statusPill.Name = "StatusPill"
     statusPill.Parent = row
@@ -1486,15 +1512,15 @@ local function SetPillState(pill, isOn)
 end
 
 -- ROW 1 : AUTO STEAL
-local stealRow, stealTitle, stealSub, stealPill = CreateFeatureRow(22, "AUTO STEAL", "Fly • Loot • Escape to Safe Zone")
+local stealRow, stealTitle, stealSub, stealPill = CreateFeatureRow(22, "AUTO STEAL", "Fast fly • Loot • Escape to Safe Zone")
 
 -- ROW 2 : PROTECTION
-local protectRow, protectTitle, protectSub, protectPill = CreateFeatureRow(60, "PROTECTION", "Anti-Chase NPCs (fires rev_ChaseCaught)")
+local protectRow, protectTitle, protectSub, protectPill = CreateFeatureRow(60, "PROTECTION", "Avoid / Escape protected NPC zones")
 
--- ROW 3 : ANTI-TRAP
-local trapRow, trapTitle, trapSub, trapPill = CreateFeatureRow(98, "ANTI-TRAP", "Disables local trap parts")
+-- ROW 3 : ANTI-TRAP (lightweight)
+local trapRow, trapTitle, trapSub, trapPill = CreateFeatureRow(98, "ANTI-TRAP", "Local trap disable (lightweight)")
 
--- ROW 4 : ARENA RESET (button still present)
+-- ROW 4 : ARENA RESET
 local resetRow, resetTitle, resetSub, resetPill = CreateFeatureRow(136, "ARENA RESET", "Unlock crates via rev_ARENA_RESET")
 resetPill.Visible = false
 
@@ -1532,31 +1558,26 @@ task.spawn(function()
         if masterToggled ~= previousMaster then
             previousMaster = masterToggled
 
-            -- Update all internal states in sync
-            stealEnabled      = masterToggled
-            protectionEnabled = masterToggled
+            stealEnabled      = masterToggled            protectionEnabled = masterToggled
             antiTrapEnabled   = masterToggled
 
-            -- Update visuals
             SetPillState(stealPill, masterToggled)
             SetPillState(protectPill, masterToggled)
             SetPillState(trapPill, masterToggled)
 
-            -- Update subtitles
             if masterToggled then
                 stealSub.Text = "Stealing crates..."
-                protectSub.Text = "Monitoring protected NPCs..."
-                trapSub.Text = "Neutralizing traps..."
+                protectSub.Text = "Monitoring protected NPC zones..."
+                trapSub.Text = "Neutralizing nearby traps..."
                 ShowNotification("MASTER SWITCH ON — All features active")
                 StartStealLoop()
-                -- Trigger an immediate arena reset on activation so crates can be looted
                 if not arenaResetRunning then
                     task.spawn(DoArenaReset)
                 end
             else
-                stealSub.Text = "Fly • Loot • Escape to Safe Zone"
-                protectSub.Text = "Anti-Chase NPCs (fires rev_ChaseCaught)"
-                trapSub.Text = "Disables local trap parts"
+                stealSub.Text = "Fast fly • Loot • Escape to Safe Zone"
+                protectSub.Text = "Avoid / Escape protected NPC zones"
+                trapSub.Text = "Local trap disable (lightweight)"
                 ShowNotification("MASTER SWITCH OFF — All features stopped")
             end
         end
@@ -1806,7 +1827,7 @@ task.spawn(function()
 end)
 
 -- -------------------------------------------------------------
--- [ SIMPLE DRAGGING ENGINE (no tilt / no squish) ]
+-- [ SIMPLE DRAGGING ENGINE ]
 -- -------------------------------------------------------------
 local isDragging = false
 local dragStartMouse = Vector2.new()
@@ -1864,7 +1885,7 @@ end)
 
 task.spawn(function()
     while YanzHubUI and YanzHubUI.Parent do
-        task.wait(1.0)
+        task.wait(1.2)  -- less frequent than before to reduce CPU
         if antiTrapEnabled then
             pcall(AntiTrapTick)
         end
@@ -1872,7 +1893,7 @@ task.spawn(function()
 end)
 
 -- -------------------------------------------------------------
--- [ RENDER STEPPED ENGINE LOOP (flame only, no tilt) ]
+-- [ RENDER STEPPED ENGINE LOOP (flame animation) ]
 -- -------------------------------------------------------------
 local clock = os.clock()
 local flameWindVelocity = Vector2.new(0, 0)
@@ -1880,7 +1901,6 @@ local flameWindVelocity = Vector2.new(0, 0)
 RunService.RenderStepped:Connect(function(dt)
     clock = clock + dt
 
-    -- Flame wind decays to zero (no drag tilt anymore)
     flameWindVelocity = flameWindVelocity:Lerp(Vector2.new(0, 0), math.min(dt * 10, 1))
 
     local tSpeed = clock * 18
@@ -1970,5 +1990,5 @@ end)
 -- -------------------------------------------------------------
 task.defer(function()
     task.wait(0.4)
-    ShowNotification("YANZ HUB V2.3 Loaded — Master Switch Ready")
+    ShowNotification("YANZ HUB V2.4 Loaded — Single Master Switch")
 end)

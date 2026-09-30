@@ -1,4 +1,4 @@
--- [[ YANZ HUB GUI - NEXT-GEN HYPER-REALISTIC FLAME & PHYSICS ENGINE (3D LIST UPDATE) ]] --
+-- [[ YANZ HUB GUI - NEXT-GEN HYPER-REALISTIC FLAME & PHYSICS ENGINE (AUTO-FETCH CRATES UPDATE) ]] --
 
 local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
@@ -35,7 +35,7 @@ MainFrame.BackgroundColor3 = Color3.fromRGB(11, 12, 15)
 MainFrame.BackgroundTransparency = 0.05
 MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 MainFrame.Position = UDim2.new(0.5, 0, 0.45, 0)
-MainFrame.Size = UDim2.new(0, 345, 0, 380) -- Increased height to support scrolling lists
+MainFrame.Size = UDim2.new(0, 345, 0, 380)
 MainFrame.ClipsDescendants = false
 
 local MainCorner = Instance.new("UICorner")
@@ -589,7 +589,7 @@ local function Create3DCrateCard(layoutOrder, tagText, crateName, rarityText, rC
     CardContainer.Name = "CardContainer_" .. layoutOrder
     CardContainer.Parent = ContentScroll
     CardContainer.BackgroundTransparency = 1
-    CardContainer.Size = UDim2.new(1, -20, 0, 86) -- 82 + 4 for 3D shadow depth
+    CardContainer.Size = UDim2.new(1, -20, 0, 86)
     CardContainer.LayoutOrder = layoutOrder
 
     local Shadow = Instance.new("Frame")
@@ -711,22 +711,74 @@ local function Create3DCrateCard(layoutOrder, tagText, crateName, rarityText, rC
 end
 
 -- -------------------------------------------------------------
--- [ POPULATING DATA FROM EXPLORER IMAGE ]
+-- [ AUTO-FETCH SYSTEM FROM WORKSPACE ]
 -- -------------------------------------------------------------
-local CratesData = {
-    {Tag = "CRATE", Name = "Angel Cosmic", Rarity = "Cosmic", Color = Color3.fromRGB(255, 80, 255), Value = "12.5M"},
-    {Tag = "CRATE", Name = "Angel Legendary", Rarity = "Legendary", Color = Color3.fromRGB(255, 140, 40), Value = "5.2M"},
-    {Tag = "CRATE", Name = "Angel Mythic", Rarity = "Mythic", Color = Color3.fromRGB(255, 40, 40), Value = "8.9M"},
-    {Tag = "CRATE", Name = "Archeologist", Rarity = "Common", Color = Color3.fromRGB(170, 170, 170), Value = "100K"},
-    {Tag = "CRATE", Name = "Archeologist", Rarity = "Uncommon", Color = Color3.fromRGB(80, 220, 80), Value = "250K"},
-    {Tag = "CRATE", Name = "Astronaut Epic", Rarity = "Epic", Color = Color3.fromRGB(170, 80, 255), Value = "1.1M"},
-    {Tag = "CRATE", Name = "Astronaut", Rarity = "Legendary", Color = Color3.fromRGB(255, 140, 40), Value = "3.8M"},
-    {Tag = "CRATE", Name = "Astronaut", Rarity = "Mythic", Color = Color3.fromRGB(255, 40, 40), Value = "7.4M"},
-    {Tag = "CRATE", Name = "Celebrity", Rarity = "Cosmic", Color = Color3.fromRGB(255, 80, 255), Value = "15.0M"}
+local RarityColors = {
+    ["Common"] = Color3.fromRGB(170, 170, 170),
+    ["Uncommon"] = Color3.fromRGB(80, 220, 80),
+    ["Rare"] = Color3.fromRGB(40, 140, 255),
+    ["Epic"] = Color3.fromRGB(170, 80, 255),
+    ["Legendary"] = Color3.fromRGB(255, 140, 40),
+    ["Mythic"] = Color3.fromRGB(255, 40, 40),
+    ["Cosmic"] = Color3.fromRGB(255, 80, 255)
 }
 
-for i, crate in ipairs(CratesData) do
-    Create3DCrateCard(i, crate.Tag, crate.Name, crate.Rarity, crate.Color, crate.Value)
+local function FormatNumber(n)
+    if not n then return "0" end
+    local num = tonumber(n)
+    if not num then return tostring(n) end
+    
+    if num >= 1000000 then
+        return string.format("%.1fM", num / 1000000)
+    elseif num >= 1000 then
+        return string.format("%.1fK", num / 1000)
+    else
+        return tostring(num)
+    end
+end
+
+-- สแกนข้อมูลจากโฟลเดอร์ Crates ในเกมโดยตรง
+local CratesFolder = workspace:FindFirstChild("Crates")
+local UniqueCrates = {}
+local LayoutIndex = 1
+
+if CratesFolder then
+    for _, crate in pairs(CratesFolder:GetChildren()) do
+        if crate:IsA("Model") then
+            -- ดึงข้อมูลจาก Attributes ตามโครงสร้างในเกม
+            local areaId = crate:GetAttribute("AreaId")
+            local tier = crate:GetAttribute("CrateTier")
+            local weight = crate:GetAttribute("CrateKg")
+            
+            -- หากไม่มี Attribute ให้พยายามแยกคำจากชื่อโมเดลแทน
+            if not areaId or not tier then
+                local splitName = string.split(crate.Name, "_")
+                if #splitName >= 3 then
+                    areaId = areaId or splitName[2]
+                    tier = tier or splitName[3]
+                end
+            end
+            
+            areaId = areaId or "Unknown"
+            tier = tier or "Common"
+            
+            local uniqueKey = areaId .. "_" .. tier
+            
+            -- สร้างเฉพาะรายการที่ไม่ซ้ำกัน
+            if not UniqueCrates[uniqueKey] then
+                UniqueCrates[uniqueKey] = true
+                
+                local rColor = RarityColors[tier] or Color3.fromRGB(200, 200, 200)
+                local vText = weight and FormatNumber(weight) or "???"
+                
+                Create3DCrateCard(LayoutIndex, "CRATE", areaId, tier, rColor, vText)
+                LayoutIndex = LayoutIndex + 1
+            end
+        end
+    end
+else
+    -- แสดงหน้าจอแจ้งเตือนหากหาโฟลเดอร์ไม่พบ
+    Create3DCrateCard(1, "ERROR", "Crates Folder Not Found", "None", Color3.fromRGB(255,50,50), "0")
 end
 
 -- -------------------------------------------------------------
@@ -737,7 +789,7 @@ ControlContainer.Name = "ControlContainer"
 ControlContainer.Parent = ContentScroll
 ControlContainer.BackgroundTransparency = 1
 ControlContainer.Size = UDim2.new(1, -20, 0, 88)
-ControlContainer.LayoutOrder = 999 -- Place at bottom
+ControlContainer.LayoutOrder = 9999 -- Place at bottom
 
 local ControlShadow = Instance.new("Frame")
 ControlShadow.Name = "ControlShadow"

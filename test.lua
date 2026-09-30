@@ -1,30 +1,186 @@
-local CoreGui = game:GetService("CoreGui")
+local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
-local Camera = workspace.CurrentCamera
-local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
+local Workspace = game:GetService("Workspace")
 
-local ParentGui
-if gethui then
-    ParentGui = gethui()
-elseif CoreGui:FindFirstChildOfClass("ScreenGui") then
-    ParentGui = CoreGui
-else
-    ParentGui = Players.LocalPlayer:WaitForChild("PlayerGui")
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+
+-- =======================================================
+-- GLOBAL STATE
+-- =======================================================
+local isToggled = false
+local isTPMode = false
+local isLoopEnabled = false
+local isDropdownOpen = false
+local isLoopRunning = false
+local isManualSelect = false
+local selectedEggInstance = nil
+local current3DModel = nil
+local rotationConn = nil
+local miniViewportConnections = {}
+local miniViewportModels = {}
+local noclipConnection = nil
+
+local toggleDropdown
+
+local function removeHoldTime(child)
+    if child:IsA("ProximityPrompt") then
+        child.HoldDuration = 0
+    end
 end
 
-pcall(function()
-    if ParentGui:FindFirstChild("YanzHubUI") then
-        ParentGui.YanzHubUI:Destroy()
-    end
-end)
+for _, v in ipairs(Workspace:GetDescendants()) do
+    removeHoldTime(v)
+end
+Workspace.DescendantAdded:Connect(removeHoldTime)
 
-local YanzHubUI = Instance.new("ScreenGui")
-YanzHubUI.Name = "YanzHubUI"
-YanzHubUI.Parent = ParentGui
-YanzHubUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-YanzHubUI.ResetOnSpawn = false
+local function fireEggPrompt(eggObj)
+    if not eggObj or not eggObj.Parent then return end
+    pcall(function()
+        for _, prompt in ipairs(eggObj:GetDescendants()) do
+            if prompt:IsA("ProximityPrompt") then
+                prompt.HoldDuration = 0
+                if fireproximityprompt then fireproximityprompt(prompt) end
+            end
+        end
+    end)
+
+    local char = LocalPlayer.Character
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        local hrpPos = char.HumanoidRootPart.Position
+        pcall(function()
+            local renderedEggs = Workspace:FindFirstChild("RenderedEggs")
+            local searchFolder = renderedEggs or Workspace
+            for _, obj in ipairs(searchFolder:GetChildren()) do
+                local part = obj:IsA("BasePart") and obj or obj:FindFirstChildWhichIsA("BasePart", true)
+                if part and (part.Position - hrpPos).Magnitude <= 30 then
+                    for _, prompt in ipairs(obj:GetDescendants()) do
+                        if prompt:IsA("ProximityPrompt") then
+                            prompt.HoldDuration = 0
+                            if fireproximityprompt then fireproximityprompt(prompt) end
+                        end
+                    end
+                end
+            end
+        end)
+    end
+end
+
+local function getSafeParent()
+    if gethui then return gethui() end
+    local success, target = pcall(function()
+        return cloneref and cloneref(CoreGui) or CoreGui
+    end)
+    if success and target then return target end
+    return LocalPlayer:WaitForChild("PlayerGui")
+end
+
+local parentContainer = getSafeParent()
+
+if parentContainer:FindFirstChild("YanzHubUI") then
+    parentContainer.YanzHubUI:Destroy()
+end
+
+-- =======================================================
+-- VOLCANO ENTRANCE BYPASS & NOCLIP ENGINE (OPTIMIZED)
+-- =======================================================
+local cachedVolcano = Workspace:FindFirstChild("Volcano")
+
+local function bypassVolcanoEntrance()
+    pcall(function()
+        local volcano = cachedVolcano or Workspace:FindFirstChild("Volcano")
+        if not volcano then return end
+
+        local entrance = volcano:FindFirstChild("VolcanoEntrance") 
+            or volcano:FindFirstChild("Entrance") 
+            or volcano:FindFirstChild("Door") 
+            or volcano:FindFirstChild("LairDoor")
+
+        local char = LocalPlayer.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+
+        if entrance and hrp then
+            if entrance:IsA("Model") then
+                for _, part in ipairs(entrance:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = false
+                        if firetouchinterest then
+                            firetouchinterest(hrp, part, 0)
+                            firetouchinterest(hrp, part, 1)
+                        end
+                    end
+                end
+            elseif entrance:IsA("BasePart") then
+                entrance.CanCollide = false
+                if firetouchinterest then
+                    firetouchinterest(hrp, entrance, 0)
+                    firetouchinterest(hrp, entrance, 1)
+                end
+            end
+        end
+
+        for _, prompt in ipairs(volcano:GetDescendants()) do
+            if prompt:IsA("ProximityPrompt") then
+                prompt.HoldDuration = 0
+                if fireproximityprompt then fireproximityprompt(prompt) end
+            end
+        end
+    end)
+end
+
+local function startContinuousNoclip()
+    if noclipConnection then
+        noclipConnection:Disconnect()
+        noclipConnection = nil
+    end
+
+    noclipConnection = RunService.Stepped:Connect(function()
+        if isToggled then
+            local char = LocalPlayer.Character
+            if char then
+                for _, part in ipairs(char:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = false
+                    end
+                end
+                local humanoid = char:FindFirstChildWhichIsA("Humanoid")
+                if humanoid and humanoid.SeatPart then
+                    local mountModel = humanoid.SeatPart:FindFirstAncestorWhichIsA("Model")
+                    if mountModel then
+                        for _, part in ipairs(mountModel:GetDescendants()) do
+                            if part:IsA("BasePart") then
+                                part.CanCollide = false
+                            end
+                        end
+                    end
+                end
+            end
+        else
+            if noclipConnection then
+                noclipConnection:Disconnect()
+                noclipConnection = nil
+            end
+        end
+    end)
+end
+
+local function stopContinuousNoclip()
+    if noclipConnection then
+        noclipConnection:Disconnect()
+        noclipConnection = nil
+    end
+    local char = LocalPlayer.Character
+    if char then
+        for _, part in ipairs(char:GetDescendants()) do
+            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                part.CanCollide = true
+            end
+        end
+    end
+end
 
 -- -------------------------------------------------------------
 -- [ CONFIG & TWEEN PROFILES ]
@@ -32,10 +188,17 @@ YanzHubUI.ResetOnSpawn = false
 local TWEEN_SPRING = TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 local TWEEN_ELASTIC = TweenInfo.new(0.5, Enum.EasingStyle.Elastic, Enum.EasingDirection.Out)
 local TWEEN_FAST = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local TWEEN_SMOOTH = TweenInfo.new(0.28, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
 
 -- -------------------------------------------------------------
 -- [ MAIN CONTAINER & SMART AUTO-SCALE ]
 -- -------------------------------------------------------------
+local YanzHubUI = Instance.new("ScreenGui")
+YanzHubUI.Name = "YanzHubUI"
+YanzHubUI.Parent = parentContainer
+YanzHubUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+YanzHubUI.ResetOnSpawn = false
+
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
 MainFrame.Parent = YanzHubUI
@@ -57,7 +220,6 @@ MainStroke.Thickness = 1.5
 MainStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 MainStroke.Transparency = 0.12
 
--- Responsive Auto-Scale System
 local UIScale = Instance.new("UIScale")
 UIScale.Parent = MainFrame
 
@@ -76,7 +238,6 @@ end
 Camera:GetPropertyChangedSignal("ViewportSize"):Connect(UpdateAutoScaler)
 UpdateAutoScaler()
 
--- ENTRANCE ANIMATION
 UIScale.Scale = 0
 TweenService:Create(UIScale, TWEEN_SPRING, {Scale = targetScaleValue}):Play()
 
@@ -135,7 +296,7 @@ local notifDebounce = false
 local function ShowNotification(text)
     if notifDebounce then return end
     notifDebounce = true
-    
+
     NotifText.Text = text or "Discord Link Copied to Clipboard!"
     NotifFrame.Position = UDim2.new(0, 12, 0, 10)
     NotifFrame.BackgroundTransparency = 1
@@ -160,7 +321,7 @@ local function ShowNotification(text)
         TweenService:Create(NotifStroke, TWEEN_FAST, {Transparency = 1}):Play()
         TweenService:Create(NotifText, TWEEN_FAST, {TextTransparency = 1}):Play()
         TweenService:Create(NotifIcon, TWEEN_FAST, {ImageTransparency = 1}):Play()
-        
+
         slideDown:Play()
         slideDown.Completed:Connect(function()
             NotifFrame.Visible = false
@@ -252,7 +413,7 @@ Header.Size = UDim2.new(1, 0, 0, 52)
 Header.ClipsDescendants = false
 Header.ZIndex = 2
 
--- Dynamic White Flame Engine
+-- [ ADVANCED DYNAMIC WHITE FLAME ENGINE ]
 local FireContainer = Instance.new("Frame")
 FireContainer.Name = "FireContainer"
 FireContainer.Parent = Header
@@ -413,7 +574,7 @@ SubtitleLabel.Name = "SubtitleLabel"
 SubtitleLabel.Parent = Header
 SubtitleLabel.BackgroundTransparency = 1
 SubtitleLabel.Position = UDim2.new(0, 52, 0, 27)
-SubtitleLabel.Size = UDim2.new(0, 140, 0, 12)
+SubtitleLabel.Size = UDim2.new(0, 160, 0, 12)
 SubtitleLabel.Font = Enum.Font.GothamMedium
 SubtitleLabel.Text = "BEST EGG SYSTEM"
 SubtitleLabel.TextColor3 = Color3.fromRGB(120, 122, 132)
@@ -421,9 +582,7 @@ SubtitleLabel.TextSize = 9
 SubtitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 SubtitleLabel.ZIndex = 5
 
--- -------------------------------------------------------------
 -- [ DISCORD BUTTON ]
--- -------------------------------------------------------------
 local DiscordButton = Instance.new("ImageButton")
 DiscordButton.Name = "DiscordButton"
 DiscordButton.Parent = Header
@@ -458,9 +617,7 @@ end)
 
 DiscordButton.MouseButton1Click:Connect(function()
     pcall(function()
-        if setclipboard then
-            setclipboard("https://discord.gg/mNGeUVcjKB")
-        end
+        if setclipboard then setclipboard("https://discord.gg/mNGeUVcjKB") end
     end)
     local tweenSquish = TweenService:Create(DiscordButton, TWEEN_FAST, {Size = UDim2.new(0, 26, 0, 26), Position = UDim2.new(1, -70, 0, 13)})
     tweenSquish:Play()
@@ -471,9 +628,7 @@ DiscordButton.MouseButton1Click:Connect(function()
     ShowNotification("Discord Link Copied to Clipboard!")
 end)
 
--- -------------------------------------------------------------
 -- [ CLOSE BUTTON ]
--- -------------------------------------------------------------
 local CloseButton = Instance.new("TextButton")
 CloseButton.Name = "CloseButton"
 CloseButton.Parent = Header
@@ -512,9 +667,9 @@ CloseButton.MouseButton1Click:Connect(function()
     ToggleGuiState()
 end)
 
--- -------------------------------------------------------------
--- [ CARD 1: BEST EGG CONTAINER WITH CLEAN BACKGROUND & 3D PREVIEW ]
--- -------------------------------------------------------------
+-- =======================================================
+-- EGG CARD - BEST EGG CONTAINER
+-- =======================================================
 local EggCard = Instance.new("Frame")
 EggCard.Name = "EggCard"
 EggCard.Parent = MainFrame
@@ -522,6 +677,7 @@ EggCard.BackgroundColor3 = Color3.fromRGB(16, 18, 22)
 EggCard.Position = UDim2.new(0, 10, 0, 52)
 EggCard.Size = UDim2.new(1, -20, 0, 82)
 EggCard.ClipsDescendants = true
+EggCard.ZIndex = 2
 
 local EggCardCorner = Instance.new("UICorner")
 EggCardCorner.CornerRadius = UDim.new(0, 10)
@@ -533,381 +689,118 @@ EggCardStroke.Color = Color3.fromRGB(255, 255, 255)
 EggCardStroke.Thickness = 1
 EggCardStroke.Transparency = 0.88
 
--- ItemFrame with Sleek Minimal Dark Background
-local ItemFrame = Instance.new("Frame")
-ItemFrame.Name = "ItemFrame"
-ItemFrame.Parent = EggCard
-ItemFrame.BackgroundColor3 = Color3.fromRGB(22, 25, 32)
-ItemFrame.Position = UDim2.new(0, 10, 0, 10)
-ItemFrame.Size = UDim2.new(0, 62, 0, 62)
-ItemFrame.ClipsDescendants = true
+local ViewportContainer = Instance.new("ViewportFrame")
+ViewportContainer.Name = "ItemFrame"
+ViewportContainer.Parent = EggCard
+ViewportContainer.BackgroundColor3 = Color3.fromRGB(26, 18, 20)
+ViewportContainer.Position = UDim2.new(0, 10, 0, 10)
+ViewportContainer.Size = UDim2.new(0, 62, 0, 62)
+ViewportContainer.ZIndex = 3
 
-local ItemFrameCorner = Instance.new("UICorner")
-ItemFrameCorner.CornerRadius = UDim.new(0, 10)
-ItemFrameCorner.Parent = ItemFrame
-
-local ItemFrameStroke = Instance.new("UIStroke")
-ItemFrameStroke.Parent = ItemFrame
-ItemFrameStroke.Color = Color3.fromRGB(255, 255, 255)
-ItemFrameStroke.Thickness = 1
-ItemFrameStroke.Transparency = 0.85
-
-local ItemIcon = Instance.new("ImageLabel")
-ItemIcon.Name = "ItemIcon"
-ItemIcon.Parent = ItemFrame
-ItemIcon.BackgroundTransparency = 1
-ItemIcon.Size = UDim2.new(1, 0, 1, 0)
-ItemIcon.Image = "rbxassetid://76833458893034"
-ItemIcon.ScaleType = Enum.ScaleType.Fit
-ItemIcon.ZIndex = 1
-
--- 3D VIEWPORT FRAME ENGINE
-local ViewportFrame = Instance.new("ViewportFrame")
-ViewportFrame.Name = "3DPreviewViewport"
-ViewportFrame.Parent = ItemFrame
-ViewportFrame.BackgroundTransparency = 1
-ViewportFrame.Size = UDim2.new(1, 0, 1, 0)
-ViewportFrame.ClipsDescendants = true
-ViewportFrame.ZIndex = 2
-ViewportFrame.Ambient = Color3.fromRGB(200, 200, 200)
-ViewportFrame.LightColor = Color3.fromRGB(255, 255, 255)
-ViewportFrame.LightDirection = Vector3.new(-1, -2, -1)
+local ViewportCorner = Instance.new("UICorner")
+ViewportCorner.CornerRadius = UDim.new(0, 10)
+ViewportCorner.Parent = ViewportContainer
 
 local ViewportCamera = Instance.new("Camera")
-ViewportCamera.FieldOfView = 45
-ViewportCamera.Parent = ViewportFrame
-ViewportFrame.CurrentCamera = ViewportCamera
+ViewportContainer.CurrentCamera = ViewportCamera
+ViewportCamera.Parent = ViewportContainer
 
-local ViewportWorldModel = Instance.new("WorldModel")
-ViewportWorldModel.Parent = ViewportFrame
+local EggCategory = Instance.new("TextLabel")
+EggCategory.Name = "TagLabel"
+EggCategory.Parent = EggCard
+EggCategory.BackgroundTransparency = 1
+EggCategory.Position = UDim2.new(0, 80, 0, 12)
+EggCategory.Size = UDim2.new(0, 120, 0, 10)
+EggCategory.Font = Enum.Font.GothamBold
+EggCategory.Text = "BEST EGG"
+EggCategory.TextColor3 = Color3.fromRGB(110, 115, 125)
+EggCategory.TextSize = 9
+EggCategory.TextXAlignment = Enum.TextXAlignment.Left
+EggCategory.ZIndex = 5
 
-local TagLabel = Instance.new("TextLabel")
-TagLabel.Name = "TagLabel"
-TagLabel.Parent = EggCard
-TagLabel.BackgroundTransparency = 1
-TagLabel.Position = UDim2.new(0, 80, 0, 12)
-TagLabel.Size = UDim2.new(0, 100, 0, 10)
-TagLabel.Font = Enum.Font.GothamBold
-TagLabel.Text = "BEST EGG"
-TagLabel.TextColor3 = Color3.fromRGB(110, 115, 125)
-TagLabel.TextSize = 9
-TagLabel.TextXAlignment = Enum.TextXAlignment.Left
+local EggName = Instance.new("TextLabel")
+EggName.Name = "ItemName"
+EggName.Parent = EggCard
+EggName.BackgroundTransparency = 1
+EggName.Position = UDim2.new(0, 80, 0, 26)
+EggName.Size = UDim2.new(0, 140, 0, 18)
+EggName.Font = Enum.Font.GothamBold
+EggName.Text = "Loading..."
+EggName.TextColor3 = Color3.fromRGB(255, 255, 255)
+EggName.TextSize = 14
+EggName.TextXAlignment = Enum.TextXAlignment.Left
+EggName.TextTruncate = Enum.TextTruncate.AtEnd
+EggName.ZIndex = 5
 
-local ItemName = Instance.new("TextLabel")
-ItemName.Name = "ItemName"
-ItemName.Parent = EggCard
-ItemName.BackgroundTransparency = 1
-ItemName.Position = UDim2.new(0, 80, 0, 26)
-ItemName.Size = UDim2.new(0, 120, 0, 18)
-ItemName.Font = Enum.Font.GothamBold
-ItemName.Text = "Searching..."
-ItemName.TextColor3 = Color3.fromRGB(255, 255, 255)
-ItemName.TextSize = 13
-ItemName.TextXAlignment = Enum.TextXAlignment.Left
+local EggRarity = Instance.new("TextLabel")
+EggRarity.Name = "RarityLabel"
+EggRarity.Parent = EggCard
+EggRarity.BackgroundTransparency = 1
+EggRarity.Position = UDim2.new(0, 80, 0, 48)
+EggRarity.Size = UDim2.new(0, 110, 0, 14)
+EggRarity.Font = Enum.Font.GothamBold
+EggRarity.Text = "Common"
+EggRarity.TextColor3 = Color3.fromRGB(255, 140, 40)
+EggRarity.TextSize = 11
+EggRarity.TextXAlignment = Enum.TextXAlignment.Left
+EggRarity.ZIndex = 5
 
-local RarityLabel = Instance.new("TextLabel")
-RarityLabel.Name = "RarityLabel"
-RarityLabel.Parent = EggCard
-RarityLabel.BackgroundTransparency = 1
-RarityLabel.Position = UDim2.new(0, 80, 0, 48)
-RarityLabel.Size = UDim2.new(0, 110, 0, 14)
-RarityLabel.Font = Enum.Font.GothamBold
-RarityLabel.Text = "Common"
-RarityLabel.TextColor3 = Color3.fromRGB(255, 140, 40)
-RarityLabel.TextSize = 11
-RarityLabel.TextXAlignment = Enum.TextXAlignment.Left
+local MainLuckIcon = Instance.new("ImageLabel")
+MainLuckIcon.Name = "LuckIcon"
+MainLuckIcon.Size = UDim2.new(0, 16, 0, 16)
+MainLuckIcon.Position = UDim2.new(1, -100, 0, 36)
+MainLuckIcon.BackgroundTransparency = 1
+MainLuckIcon.Image = "rbxassetid://134717036407560"
+MainLuckIcon.ZIndex = 5
+MainLuckIcon.Parent = EggCard
 
-local ValueLabel = Instance.new("TextLabel")
-ValueLabel.Name = "ValueLabel"
-ValueLabel.Parent = EggCard
-ValueLabel.BackgroundTransparency = 1
-ValueLabel.Position = UDim2.new(1, -115, 0, 36)
-ValueLabel.Size = UDim2.new(0, 90, 0, 18)
-ValueLabel.Font = Enum.Font.GothamBold
-ValueLabel.Text = "0 Kg"
-ValueLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-ValueLabel.TextSize = 12
-ValueLabel.TextXAlignment = Enum.TextXAlignment.Right
+local EggPrice = Instance.new("TextLabel")
+EggPrice.Name = "ValueLabel"
+EggPrice.Parent = EggCard
+EggPrice.BackgroundTransparency = 1
+EggPrice.Position = UDim2.new(1, -80, 0, 35)
+EggPrice.Size = UDim2.new(0, 62, 0, 18)
+EggPrice.Font = Enum.Font.GothamBold
+EggPrice.Text = "x1 Luck"
+EggPrice.TextColor3 = Color3.fromRGB(46, 204, 113)
+EggPrice.TextSize = 12
+EggPrice.TextXAlignment = Enum.TextXAlignment.Right
+EggPrice.ZIndex = 5
 
-local ArrowBtn = Instance.new("TextButton")
-ArrowBtn.Name = "ArrowBtn"
-ArrowBtn.Parent = EggCard
-ArrowBtn.BackgroundTransparency = 1
-ArrowBtn.Position = UDim2.new(1, -24, 0, 8)
-ArrowBtn.Size = UDim2.new(0, 16, 0, 16)
-ArrowBtn.Font = Enum.Font.GothamBold
-ArrowBtn.Text = "v"
-ArrowBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-ArrowBtn.TextSize = 11
+local DropdownBtn = Instance.new("TextButton")
+DropdownBtn.Name = "ArrowBtn"
+DropdownBtn.Parent = EggCard
+DropdownBtn.BackgroundColor3 = Color3.fromRGB(26, 30, 38)
+DropdownBtn.Position = UDim2.new(1, -28, 0, 8)
+DropdownBtn.Size = UDim2.new(0, 20, 0, 20)
+DropdownBtn.Font = Enum.Font.GothamBold
+DropdownBtn.Text = "∨"
+DropdownBtn.TextColor3 = Color3.fromRGB(200, 205, 215)
+DropdownBtn.TextSize = 12
+DropdownBtn.ZIndex = 6
 
--- -------------------------------------------------------------
--- [ DROPDOWN SCROLL CONTAINER FOR FULL EGGCARD LIST ]
--- -------------------------------------------------------------
-local CrateListScroll = Instance.new("ScrollingFrame")
-CrateListScroll.Name = "CrateListScroll"
-CrateListScroll.Parent = EggCard
-CrateListScroll.BackgroundTransparency = 1
-CrateListScroll.Position = UDim2.new(0, 8, 0, 82)
-CrateListScroll.Size = UDim2.new(1, -16, 0, 190)
-CrateListScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-CrateListScroll.ScrollBarThickness = 3
-CrateListScroll.ScrollBarImageColor3 = Color3.fromRGB(180, 185, 195)
-CrateListScroll.Visible = false
-CrateListScroll.ClipsDescendants = true
+local DropdownBtnCorner = Instance.new("UICorner")
+DropdownBtnCorner.CornerRadius = UDim.new(0, 6)
+DropdownBtnCorner.Parent = DropdownBtn
 
-local ScrollLayout = Instance.new("UIListLayout")
-ScrollLayout.Parent = CrateListScroll
-ScrollLayout.SortOrder = Enum.SortOrder.LayoutOrder
-ScrollLayout.Padding = UDim.new(0, 8)
-
-ScrollLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-    CrateListScroll.CanvasSize = UDim2.new(0, 0, 0, ScrollLayout.AbsoluteContentSize.Y + 8)
+DropdownBtn.MouseEnter:Connect(function()
+    TweenService:Create(DropdownBtn, TWEEN_FAST, {BackgroundColor3 = Color3.fromRGB(45, 50, 60), TextColor3 = Color3.fromRGB(255, 255, 255)}):Play()
 end)
 
--- -------------------------------------------------------------
--- [ RARITY COLOR ENGINE & DATA SCANNER FOR WORKSPACE.CRATES ]
--- -------------------------------------------------------------
-local RARITY_COLORS = {
-    ["COMMON"] = Color3.fromRGB(180, 180, 180),
-    ["UNCOMMON"] = Color3.fromRGB(80, 220, 120),
-    ["RARE"] = Color3.fromRGB(60, 150, 255),
-    ["EPIC"] = Color3.fromRGB(180, 70, 255),
-    ["LEGENDARY"] = Color3.fromRGB(255, 140, 40),
-    ["MYTHIC"] = Color3.fromRGB(255, 50, 120),
-    ["DIVINE"] = Color3.fromRGB(255, 215, 0),
-    ["RELIC"] = Color3.fromRGB(0, 230, 200),
-    ["SECRET"] = Color3.fromRGB(255, 0, 80),
-    ["EXOTIC"] = Color3.fromRGB(255, 100, 200),
-    ["COSMIC"] = Color3.fromRGB(0, 240, 255),
-    ["APEX"] = Color3.fromRGB(255, 80, 0),
-    ["CELESTIAL"] = Color3.fromRGB(160, 220, 255),
-}
+DropdownBtn.MouseLeave:Connect(function()
+    TweenService:Create(DropdownBtn, TWEEN_FAST, {BackgroundColor3 = Color3.fromRGB(26, 30, 38), TextColor3 = Color3.fromRGB(200, 205, 215)}):Play()
+end)
 
-local function GetRarityColor(rarityStr)
-    if not rarityStr or rarityStr == "" then return Color3.fromRGB(200, 200, 200) end
-    local upper = tostring(rarityStr):upper()
-    for key, color in pairs(RARITY_COLORS) do
-        if upper:find(key) then
-            return color
-        end
-    end
-    local hash = 0
-    for i = 1, #rarityStr do
-        hash = (hash + string.byte(rarityStr, i) * 37) % 360
-    end
-    return Color3.fromHSV(hash / 360, 0.75, 1)
-end
-
--- FORMAT VALUE WITH ALWAYS "Kg" AT THE END
-local function FormatCrateValue(val)
-    if val == nil then return "0 Kg" end
-    local num = tonumber(val)
-    if not num then 
-        local cleanStr = tostring(val):gsub("%s*[Kk][Gg]%s*$", "")
-        return cleanStr .. " Kg" 
-    end
-    
-    if num >= 1e9 then
-        return string.format("%.2fB Kg", num / 1e9)
-    elseif num >= 1e6 then
-        return string.format("%.2fM Kg", num / 1e6)
-    elseif num >= 1e3 then
-        return string.format("%.2fK Kg", num / 1e3)
-    elseif num > 0 then
-        if num % 1 == 0 then
-            return string.format("%d Kg", num)
-        else
-            return string.format("%.2f Kg", num)
-        end
-    else
-        return "0 Kg"
-    end
-end
-
-local currentPreviewModel = nil
-local currentTargetCrate = nil
-local selectedCrateModel = nil -- Selected lock crate
-local previewCenter = Vector3.new()
-local previewRotation = 0
-
--- Table to store dropdown mini 3D models for live 360 sync
-local dropdownPreviewModels = {}
-local populateSessionId = 0 -- Session token for async batch canceling
-
-local function Setup3DModelPreview(crateModel)
-    if not crateModel or not ViewportWorldModel then return end
-    
-    ViewportWorldModel:ClearAllChildren()
-    currentPreviewModel = nil
-    
-    local cloned = nil
-    pcall(function()
-        local origArch = crateModel.Archivable
-        crateModel.Archivable = true
-        cloned = crateModel:Clone()
-        crateModel.Archivable = origArch
-    end)
-    
-    if not cloned then 
-        ItemIcon.Visible = true
-        return 
-    end
-    
-    ItemIcon.Visible = false
-    
-    for _, item in ipairs(cloned:GetDescendants()) do
-        if item:IsA("LuaSourceContainer") or item:IsA("Sound") or item:IsA("ParticleEmitter") or item:IsA("Highlight") then
-            item:Destroy()
-        end
-    end
-    
-    cloned.Parent = ViewportWorldModel
-    
-    local cf, size
-    if cloned:IsA("Model") then
-        cf, size = cloned:GetBoundingBox()
-    elseif cloned:IsA("BasePart") then
-        cf, size = cloned.CFrame, cloned.Size
-    else
-        return
-    end
-    
-    previewCenter = cf.Position
-    currentPreviewModel = cloned
-    
-    local maxDim = math.max(size.X, size.Y, size.Z)
-    if maxDim <= 0.1 then maxDim = 2 end
-    
-    local fov = ViewportCamera.FieldOfView
-    local distance = (maxDim / 2) / math.tan(math.rad(fov / 2)) * 1.55
-    
-    local cameraPos = previewCenter + Vector3.new(0, size.Y * 0.15, distance)
-    ViewportCamera.CFrame = CFrame.new(cameraPos, previewCenter)
-end
-
-local function ScanCrateData(crate)
-    if not crate then return nil end
-    
-    local data = {
-        Model = crate,
-        Name = "Unknown",
-        Rarity = "Common",
-        ValueNum = 0,
-        ValueText = "0 Kg"
-    }
-    
-    -- 1. SCAN CRATE NAME
-    local rawName = crate:GetAttribute("CrateName") 
-        or crate:GetAttribute("RealName") 
-        or crate:GetAttribute("ItemName") 
-        or crate:GetAttribute("Name")
-        or crate:GetAttribute("DisplayName")
-        
-    if not rawName then
-        for _, childName in ipairs({"CrateName", "RealName", "ItemName", "DisplayName", "Name"}) do
-            local v = crate:FindFirstChild(childName)
-            if v and (v:IsA("StringValue") or v:IsA("ValueObject")) then
-                rawName = v.Value
-                break
-            end
-        end
-    end
-    
-    if not rawName or rawName == "" then
-        local nameStr = crate.Name
-        nameStr = nameStr:gsub("^Crate_", ""):gsub("^Crate%s*", ""):gsub("^Egg_", ""):gsub("^Egg%s*", "")
-        local parts = nameStr:split("_")
-        rawName = (#parts > 0 and parts[1] ~= "") and parts[1] or nameStr
-    end
-    data.Name = rawName
-    
-    -- 2. SCAN RARITY / TIER
-    local rawRarity = crate:GetAttribute("CrateTier")
-        or crate:GetAttribute("Rarity")
-        or crate:GetAttribute("Tier")
-        or crate:GetAttribute("RarityLabel")
-        
-    if not rawRarity then
-        for _, childName in ipairs({"CrateTier", "Rarity", "Tier", "RarityLabel"}) do
-            local v = crate:FindFirstChild(childName)
-            if v then
-                rawRarity = tostring(v.Value)
-                break
-            end
-        end
-    end
-    
-    if not rawRarity or rawRarity == "" then
-        local nameUpper = crate.Name:upper()
-        for rarityKey, _ in pairs(RARITY_COLORS) do
-            if nameUpper:find(rarityKey) then
-                rawRarity = rarityKey
-                break
-            end
-        end
-    end
-    
-    local baseRarity = (rawRarity and rawRarity ~= "") and rawRarity or "Common"
-
-    -- 3. SCAN CRATE SIZE
-    local rawSize = crate:GetAttribute("CrateSize")
-        or crate:GetAttribute("Size")
-        or crate:GetAttribute("EggSize")
-        or crate:GetAttribute("CrateScale")
-        
-    if not rawSize then
-        for _, childName in ipairs({"CrateSize", "Size", "EggSize", "CrateScale"}) do
-            local v = crate:FindFirstChild(childName)
-            if v and (v:IsA("ValueObject") or v:IsA("StringValue")) then
-                rawSize = tostring(v.Value)
-                break
-            end
-        end
-    end
-
-    -- Combine Rarity and Size (e.g. "Cosmic - Huge" or "Cosmic")
-    if rawSize and tostring(rawSize) ~= "" then
-        data.Rarity = baseRarity .. " - " .. tostring(rawSize)
-    else
-        data.Rarity = baseRarity
-    end
-    
-    -- 4. SCAN VALUE / KG
-    local rawValue = crate:GetAttribute("CrateKg")
-        or crate:GetAttribute("Kg")
-        or crate:GetAttribute("Weight")
-        or crate:GetAttribute("Value")
-        
-    if not rawValue then
-        for _, childName in ipairs({"CrateKg", "Kg", "Weight", "Value"}) do
-            local v = crate:FindFirstChild(childName)
-            if v then
-                rawValue = tonumber(v.Value) or v.Value
-                break
-            end
-        end
-    end
-    
-    local numVal = tonumber(rawValue) or 0
-    data.ValueNum = numVal
-    data.ValueText = FormatCrateValue(rawValue or numVal)
-    
-    return data
-end
-
--- Forward declarations
-local PopulateCrateList
-local ScanAndUpdateBestCrate
-
--- -------------------------------------------------------------
--- [ CONTROL PANEL & AUTO EXPAND / COLLAPSE SYSTEM ]
--- -------------------------------------------------------------
+-- =======================================================
+-- CONTROL PANEL
+-- =======================================================
 local ControlPanel = Instance.new("Frame")
 ControlPanel.Name = "ControlPanel"
 ControlPanel.Parent = MainFrame
 ControlPanel.BackgroundColor3 = Color3.fromRGB(16, 18, 22)
 ControlPanel.Position = UDim2.new(0, 10, 0, 144)
 ControlPanel.Size = UDim2.new(1, -20, 0, 84)
+ControlPanel.ZIndex = 2
 
 local ControlCorner = Instance.new("UICorner")
 ControlCorner.CornerRadius = UDim.new(0, 10)
@@ -919,380 +812,18 @@ ControlStroke.Color = Color3.fromRGB(255, 255, 255)
 ControlStroke.Thickness = 1
 ControlStroke.Transparency = 0.88
 
-local isEggExpanded = false
-
-local function SetCardExpandedState(expanded)
-    isEggExpanded = expanded
-    local targetRot = isEggExpanded and 180 or 0
-    local targetEggH = isEggExpanded and 280 or 82
-    local targetControlY = isEggExpanded and 342 or 144
-    local targetMainH = isEggExpanded and 440 or 242
-
-    CrateListScroll.Visible = isEggExpanded
-
-    if isEggExpanded then
-        PopulateCrateList()
-    else
-        dropdownPreviewModels = {}
-        for _, child in ipairs(CrateListScroll:GetChildren()) do
-            if child:IsA("Frame") or child:IsA("TextButton") then
-                child:Destroy()
-            end
-        end
-    end
-
-    TweenService:Create(ArrowBtn, TWEEN_ELASTIC, {Rotation = targetRot}):Play()
-    TweenService:Create(EggCard, TWEEN_SPRING, {Size = UDim2.new(1, -20, 0, targetEggH)}):Play()
-    TweenService:Create(ControlPanel, TWEEN_SPRING, {Position = UDim2.new(0, 10, 0, targetControlY)}):Play()
-    TweenService:Create(MainFrame, TWEEN_SPRING, {Size = UDim2.new(0, 345, 0, targetMainH)}):Play()
-end
-
-ArrowBtn.MouseButton1Click:Connect(function()
-    SetCardExpandedState(not isEggExpanded)
-end)
-
--- -------------------------------------------------------------
--- [ MINI EGGCARD BUILDER WITH LAZY ASYNC 3D LOADING ]
--- -------------------------------------------------------------
-PopulateCrateList = function()
-    if not isEggExpanded then return end
-
-    populateSessionId = populateSessionId + 1
-    local currentSession = populateSessionId
-
-    dropdownPreviewModels = {}
-    for _, child in ipairs(CrateListScroll:GetChildren()) do
-        if child:IsA("Frame") or child:IsA("TextButton") then
-            child:Destroy()
-        end
-    end
-
-    local cratesFolder = workspace:FindFirstChild("Crates")
-    if not cratesFolder then return end
-
-    -- 1. Collect and Scan All Crates Data
-    local crateItems = {}
-    local children = cratesFolder:GetChildren()
-    for _, child in ipairs(children) do
-        if child:IsA("Model") or child:IsA("BasePart") then
-            local data = ScanCrateData(child)
-            if data then
-                table.insert(crateItems, data)
-            end
-        end
-    end
-
-    -- 2. Sort Crates from Highest to Lowest Kg (มากไปน้อย)
-    table.sort(crateItems, function(a, b)
-        return a.ValueNum > b.ValueNum
-    end)
-
-    -- 3. Filter out currently displayed/selected EggCard
-    local filteredItems = {}
-    for _, data in ipairs(crateItems) do
-        if data.Model ~= currentTargetCrate then
-            table.insert(filteredItems, data)
-        end
-    end
-
-    -- 4. Fast UI Frame Creation
-    local pending3DTasks = {}
-
-    for index, data in ipairs(filteredItems) do
-        if currentSession ~= populateSessionId or not isEggExpanded then return end
-        local child = data.Model
-
-        local miniCard = Instance.new("TextButton")
-        miniCard.Name = "MiniCard_" .. index
-        miniCard.Parent = CrateListScroll
-        miniCard.BackgroundColor3 = Color3.fromRGB(16, 18, 22)
-        miniCard.Size = UDim2.new(1, -6, 0, 68)
-        miniCard.Text = ""
-        miniCard.AutoButtonColor = false
-        miniCard.ClipsDescendants = true
-
-        local miniCardCorner = Instance.new("UICorner")
-        miniCardCorner.CornerRadius = UDim.new(0, 10)
-        miniCardCorner.Parent = miniCard
-
-        local miniCardStroke = Instance.new("UIStroke")
-        miniCardStroke.Parent = miniCard
-        miniCardStroke.Color = Color3.fromRGB(255, 255, 255)
-        miniCardStroke.Thickness = 1
-        miniCardStroke.Transparency = 0.88
-
-        -- Mini ItemFrame Background
-        local mItemFrame = Instance.new("Frame")
-        mItemFrame.Name = "MiniItemFrame"
-        mItemFrame.Parent = miniCard
-        mItemFrame.BackgroundColor3 = Color3.fromRGB(22, 25, 32)
-        mItemFrame.Position = UDim2.new(0, 8, 0, 8)
-        mItemFrame.Size = UDim2.new(0, 52, 0, 52)
-        mItemFrame.ClipsDescendants = true
-
-        local mItemCorner = Instance.new("UICorner")
-        mItemCorner.CornerRadius = UDim.new(0, 8)
-        mItemCorner.Parent = mItemFrame
-
-        local mItemStroke = Instance.new("UIStroke")
-        mItemStroke.Parent = mItemFrame
-        mItemStroke.Color = Color3.fromRGB(255, 255, 255)
-        mItemStroke.Thickness = 1
-        mItemStroke.Transparency = 0.88
-
-        -- Mini Viewport Preview Setup
-        local miniVpFrame = Instance.new("ViewportFrame")
-        miniVpFrame.Name = "Mini3DViewport"
-        miniVpFrame.Parent = mItemFrame
-        miniVpFrame.BackgroundTransparency = 1
-        miniVpFrame.Size = UDim2.new(1, 0, 1, 0)
-        miniVpFrame.Ambient = Color3.fromRGB(200, 200, 200)
-        miniVpFrame.LightColor = Color3.fromRGB(255, 255, 255)
-        miniVpFrame.LightDirection = Vector3.new(-1, -2, -1)
-
-        local miniCam = Instance.new("Camera")
-        miniCam.FieldOfView = 45
-        miniCam.Parent = miniVpFrame
-        miniVpFrame.CurrentCamera = miniCam
-
-        local miniWorld = Instance.new("WorldModel")
-        miniWorld.Parent = miniVpFrame
-
-        -- Store for background async 3D model cloning queue
-        table.insert(pending3DTasks, {
-            CrateModel = child,
-            WorldModel = miniWorld,
-            Camera = miniCam
-        })
-
-        -- Mini Tag Label
-        local mTag = Instance.new("TextLabel")
-        mTag.Name = "MiniTag"
-        mTag.Parent = miniCard
-        mTag.BackgroundTransparency = 1
-        mTag.Position = UDim2.new(0, 68, 0, 10)
-        mTag.Size = UDim2.new(0, 100, 0, 10)
-        mTag.Font = Enum.Font.GothamBold
-        mTag.Text = "EGG / CRATE"
-        mTag.TextColor3 = Color3.fromRGB(110, 115, 125)
-        mTag.TextSize = 8
-        mTag.TextXAlignment = Enum.TextXAlignment.Left
-
-        -- Mini Item Name Label
-        local mName = Instance.new("TextLabel")
-        mName.Name = "MiniName"
-        mName.Parent = miniCard
-        mName.BackgroundTransparency = 1
-        mName.Position = UDim2.new(0, 68, 0, 22)
-        mName.Size = UDim2.new(0, 120, 0, 16)
-        mName.Font = Enum.Font.GothamBold
-        mName.Text = data.Name
-        mName.TextColor3 = Color3.fromRGB(255, 255, 255)
-        mName.TextSize = 12
-        mName.TextXAlignment = Enum.TextXAlignment.Left
-
-        -- Mini Rarity Label
-        local mRarity = Instance.new("TextLabel")
-        mRarity.Name = "MiniRarity"
-        mRarity.Parent = miniCard
-        mRarity.BackgroundTransparency = 1
-        mRarity.Position = UDim2.new(0, 68, 0, 42)
-        mRarity.Size = UDim2.new(0, 120, 0, 14)
-        mRarity.Font = Enum.Font.GothamBold
-        mRarity.Text = data.Rarity
-        mRarity.TextColor3 = GetRarityColor(data.Rarity)
-        mRarity.TextSize = 10
-        mRarity.TextXAlignment = Enum.TextXAlignment.Left
-
-        -- Mini Value Label
-        local mValue = Instance.new("TextLabel")
-        mValue.Name = "MiniValue"
-        mValue.Parent = miniCard
-        mValue.BackgroundTransparency = 1
-        mValue.Position = UDim2.new(1, -110, 0, 26)
-        mValue.Size = UDim2.new(0, 98, 0, 16)
-        mValue.Font = Enum.Font.GothamBold
-        mValue.Text = data.ValueText
-        mValue.TextColor3 = Color3.fromRGB(255, 255, 255)
-        mValue.TextSize = 11
-        mValue.TextXAlignment = Enum.TextXAlignment.Right
-
-        -- Hover Effect
-        miniCard.MouseEnter:Connect(function()
-            TweenService:Create(miniCardStroke, TWEEN_FAST, {Transparency = 0.3}):Play()
-        end)
-        miniCard.MouseLeave:Connect(function()
-            TweenService:Create(miniCardStroke, TWEEN_FAST, {Transparency = 0.88}):Play()
-        end)
-
-        -- Selection Event
-        miniCard.MouseButton1Click:Connect(function()
-            selectedCrateModel = child
-            SetCardExpandedState(false)
-            ScanAndUpdateBestCrate()
-        end)
-    end
-
-    -- 5. Progressive Async 3D Loader Thread
-    task.spawn(function()
-        for _, loadTask in ipairs(pending3DTasks) do
-            if currentSession ~= populateSessionId or not isEggExpanded then return end
-
-            local child = loadTask.CrateModel
-            local miniWorld = loadTask.WorldModel
-            local miniCam = loadTask.Camera
-
-            if child and child.Parent and miniWorld and miniWorld.Parent then
-                pcall(function()
-                    local origArch = child.Archivable
-                    child.Archivable = true
-                    local cloned = child:Clone()
-                    child.Archivable = origArch
-
-                    if cloned then
-                        for _, item in ipairs(cloned:GetDescendants()) do
-                            if item:IsA("LuaSourceContainer") or item:IsA("Sound") or item:IsA("ParticleEmitter") or item:IsA("Highlight") then
-                                item:Destroy()
-                            end
-                        end
-                        cloned.Parent = miniWorld
-                        local cf, sz
-                        if cloned:IsA("Model") then
-                            cf, sz = cloned:GetBoundingBox()
-                        elseif cloned:IsA("BasePart") then
-                            cf, sz = cloned.CFrame, cloned.Size
-                        end
-                        if cf and sz then
-                            local maxDim = math.max(sz.X, sz.Y, sz.Z)
-                            if maxDim <= 0.1 then maxDim = 2 end
-                            local dist = (maxDim / 2) / math.tan(math.rad(22.5)) * 1.5
-                            miniCam.CFrame = CFrame.new(cf.Position + Vector3.new(0, sz.Y * 0.15, dist), cf.Position)
-                            
-                            table.insert(dropdownPreviewModels, {
-                                Model = cloned,
-                                Center = cf.Position
-                            })
-                        end
-                    end
-                end)
-            end
-            task.wait(0.01)
-        end
-    end)
-end
-
-ScanAndUpdateBestCrate = function()
-    local cratesFolder = workspace:FindFirstChild("Crates")
-    if not cratesFolder then
-        ItemName.Text = "No Crates"
-        RarityLabel.Text = "None"
-        RarityLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
-        ValueLabel.Text = "0 Kg"
-        ViewportWorldModel:ClearAllChildren()
-        currentPreviewModel = nil
-        currentTargetCrate = nil
-        ItemIcon.Visible = true
-        if isEggExpanded then PopulateCrateList() end
-        return
-    end
-
-    if selectedCrateModel and selectedCrateModel.Parent ~= cratesFolder then
-        selectedCrateModel = nil
-    end
-    
-    local targetCrateData = nil
-
-    if selectedCrateModel then
-        targetCrateData = ScanCrateData(selectedCrateModel)
-        TagLabel.Text = "SELECTED EGG"
-    else
-        TagLabel.Text = "BEST EGG"
-        local bestVal = -1
-        local children = cratesFolder:GetChildren()
-        for _, child in ipairs(children) do
-            if child:IsA("Model") or child:IsA("BasePart") then
-                local data = ScanCrateData(child)
-                if data and data.ValueNum >= bestVal then
-                    bestVal = data.ValueNum
-                    targetCrateData = data
-                end
-            end
-        end
-    end
-
-    if targetCrateData then
-        ItemName.Text = targetCrateData.Name
-        RarityLabel.Text = targetCrateData.Rarity
-        RarityLabel.TextColor3 = GetRarityColor(targetCrateData.Rarity)
-        ValueLabel.Text = targetCrateData.ValueText
-        
-        if currentTargetCrate ~= targetCrateData.Model then
-            currentTargetCrate = targetCrateData.Model
-            Setup3DModelPreview(targetCrateData.Model)
-            if isEggExpanded then PopulateCrateList() end
-        end
-    else
-        ItemName.Text = "Waiting..."
-        RarityLabel.Text = "Searching"
-        RarityLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
-        ValueLabel.Text = "0 Kg"
-        ViewportWorldModel:ClearAllChildren()
-        currentPreviewModel = nil
-        currentTargetCrate = nil
-        ItemIcon.Visible = true
-        if isEggExpanded then PopulateCrateList() end
-    end
-end
-
--- Debounce engine to safely handle rapid child added/removed events
-local updatePending = false
-local function RequestSystemRefresh()
-    if updatePending then return end
-    updatePending = true
-    task.defer(function()
-        pcall(ScanAndUpdateBestCrate)
-        updatePending = false
-    end)
-end
-
-local function HookCratesFolder()
-    local cratesFolder = workspace:FindFirstChild("Crates")
-    if cratesFolder then
-        cratesFolder.ChildAdded:Connect(RequestSystemRefresh)
-        cratesFolder.ChildRemoved:Connect(RequestSystemRefresh)
-    end
-end
-
-workspace.ChildAdded:Connect(function(child)
-    if child.Name == "Crates" then
-        HookCratesFolder()
-        RequestSystemRefresh()
-    end
-end)
-
-HookCratesFolder()
-ScanAndUpdateBestCrate()
-
-task.spawn(function()
-    while task.wait(2) do
-        RequestSystemRefresh()
-    end
-end)
-
--- -------------------------------------------------------------
--- [ CONTROL PANEL DETAILS & LOOP ENGINE ]
--- -------------------------------------------------------------
-local ModeTitle = Instance.new("TextLabel")
-ModeTitle.Name = "ModeTitle"
-ModeTitle.Parent = ControlPanel
-ModeTitle.BackgroundTransparency = 1
-ModeTitle.Position = UDim2.new(0, 12, 0, 18)
-ModeTitle.Size = UDim2.new(0, 100, 0, 16)
-ModeTitle.Font = Enum.Font.GothamBold
-ModeTitle.Text = "TELEGUIADO"
-ModeTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-ModeTitle.TextSize = 11
-ModeTitle.TextXAlignment = Enum.TextXAlignment.Left
+local TeleLabel = Instance.new("TextLabel")
+TeleLabel.Name = "ModeTitle"
+TeleLabel.Parent = ControlPanel
+TeleLabel.BackgroundTransparency = 1
+TeleLabel.Position = UDim2.new(0, 12, 0, 18)
+TeleLabel.Size = UDim2.new(0, 110, 0, 16)
+TeleLabel.Font = Enum.Font.GothamBold
+TeleLabel.Text = "TELEGUIADO"
+TeleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TeleLabel.TextSize = 11
+TeleLabel.TextXAlignment = Enum.TextXAlignment.Left
+TeleLabel.ZIndex = 5
 
 local ModeSub = Instance.new("TextLabel")
 ModeSub.Name = "ModeSub"
@@ -1305,45 +836,41 @@ ModeSub.Text = "ONE SHOT"
 ModeSub.TextColor3 = Color3.fromRGB(110, 115, 125)
 ModeSub.TextSize = 9
 ModeSub.TextXAlignment = Enum.TextXAlignment.Left
+ModeSub.ZIndex = 5
 
-local SwapButton = Instance.new("TextButton")
-SwapButton.Name = "SwapButton"
-SwapButton.Parent = ControlPanel
-SwapButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-SwapButton.Position = UDim2.new(0, 116, 0, 22)
-SwapButton.Size = UDim2.new(0, 40, 0, 40)
-SwapButton.Font = Enum.Font.GothamBold
-SwapButton.Text = "⇄"
-SwapButton.TextColor3 = Color3.fromRGB(12, 13, 16)
-SwapButton.TextSize = 20
+local SwapBtn = Instance.new("TextButton")
+SwapBtn.Name = "SwapButton"
+SwapBtn.Parent = ControlPanel
+SwapBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+SwapBtn.Position = UDim2.new(0, 116, 0, 22)
+SwapBtn.Size = UDim2.new(0, 40, 0, 40)
+SwapBtn.Font = Enum.Font.GothamBold
+SwapBtn.Text = "⇄"
+SwapBtn.TextColor3 = Color3.fromRGB(12, 13, 16)
+SwapBtn.TextSize = 20
+SwapBtn.ZIndex = 5
 
 local SwapCorner = Instance.new("UICorner")
 SwapCorner.CornerRadius = UDim.new(0, 10)
-SwapCorner.Parent = SwapButton
+SwapCorner.Parent = SwapBtn
 
 local SwapStroke = Instance.new("UIStroke")
-SwapStroke.Parent = ControlPanel
+SwapStroke.Parent = SwapBtn
 SwapStroke.Color = Color3.fromRGB(255, 255, 255)
 SwapStroke.Thickness = 2
 SwapStroke.Transparency = 0.5
 
 local swapRotation = 0
-SwapButton.MouseEnter:Connect(function()
-    TweenService:Create(SwapButton, TWEEN_SPRING, {Size = UDim2.new(0, 43, 0, 43), Position = UDim2.new(0, 114.5, 0, 20.5)}):Play()
+SwapBtn.MouseEnter:Connect(function()
+    TweenService:Create(SwapBtn, TWEEN_SPRING, {Size = UDim2.new(0, 43, 0, 43), Position = UDim2.new(0, 114.5, 0, 20.5)}):Play()
     TweenService:Create(SwapStroke, TWEEN_FAST, {Transparency = 0}):Play()
 end)
 
-SwapButton.MouseLeave:Connect(function()
-    TweenService:Create(SwapButton, TWEEN_SPRING, {Size = UDim2.new(0, 40, 0, 40), Position = UDim2.new(0, 116, 0, 22)}):Play()
+SwapBtn.MouseLeave:Connect(function()
+    TweenService:Create(SwapBtn, TWEEN_SPRING, {Size = UDim2.new(0, 40, 0, 40), Position = UDim2.new(0, 116, 0, 22)}):Play()
     TweenService:Create(SwapStroke, TWEEN_FAST, {Transparency = 0.5}):Play()
 end)
 
-SwapButton.MouseButton1Click:Connect(function()
-    swapRotation = swapRotation + 180
-    TweenService:Create(SwapButton, TWEEN_ELASTIC, {Rotation = swapRotation}):Play()
-end)
-
--- LOOP CHECKBOX & LOOP PROCESSOR
 local LoopBox = Instance.new("TextButton")
 LoopBox.Name = "LoopBox"
 LoopBox.Parent = ControlPanel
@@ -1355,6 +882,7 @@ LoopBox.Font = Enum.Font.GothamBold
 LoopBox.Text = ""
 LoopBox.TextColor3 = Color3.fromRGB(255, 255, 255)
 LoopBox.TextSize = 14
+LoopBox.ZIndex = 5
 
 local LoopBoxCorner = Instance.new("UICorner")
 LoopBoxCorner.CornerRadius = UDim.new(0, 6)
@@ -1366,14 +894,12 @@ LoopBoxStroke.Color = Color3.fromRGB(140, 145, 155)
 LoopBoxStroke.Thickness = 1.2
 LoopBoxStroke.Transparency = 0.3
 
-local loopChecked = false
-
 local function ToggleLoopFunc()
-    loopChecked = not loopChecked
-    if loopChecked then
+    isLoopEnabled = not isLoopEnabled
+    if isLoopEnabled then
         LoopBox.Text = "✓"
         TweenService:Create(LoopBox, TWEEN_SPRING, {Size = UDim2.new(0, 27, 0, 27), Position = UDim2.new(0, 170.5, 0, 28.5)}):Play()
-        TweenService:Create(LoopBoxStroke, TWEEN_FAST, {Color = Color3.fromRGB(255, 255, 255), Transparency = 0}):Play()
+        TweenService:Create(LoopBoxStroke, TWEEN_FAST, {Color = Color3.fromRGB(46, 204, 113), Transparency = 0}):Play()
         task.delay(0.1, function()
             TweenService:Create(LoopBox, TWEEN_FAST, {Size = UDim2.new(0, 24, 0, 24), Position = UDim2.new(0, 172, 0, 30)}):Play()
         end)
@@ -1396,76 +922,1071 @@ LoopLabel.Text = "LOOP"
 LoopLabel.TextColor3 = Color3.fromRGB(210, 215, 225)
 LoopLabel.TextSize = 11
 LoopLabel.TextXAlignment = Enum.TextXAlignment.Left
+LoopLabel.ZIndex = 5
 
 LoopLabel.MouseButton1Click:Connect(ToggleLoopFunc)
 
--- Background Continuous Loop Routine
-task.spawn(function()
-    while true do
-        task.wait(0.5)
-        if loopChecked then
-            pcall(function()
-                RequestSystemRefresh()
-            end)
-        end
-    end
-end)
-
--- Neon Toggle Switch (Clean Pure Toggle UI State)
-local ToggleFrame = Instance.new("TextButton")
-ToggleFrame.Name = "ToggleFrame"
-ToggleFrame.Parent = ControlPanel
-ToggleFrame.BackgroundColor3 = Color3.fromRGB(32, 35, 44)
-ToggleFrame.Position = UDim2.new(1, -54, 0, 31)
-ToggleFrame.Size = UDim2.new(0, 44, 0, 22)
-ToggleFrame.Text = ""
+local ToggleBg = Instance.new("TextButton")
+ToggleBg.Name = "ToggleFrame"
+ToggleBg.Parent = ControlPanel
+ToggleBg.BackgroundColor3 = Color3.fromRGB(32, 35, 44)
+ToggleBg.Position = UDim2.new(1, -54, 0, 31)
+ToggleBg.Size = UDim2.new(0, 44, 0, 22)
+ToggleBg.Text = ""
+ToggleBg.ZIndex = 5
 
 local ToggleCorner = Instance.new("UICorner")
 ToggleCorner.CornerRadius = UDim.new(1, 0)
-ToggleCorner.Parent = ToggleFrame
+ToggleCorner.Parent = ToggleBg
 
 local ToggleCircle = Instance.new("Frame")
 ToggleCircle.Name = "ToggleCircle"
-ToggleCircle.Parent = ToggleFrame
+ToggleCircle.Parent = ToggleBg
 ToggleCircle.BackgroundColor3 = Color3.fromRGB(150, 155, 165)
 ToggleCircle.Position = UDim2.new(0, 3, 0.5, 0)
 ToggleCircle.AnchorPoint = Vector2.new(0, 0.5)
 ToggleCircle.Size = UDim2.new(0, 16, 0, 16)
+ToggleCircle.ZIndex = 6
 
 local CircleCorner = Instance.new("UICorner")
 CircleCorner.CornerRadius = UDim.new(1, 0)
 CircleCorner.Parent = ToggleCircle
 
-local toggled = false
-ToggleFrame.MouseButton1Click:Connect(function()
-    toggled = not toggled
-    if toggled then
-        TweenService:Create(ToggleFrame, TWEEN_FAST, {BackgroundColor3 = Color3.fromRGB(255, 255, 255)}):Play()
+-- =======================================================
+-- DROPDOWN SCROLLING FRAME
+-- =======================================================
+local DropdownFrame = Instance.new("ScrollingFrame")
+DropdownFrame.Name = "EggDropdown"
+DropdownFrame.Size = UDim2.new(1, -20, 0, 0)
+DropdownFrame.Position = UDim2.new(0, 10, 0, 142)
+DropdownFrame.BackgroundColor3 = Color3.fromRGB(16, 18, 22)
+DropdownFrame.BorderSizePixel = 0
+DropdownFrame.Visible = false
+DropdownFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+DropdownFrame.ScrollBarThickness = 4
+DropdownFrame.ScrollBarImageColor3 = Color3.fromRGB(180, 185, 195)
+DropdownFrame.ZIndex = 10
+DropdownFrame.Parent = MainFrame
+
+local DropdownCorner = Instance.new("UICorner")
+DropdownCorner.CornerRadius = UDim.new(0, 10)
+DropdownCorner.Parent = DropdownFrame
+
+local DropdownStroke = Instance.new("UIStroke")
+DropdownStroke.Color = Color3.fromRGB(255, 255, 255)
+DropdownStroke.Thickness = 1
+DropdownStroke.Transparency = 0.88
+DropdownStroke.Parent = DropdownFrame
+
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.Parent = DropdownFrame
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Padding = UDim.new(0, 5)
+
+local UIPadding = Instance.new("UIPadding")
+UIPadding.PaddingTop = UDim.new(0, 6)
+UIPadding.PaddingBottom = UDim.new(0, 6)
+UIPadding.PaddingLeft = UDim.new(0, 6)
+UIPadding.PaddingRight = UDim.new(0, 6)
+UIPadding.Parent = DropdownFrame
+
+-- =======================================================
+-- RIDE A PET WIKI EGG DATABASE
+-- =======================================================
+local WikiEggDatabase = {
+    ["White Egg"] = "Common", ["Brown Egg"] = "Common",
+    ["Cracked Egg"] = "Rare", ["Easter Egg"] = "Rare", ["Stone Egg"] = "Rare",
+    ["Ocean Egg"] = "Rare", ["Leaf Egg"] = "Rare", ["Asteroid Egg"] = "Rare",
+    ["Magma Egg"] = "Rare",
+    ["Mushroom Egg"] = "Epic", ["Flower Egg"] = "Epic", ["Slime Egg"] = "Epic",
+    ["Ice Egg"] = "Epic", ["Cauldron"] = "Epic",
+    ["Glass Egg"] = "Legendary", ["Golden Egg"] = "Legendary", ["Obsidian Egg"] = "Legendary",
+    ["Crystal Egg"] = "Mythic", ["Skull Egg"] = "Mythic", ["Dominus Egg"] = "Mythic",
+    ["Flaming Egg"] = "Mythic", ["Sinister Egg"] = "Mythic", ["Soul Egg"] = "Mythic",
+    ["Darkness Egg"] = "Mythic", ["Rainbow Egg"] = "Mythic", ["Steel Egg"] = "Mythic",
+    ["Dragon Egg"] = "Mythic",
+    ["Aurora Egg"] = "Divine", ["Galaxy Egg"] = "Divine", ["Lava Egg"] = "Divine",
+    ["Galactic Egg"] = "Divine", ["Bloom Egg"] = "Divine",
+    ["Black Hole Egg"] = "Ethereal", ["Blackhole Egg"] = "Ethereal",
+    ["Solaris Egg"] = "Ethereal", ["Cherub Egg"] = "Ethereal", ["AdminEgg"] = "Ethereal",
+    ["Void Egg"] = "Ethereal", ["Ethereal Egg"] = "Ethereal", ["Etheral Egg"] = "Ethereal",
+    ["Volcanic Egg"] = "Ethereal"
+}
+
+local RarityWeights = {
+    ["Ethereal"] = 7, ["Etheral"] = 7,
+    ["Divine"] = 6,
+    ["Mythic"] = 5,
+    ["Legendary"] = 4,
+    ["Epic"] = 3,
+    ["Rare"] = 2,
+    ["Common"] = 1
+}
+
+local RarityColors = {
+    ["Ethereal"] = Color3.fromRGB(255, 0, 128),
+    ["Etheral"] = Color3.fromRGB(255, 0, 128),
+    ["Divine"] = Color3.fromRGB(0, 240, 255),
+    ["Mythic"] = Color3.fromRGB(220, 40, 255),
+    ["Legendary"] = Color3.fromRGB(255, 170, 0),
+    ["Epic"] = Color3.fromRGB(160, 50, 255),
+    ["Rare"] = Color3.fromRGB(0, 140, 255),
+    ["Common"] = Color3.fromRGB(180, 180, 180)
+}
+
+local function parseLuckValue(val)
+    if type(val) == "number" then return val end
+    if type(val) ~= "string" then return 1 end
+    local str = string.gsub(string.upper(val), ",", "")
+    local numStr = string.match(str, "([%d%.]+)")
+    if not numStr then return 1 end
+    local num = tonumber(numStr) or 1
+    if string.find(str, "T") then num = num * 1e12
+    elseif string.find(str, "B") then num = num * 1e9
+    elseif string.find(str, "M") then num = num * 1e6
+    elseif string.find(str, "K") then num = num * 1e3 end
+    return num
+end
+
+local function formatLuckNumber(num)
+    if type(num) ~= "number" then return tostring(num) end
+    if num >= 1e12 then return string.format("%.1fT", num / 1e12)
+    elseif num >= 1e9 then return string.format("%.1fB", num / 1e9)
+    elseif num >= 1e6 then return string.format("%.1fM", num / 1e6)
+    elseif num >= 1e3 then return string.format("%.1fK", num / 1e3)
+    else return tostring(num) end
+end
+
+local function getEggLuck(eggObj)
+    if not eggObj or not eggObj.Parent then return "x1 Luck" end
+    local handle = eggObj:FindFirstChild("Handle")
+    if handle then
+        local luckObj = handle:FindFirstChild("Luck")
+        if luckObj then
+            if luckObj:IsA("TextLabel") or luckObj:IsA("TextButton") then return luckObj.Text
+            elseif luckObj:IsA("ValueBase") then return "x" .. formatLuckNumber(luckObj.Value) .. " Luck"
+            elseif luckObj:IsA("BillboardGui") or luckObj:IsA("SurfaceGui") then
+                local txt = luckObj:FindFirstChildWhichIsA("TextLabel", true)
+                if txt then return txt.Text end
+            end
+        end
+        local eggLuckObj = handle:FindFirstChild("EggLuck")
+        if eggLuckObj then
+            local txt = eggLuckObj:FindFirstChildWhichIsA("TextLabel", true)
+            if txt then return txt.Text end
+        end
+    end
+    if eggObj:GetAttribute("Luck") then return "x" .. formatLuckNumber(eggObj:GetAttribute("Luck")) .. " Luck" end
+    local luckVal = eggObj:FindFirstChild("Luck", true)
+    if luckVal then
+        if luckVal:IsA("ValueBase") then return "x" .. formatLuckNumber(luckVal.Value) .. " Luck"
+        elseif luckVal:IsA("TextLabel") then return luckVal.Text end
+    end
+    return "x1 Luck"
+end
+
+local function getEggLuckNumeric(eggObj)
+    if not eggObj or not eggObj.Parent then return 1 end
+    local handle = eggObj:FindFirstChild("Handle")
+    if handle then
+        local luckObj = handle:FindFirstChild("Luck")
+        if luckObj then
+            if luckObj:IsA("ValueBase") then return luckObj.Value end
+            if luckObj:IsA("TextLabel") or luckObj:IsA("TextButton") then return parseLuckValue(luckObj.Text) end
+            if luckObj:IsA("BillboardGui") or luckObj:IsA("SurfaceGui") then
+                local txt = luckObj:FindFirstChildWhichIsA("TextLabel", true)
+                if txt then return parseLuckValue(txt.Text) end
+            end
+        end
+        local eggLuckObj = handle:FindFirstChild("EggLuck")
+        if eggLuckObj then
+            local txt = eggLuckObj:FindFirstChildWhichIsA("TextLabel", true)
+            if txt then return parseLuckValue(txt.Text) end
+        end
+    end
+    if eggObj:GetAttribute("Luck") then return parseLuckValue(eggObj:GetAttribute("Luck")) end
+    local luckVal = eggObj:FindFirstChild("Luck", true)
+    if luckVal then
+        if luckVal:IsA("ValueBase") then return luckVal.Value
+        elseif luckVal:IsA("TextLabel") then return parseLuckValue(luckVal.Text) end
+    end
+    return 1
+end
+
+local function getEggRarity(eggObj)
+    if not eggObj or not eggObj.Parent then return "Common" end
+    local eggName = eggObj.Name
+    if WikiEggDatabase[eggName] then return WikiEggDatabase[eggName] end
+    if eggObj:GetAttribute("Rarity") and RarityWeights[tostring(eggObj:GetAttribute("Rarity"))] then
+        return tostring(eggObj:GetAttribute("Rarity"))
+    end
+    local rarityVal = eggObj:FindFirstChild("Rarity", true)
+    if rarityVal then
+        local rStr = rarityVal:IsA("ValueBase") and tostring(rarityVal.Value) or (rarityVal:IsA("TextLabel") and rarityVal.Text or nil)
+        if rStr and RarityWeights[rStr] then return rStr end
+    end
+
+    local eggSpawns = Workspace:FindFirstChild("EggSpawns")
+    if eggSpawns and (eggObj:IsA("Model") or eggObj:IsA("BasePart")) then
+        local success, eggPos = pcall(function()
+            return eggObj:IsA("Model") and eggObj:GetPivot().Position or eggObj.Position
+        end)
+        if success and eggPos then
+            local closestSpawnName = nil
+            local minDist = 40
+            for _, spawnPart in ipairs(eggSpawns:GetChildren()) do
+                local spawnPos = spawnPart:IsA("BasePart") and spawnPart.Position or spawnPart:GetPivot().Position
+                local dist = (eggPos - spawnPos).Magnitude
+                if dist < minDist then
+                    minDist = dist
+                    closestSpawnName = spawnPart.Name
+                end
+            end
+            if closestSpawnName and RarityWeights[closestSpawnName] then return closestSpawnName end
+        end
+    end
+
+    for rarityName, _ in pairs(RarityWeights) do
+        if string.find(string.lower(eggName), string.lower(rarityName)) then
+            return rarityName
+        end
+    end
+    return "Common"
+end
+
+-- =======================================================
+-- ESP SYSTEM
+-- =======================================================
+local espContainer = Instance.new("Folder")
+espContainer.Name = "YanzEggESPFolder"
+espContainer.Parent = parentContainer
+
+local function removeESP()
+    for _, child in ipairs(espContainer:GetChildren()) do
+        child:Destroy()
+    end
+end
+
+local function updateESP()
+    if not isToggled or not selectedEggInstance or not selectedEggInstance.Parent then
+        removeESP()
+        return
+    end
+    local targetPart = selectedEggInstance:IsA("Model") and (selectedEggInstance.PrimaryPart or selectedEggInstance:FindFirstChildWhichIsA("BasePart", true)) or (selectedEggInstance:IsA("BasePart") and selectedEggInstance)
+    if not targetPart then
+        removeESP()
+        return
+    end
+    local bgui = espContainer:FindFirstChild("TargetEggESP")
+    if not bgui then
+        bgui = Instance.new("BillboardGui")
+        bgui.Name = "TargetEggESP"
+        bgui.AlwaysOnTop = true
+        bgui.Size = UDim2.new(0, 180, 0, 45)
+        bgui.StudsOffset = Vector3.new(0, 3, 0)
+        bgui.Parent = espContainer
+
+        local nameTxt = Instance.new("TextLabel")
+        nameTxt.Name = "NameTxt"
+        nameTxt.Size = UDim2.new(1, 0, 0, 20)
+        nameTxt.BackgroundTransparency = 1
+        nameTxt.Font = Enum.Font.GothamBold
+        nameTxt.TextSize = 13
+        nameTxt.TextColor3 = Color3.fromRGB(255, 255, 255)
+        nameTxt.TextStrokeTransparency = 0.2
+        nameTxt.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        nameTxt.Parent = bgui
+
+        local distTxt = Instance.new("TextLabel")
+        distTxt.Name = "DistTxt"
+        distTxt.Size = UDim2.new(1, 0, 0, 18)
+        distTxt.Position = UDim2.new(0, 0, 0, 20)
+        distTxt.BackgroundTransparency = 1
+        distTxt.Font = Enum.Font.GothamMedium
+        distTxt.TextSize = 11
+        distTxt.TextColor3 = Color3.fromRGB(46, 204, 113)
+        distTxt.TextStrokeTransparency = 0.2
+        distTxt.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        distTxt.Parent = bgui
+    end
+
+    bgui.Adornee = targetPart
+    local nameTxt = bgui:FindFirstChild("NameTxt")
+    local distTxt = bgui:FindFirstChild("DistTxt")
+
+    if nameTxt and distTxt then
+        local rarity = getEggRarity(selectedEggInstance)
+        nameTxt.Text = selectedEggInstance.Name .. " (" .. rarity .. ")"
+        nameTxt.TextColor3 = RarityColors[rarity] or Color3.fromRGB(255, 255, 255)
+
+        local char = LocalPlayer.Character
+        if char and char:FindFirstChild("HumanoidRootPart") then
+            local dist = math.floor((char.HumanoidRootPart.Position - targetPart.Position).Magnitude)
+            distTxt.Text = "ระยะทาง: " .. tostring(dist) .. " Studs"
+        else
+            distTxt.Text = "ระยะทาง: -- Studs"
+        end
+    end
+end
+
+RunService.RenderStepped:Connect(function()
+    if isToggled then updateESP() else removeESP() end
+end)
+
+-- =======================================================
+-- 3D VIEWPORT ENGINE (MEMORY LEAK CLEANED)
+-- =======================================================
+local function update3DEggPreview(eggObj)
+    if current3DModel then current3DModel:Destroy() current3DModel = nil end
+    if rotationConn then rotationConn:Disconnect() rotationConn = nil end
+    if not eggObj or not eggObj.Parent then return end
+
+    local clone
+    pcall(function() clone = eggObj:Clone() end)
+    if not clone then return end
+
+    for _, v in pairs(clone:GetDescendants()) do
+        if v:IsA("Script") or v:IsA("LocalScript") or v:IsA("Sound") or v:IsA("BillboardGui") or v:IsA("SurfaceGui") then
+            v:Destroy()
+        end
+    end
+
+    clone.Parent = ViewportContainer
+    current3DModel = clone
+
+    local targetPart = clone:FindFirstChildWhichIsA("MeshPart", true)
+        or clone:FindFirstChildWhichIsA("BasePart", true)
+        or (clone:IsA("BasePart") and clone)
+
+    if targetPart then
+        local centerPos = targetPart.Position
+        ViewportCamera.CFrame = CFrame.new(centerPos + Vector3.new(0, 0.2, 3.8), centerPos)
+        local rotAngle = 0
+        rotationConn = RunService.RenderStepped:Connect(function(dt)
+            rotAngle = rotAngle + (dt * 50)
+            if clone and clone.Parent then
+                if clone:IsA("Model") then
+                    clone:PivotTo(CFrame.new(centerPos) * CFrame.Angles(0, math.rad(rotAngle), 0))
+                elseif clone:IsA("BasePart") then
+                    clone.CFrame = CFrame.new(centerPos) * CFrame.Angles(0, math.rad(rotAngle), 0)
+                end
+            end
+        end)
+    end
+end
+
+local function createMini3DPreview(eggObj, parentViewport)
+    if not eggObj or not eggObj.Parent then return end
+    if not parentViewport or not parentViewport.Parent then return end
+
+    parentViewport:ClearAllChildren()
+
+    local vpCam = Instance.new("Camera")
+    parentViewport.CurrentCamera = vpCam
+    vpCam.Parent = parentViewport
+
+    local clone
+    pcall(function() clone = eggObj:Clone() end)
+    if not clone then return end
+
+    for _, v in pairs(clone:GetDescendants()) do
+        if v:IsA("Script") or v:IsA("LocalScript") or v:IsA("Sound") or v:IsA("BillboardGui") or v:IsA("SurfaceGui") then
+            v:Destroy()
+        end
+    end
+    clone.Parent = parentViewport
+    table.insert(miniViewportModels, clone)
+
+    local targetPart = clone:FindFirstChildWhichIsA("MeshPart", true)
+        or clone:FindFirstChildWhichIsA("BasePart", true)
+        or (clone:IsA("BasePart") and clone)
+
+    if targetPart then
+        local centerPos = targetPart.Position
+        vpCam.CFrame = CFrame.new(centerPos + Vector3.new(0, 0.2, 3.8), centerPos)
+        local rotAngle = math.random(0, 360)
+        local conn
+        conn = RunService.RenderStepped:Connect(function(dt)
+            if not parentViewport or not parentViewport.Parent or not clone or not clone.Parent then
+                if conn then conn:Disconnect() end
+                return
+            end
+            rotAngle = rotAngle + (dt * 45)
+            if clone:IsA("Model") then
+                clone:PivotTo(CFrame.new(centerPos) * CFrame.Angles(0, math.rad(rotAngle), 0))
+            elseif clone:IsA("BasePart") then
+                clone.CFrame = CFrame.new(centerPos) * CFrame.Angles(0, math.rad(rotAngle), 0)
+            end
+        end)
+        table.insert(miniViewportConnections, conn)
+    end
+end
+
+local function selectEgg(eggObj)
+    if not eggObj or not eggObj.Parent then return end
+    selectedEggInstance = eggObj
+    local rarity = getEggRarity(eggObj)
+
+    EggName.Text = eggObj.Name
+    EggRarity.Text = rarity
+    EggRarity.TextColor3 = RarityColors[rarity] or Color3.fromRGB(200, 200, 200)
+    EggPrice.Text = getEggLuck(eggObj)
+
+    update3DEggPreview(eggObj)
+end
+
+-- =======================================================
+-- SEQUENTIAL 3D PREVIEW LOADING QUEUE
+-- =======================================================
+local previewQueue = {}
+local isProcessingQueue = false
+local currentQueueToken = 0
+
+local function clearPreviewQueue()
+    currentQueueToken = currentQueueToken + 1
+    previewQueue = {}
+end
+
+local function processPreviewQueue(myToken)
+    if isProcessingQueue then return end
+    isProcessingQueue = true
+    task.spawn(function()
+        while true do
+            if myToken ~= currentQueueToken then
+                break
+            end
+            if #previewQueue == 0 then
+                break
+            end
+
+            local job = table.remove(previewQueue, 1)
+            if job and job.eggObj and job.eggObj.Parent and job.viewport and job.viewport.Parent then
+                pcall(function()
+                    createMini3DPreview(job.eggObj, job.viewport)
+                end)
+            end
+
+            task.wait(0.025)
+        end
+        isProcessingQueue = false
+    end)
+end
+
+local function enqueueMiniPreview(eggObj, viewport)
+    table.insert(previewQueue, {
+        eggObj = eggObj,
+        viewport = viewport,
+    })
+end
+
+-- =======================================================
+-- DROPDOWN RENDER (WITH EXCLUSIVE FILTER)
+-- =======================================================
+local function refreshEggDropdownList()
+    clearPreviewQueue()
+    for _, conn in ipairs(miniViewportConnections) do
+        if conn then conn:Disconnect() end
+    end
+    miniViewportConnections = {}
+
+    for _, model in ipairs(miniViewportModels) do
+        if model then pcall(function() model:Destroy() end) end
+    end
+    miniViewportModels = {}
+
+    for _, child in pairs(DropdownFrame:GetChildren()) do
+        if child:IsA("TextButton") or child:IsA("Frame") then child:Destroy() end
+    end
+
+    local renderedEggs = Workspace:FindFirstChild("RenderedEggs")
+    local eggList = {}
+
+    if renderedEggs then
+        for _, egg in pairs(renderedEggs:GetChildren()) do
+            local rarity = getEggRarity(egg)
+            local weight = RarityWeights[rarity] or 1
+            local luckNum = getEggLuckNumeric(egg)
+            table.insert(eggList, {
+                Object = egg, Name = egg.Name, Rarity = rarity,
+                Weight = weight, LuckNum = luckNum
+            })
+        end
+    end
+
+    table.sort(eggList, function(a, b)
+        if a.LuckNum ~= b.LuckNum then return a.LuckNum > b.LuckNum end
+        return a.Weight > b.Weight
+    end)
+
+    -- ==========================================================
+    -- [ AUTO-SELECT FROM FULL LIST (ก่อน filter) ]
+    -- เลือกใบแรกอัตโนมัติ ถ้ายังไม่มีการเลือกแบบ manual หรือใบเดิมหายไป
+    -- ==========================================================
+    if #eggList > 0 then
+        if not isManualSelect or not selectedEggInstance or not selectedEggInstance.Parent then
+            isManualSelect = false
+            selectEgg(eggList[1].Object)
+        end
+    end
+
+    -- ==========================================================
+    -- [ EXCLUSIVE FILTER ]
+    -- ซ่อนการ์ดที่กำลังแสดงบน EggCard ออกจากรายการ ArrowBtn
+    -- เมื่อเปลี่ยนการเลือกใหม่ ใบเดิมจะกลับมาแสดงอัตโนมัติ
+    -- ==========================================================
+    local filteredList = {}
+    for _, item in ipairs(eggList) do
+        if item.Object ~= selectedEggInstance then
+            table.insert(filteredList, item)
+        end
+    end
+
+    local totalHeight = 0
+    for _, item in ipairs(filteredList) do
+        local ItemBtn = Instance.new("TextButton")
+        ItemBtn.Size = UDim2.new(1, -8, 0, 42)
+        ItemBtn.BackgroundColor3 = Color3.fromRGB(24, 27, 34)
+        ItemBtn.Text = ""
+        ItemBtn.ZIndex = 11
+        ItemBtn.Parent = DropdownFrame
+
+        local BtnCorner = Instance.new("UICorner")
+        BtnCorner.CornerRadius = UDim.new(0, 6)
+        BtnCorner.Parent = ItemBtn
+
+        local BtnStroke = Instance.new("UIStroke")
+        BtnStroke.Color = Color3.fromRGB(255, 255, 255)
+        BtnStroke.Thickness = 1
+        BtnStroke.Transparency = 0.92
+        BtnStroke.Parent = ItemBtn
+
+        local MiniViewport = Instance.new("ViewportFrame")
+        MiniViewport.Size = UDim2.new(0, 34, 0, 34)
+        MiniViewport.Position = UDim2.new(0, 5, 0.5, -17)
+        MiniViewport.BackgroundTransparency = 1
+        MiniViewport.ZIndex = 12
+        MiniViewport.Parent = ItemBtn
+
+        enqueueMiniPreview(item.Object, MiniViewport)
+
+        local ItemNameLabel = Instance.new("TextLabel")
+        ItemNameLabel.Size = UDim2.new(0, 140, 0, 16)
+        ItemNameLabel.Position = UDim2.new(0, 45, 0, 5)
+        ItemNameLabel.Text = item.Name
+        ItemNameLabel.Font = Enum.Font.GothamBold
+        ItemNameLabel.TextSize = 11
+        ItemNameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        ItemNameLabel.TextXAlignment = Enum.TextXAlignment.Left
+        ItemNameLabel.BackgroundTransparency = 1
+        ItemNameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+        ItemNameLabel.ZIndex = 12
+        ItemNameLabel.Parent = ItemBtn
+
+        local ItemRarityLabel = Instance.new("TextLabel")
+        ItemRarityLabel.Size = UDim2.new(0, 100, 0, 14)
+        ItemRarityLabel.Position = UDim2.new(0, 45, 0, 22)
+        ItemRarityLabel.Text = item.Rarity
+        ItemRarityLabel.Font = Enum.Font.GothamMedium
+        ItemRarityLabel.TextSize = 9
+        ItemRarityLabel.TextColor3 = RarityColors[item.Rarity] or Color3.fromRGB(200, 200, 200)
+        ItemRarityLabel.TextXAlignment = Enum.TextXAlignment.Left
+        ItemRarityLabel.BackgroundTransparency = 1
+        ItemRarityLabel.ZIndex = 12
+        ItemRarityLabel.Parent = ItemBtn
+
+        local ItemLuckIcon = Instance.new("ImageLabel")
+        ItemLuckIcon.Size = UDim2.new(0, 14, 0, 14)
+        ItemLuckIcon.Position = UDim2.new(1, -85, 0.5, -7)
+        ItemLuckIcon.BackgroundTransparency = 1
+        ItemLuckIcon.Image = "rbxassetid://134717036407560"
+        ItemLuckIcon.ZIndex = 12
+        ItemLuckIcon.Parent = ItemBtn
+
+        local ItemLuckLabel = Instance.new("TextLabel")
+        ItemLuckLabel.Size = UDim2.new(0, 65, 0, 18)
+        ItemLuckLabel.Position = UDim2.new(1, -68, 0.5, -9)
+        ItemLuckLabel.Text = getEggLuck(item.Object)
+        ItemLuckLabel.Font = Enum.Font.GothamBold
+        ItemLuckLabel.TextSize = 10
+        ItemLuckLabel.TextColor3 = Color3.fromRGB(46, 204, 113)
+        ItemLuckLabel.TextXAlignment = Enum.TextXAlignment.Left
+        ItemLuckLabel.BackgroundTransparency = 1
+        ItemLuckLabel.ZIndex = 12
+        ItemLuckLabel.Parent = ItemBtn
+
+        ItemBtn.MouseEnter:Connect(function()
+            TweenService:Create(ItemBtn, TWEEN_FAST, {BackgroundColor3 = Color3.fromRGB(35, 40, 50)}):Play()
+            TweenService:Create(BtnStroke, TWEEN_FAST, {Transparency = 0.7}):Play()
+        end)
+        ItemBtn.MouseLeave:Connect(function()
+            TweenService:Create(ItemBtn, TWEEN_FAST, {BackgroundColor3 = Color3.fromRGB(24, 27, 34)}):Play()
+            TweenService:Create(BtnStroke, TWEEN_FAST, {Transparency = 0.92}):Play()
+        end)
+
+        ItemBtn.MouseButton1Click:Connect(function()
+            isManualSelect = true
+            selectEgg(item.Object)
+            if toggleDropdown then toggleDropdown() end
+        end)
+
+        totalHeight = totalHeight + 47
+    end
+
+    DropdownFrame.CanvasSize = UDim2.new(0, 0, 0, totalHeight + 10)
+
+    processPreviewQueue(currentQueueToken)
+end
+
+-- =======================================================
+-- REAL-TIME EVENT LISTENERS
+-- =======================================================
+local renderedEggsContainer = Workspace:FindFirstChild("RenderedEggs")
+if renderedEggsContainer then
+    renderedEggsContainer.ChildAdded:Connect(function()
+        task.defer(function() refreshEggDropdownList() end)
+    end)
+    renderedEggsContainer.ChildRemoved:Connect(function(removedChild)
+        task.defer(function()
+            if selectedEggInstance == removedChild or not selectedEggInstance or not selectedEggInstance.Parent then
+                selectedEggInstance = nil
+                isManualSelect = false
+            end
+            refreshEggDropdownList()
+        end)
+    end)
+end
+
+-- =======================================================
+-- DYNAMIC DROPDOWN EXPAND ENGINE
+-- =======================================================
+function toggleDropdown()
+    isDropdownOpen = not isDropdownOpen
+    if isDropdownOpen then
+        refreshEggDropdownList()
+        DropdownFrame.Visible = true
+
+        TweenService:Create(MainFrame, TWEEN_SMOOTH, {Size = UDim2.new(0, 345, 0, 400)}):Play()
+        TweenService:Create(DropdownFrame, TWEEN_SMOOTH, {Size = UDim2.new(1, -20, 0, 152)}):Play()
+        TweenService:Create(ControlPanel, TWEEN_SMOOTH, {Position = UDim2.new(0, 10, 0, 302)}):Play()
+
+        DropdownBtn.Text = "∧"
+        TweenService:Create(DropdownBtn, TWEEN_ELASTIC, {Rotation = 180}):Play()
+    else
+        DropdownBtn.Text = "∨"
+        TweenService:Create(DropdownBtn, TWEEN_ELASTIC, {Rotation = 0}):Play()
+
+        local tw = TweenService:Create(DropdownFrame, TWEEN_SMOOTH, {Size = UDim2.new(1, -20, 0, 0)})
+        TweenService:Create(MainFrame, TWEEN_SMOOTH, {Size = UDim2.new(0, 345, 0, 242)}):Play()
+        TweenService:Create(ControlPanel, TWEEN_SMOOTH, {Position = UDim2.new(0, 10, 0, 144)}):Play()
+
+        tw:Play()
+        tw.Completed:Connect(function()
+            if not isDropdownOpen then
+                DropdownFrame.Visible = false
+            end
+        end)
+    end
+end
+
+DropdownBtn.MouseButton1Click:Connect(toggleDropdown)
+
+-- =======================================================
+-- REAL-TIME PLOT SCANNER & SAFE HOME POSITION ENGINE
+-- =======================================================
+local function getMyPlot()
+    local plots = Workspace:FindFirstChild("Plots")
+    if not plots then return nil end
+
+    for _, plot in ipairs(plots:GetChildren()) do
+        local dataFolder = plot:FindFirstChild("Data")
+        if dataFolder then
+            local ownerVal = dataFolder:FindFirstChild("Owner") or dataFolder:FindFirstChild("Player") or dataFolder:FindFirstChild("PlotOwner")
+            if ownerVal then
+                if ownerVal:IsA("ValueBase") and (ownerVal.Value == LocalPlayer.Name or ownerVal.Value == LocalPlayer or ownerVal.Value == LocalPlayer.UserId) then
+                    return plot
+                elseif type(ownerVal) == "string" and ownerVal == LocalPlayer.Name then
+                    return plot
+                end
+            end
+            if dataFolder:GetAttribute("Owner") == LocalPlayer.Name or dataFolder:GetAttribute("Owner") == LocalPlayer.UserId then
+                return plot
+            end
+        end
+
+        local directOwner = plot:GetAttribute("Owner") or plot:FindFirstChild("Owner")
+        if directOwner then
+            if directOwner == LocalPlayer.Name or (typeof(directOwner) == "Instance" and directOwner.Value == LocalPlayer.Name) then
+                return plot
+            end
+        end
+    end
+
+    local char = LocalPlayer.Character
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        local hrpPos = char.HumanoidRootPart.Position
+        local closestPlot = nil
+        local minDistance = math.huge
+
+        for _, plot in ipairs(plots:GetChildren()) do
+            local baseplate = plot:FindFirstChild("Baseplate") or plot:FindFirstChild("Fence")
+            if baseplate then
+                local pos = baseplate:IsA("BasePart") and baseplate.Position or baseplate:GetPivot().Position
+                local dist = (hrpPos - pos).Magnitude
+                if dist < minDistance then
+                    minDistance = dist
+                    closestPlot = plot
+                end
+            end
+        end
+
+        if minDistance < 150 then return closestPlot end
+    end
+    return nil
+end
+
+local function getHomeCFrame()
+    local myPlot = getMyPlot()
+    if myPlot then
+        local fence = myPlot:FindFirstChild("Fence")
+        if fence then
+            return fence:IsA("BasePart") and (fence.CFrame + Vector3.new(0, 6, 0)) or (fence:GetPivot() + Vector3.new(0, 6, 0))
+        end
+        local baseplate = myPlot:FindFirstChild("Baseplate")
+        if baseplate then
+            return baseplate:IsA("BasePart") and (baseplate.CFrame + Vector3.new(0, 6, 0)) or (baseplate:GetPivot() + Vector3.new(0, 6, 0))
+        end
+        return myPlot:GetPivot() + Vector3.new(0, 6, 0)
+    end
+
+    local char = LocalPlayer.Character
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        return char.HumanoidRootPart.CFrame + Vector3.new(0, 5, 0)
+    end
+    return CFrame.new(0, 50, 0)
+end
+
+-- =======================================================
+-- INSTANT SHUTDOWN MOVEMENT ENGINE
+-- =======================================================
+SwapBtn.MouseButton1Click:Connect(function()
+    isTPMode = not isTPMode
+    TeleLabel.Text = isTPMode and "TELEGUITP" or "TELEGUIADO"
+    ModeSub.Text = isTPMode and "TP MODE" or "ONE SHOT"
+    swapRotation = swapRotation + 180
+    TweenService:Create(SwapBtn, TWEEN_ELASTIC, {Rotation = swapRotation}):Play()
+end)
+
+local function getVolcanoEntranceCFrame()
+    local volcano = cachedVolcano or Workspace:FindFirstChild("Volcano")
+    if volcano then
+        local entrance = volcano:FindFirstChild("VolcanoEntrance") or volcano:FindFirstChild("Entrance") or volcano:FindFirstChild("Door")
+        if entrance then
+            return entrance:IsA("Model") and entrance:GetPivot() or entrance.CFrame
+        end
+    end
+    return nil
+end
+
+local function getEggCFrame()
+    local baseCF = nil
+    if selectedEggInstance and selectedEggInstance.Parent then
+        baseCF = selectedEggInstance:IsA("Model") and selectedEggInstance:GetPivot() or selectedEggInstance.CFrame
+    else
+        local renderedEggs = Workspace:FindFirstChild("RenderedEggs")
+        if renderedEggs and #renderedEggs:GetChildren() > 0 then
+            refreshEggDropdownList()
+            if selectedEggInstance and selectedEggInstance.Parent then
+                baseCF = selectedEggInstance:IsA("Model") and selectedEggInstance:GetPivot() or selectedEggInstance.CFrame
+            end
+        end
+    end
+
+    if baseCF then
+        return baseCF + Vector3.new(0, 3.5, 0)
+    end
+    return nil
+end
+
+-- [ FLY+TWEEN ENGINE ]
+local function tweenTo(targetCFrame, speed)
+    if not isToggled then return end
+    local character = LocalPlayer.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+    local hrp = character.HumanoidRootPart
+    local humanoid = character:FindFirstChildWhichIsA("Humanoid")
+    if not humanoid or humanoid.Health <= 0 then return end
+
+    local distance = (hrp.Position - targetCFrame.Position).Magnitude
+    local duration = math.clamp(distance / speed, 0.05, 12)
+
+    local bv = Instance.new("BodyVelocity")
+    bv.Name = "YanzFlyVelocity"
+    bv.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+    bv.Velocity = Vector3.zero
+    bv.Parent = hrp
+
+    local bg = Instance.new("BodyGyro")
+    bg.Name = "YanzFlyGyro"
+    bg.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
+    bg.P = 9000
+    bg.CFrame = hrp.CFrame
+    bg.Parent = hrp
+
+    if humanoid then humanoid.PlatformStand = true end
+
+    local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear)
+    local tween = TweenService:Create(hrp, tweenInfo, {CFrame = targetCFrame})
+
+    local completed = false
+    local conn
+    conn = tween.Completed:Connect(function()
+        completed = true
+        if conn then conn:Disconnect() end
+    end)
+
+    tween:Play()
+
+    local startTime = tick()
+    while not completed and (tick() - startTime) < (duration + 1) do
+        if not isToggled or not character or not character.Parent or not hrp or not hrp.Parent or not humanoid or humanoid.Health <= 0 then
+            tween:Cancel()
+            break
+        end
+        pcall(function()
+            hrp.AssemblyLinearVelocity = Vector3.zero
+            hrp.AssemblyAngularVelocity = Vector3.zero
+            bg.CFrame = targetCFrame
+        end)
+        task.wait(0.02)
+    end
+
+    pcall(function()
+        bv:Destroy()
+        bg:Destroy()
+        if hrp and hrp.Parent then
+            hrp.AssemblyLinearVelocity = Vector3.zero
+            hrp.AssemblyAngularVelocity = Vector3.zero
+            if isToggled and character and character.Parent and humanoid and humanoid.Health > 0 then
+                hrp.CFrame = targetCFrame
+            end
+        end
+    end)
+
+    if humanoid and humanoid.Parent then humanoid.PlatformStand = false end
+end
+
+-- =======================================================
+-- INSTANT WARP / TRUE TP ENGINE
+-- =======================================================
+local function instantWarpTo(targetCFrame)
+    if not isToggled then return end
+    local character = LocalPlayer.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+    local hrp = character.HumanoidRootPart
+    local humanoid = character:FindFirstChildWhichIsA("Humanoid")
+
+    local bv = Instance.new("BodyVelocity")
+    bv.Name = "YanzWarpVelocity"
+    bv.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+    bv.Velocity = Vector3.zero
+    bv.Parent = hrp
+
+    local bg = Instance.new("BodyGyro")
+    bg.Name = "YanzWarpGyro"
+    bg.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
+    bg.P = 9000
+    bg.CFrame = targetCFrame
+    bg.Parent = hrp
+
+    if humanoid then humanoid.PlatformStand = true end
+
+    pcall(function()
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
+    end)
+
+    pcall(function()
+        hrp.CFrame = targetCFrame
+    end)
+
+    task.wait(0.05)
+
+    pcall(function()
+        bv:Destroy()
+        bg:Destroy()
+        if humanoid and humanoid.Parent then humanoid.PlatformStand = false end
+        if isToggled and hrp and hrp.Parent then
+            hrp.AssemblyLinearVelocity = Vector3.zero
+            hrp.AssemblyAngularVelocity = Vector3.zero
+            hrp.CFrame = targetCFrame
+        end
+    end)
+end
+
+-- =======================================================
+-- SAFE TELEPORT - ระบบ TP
+-- =======================================================
+local function safeTeleport(targetCFrame)
+    if not isToggled then return end
+    local character = LocalPlayer.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+    local hrp = character.HumanoidRootPart
+    local humanoid = character:FindFirstChildWhichIsA("Humanoid")
+
+    local bv = Instance.new("BodyVelocity")
+    bv.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+    bv.Velocity = Vector3.zero
+    bv.Parent = hrp
+
+    local bg = Instance.new("BodyGyro")
+    bg.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
+    bg.CFrame = targetCFrame
+    bg.Parent = hrp
+
+    if humanoid then humanoid.PlatformStand = true end
+
+    pcall(function()
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
+    end)
+
+    local dist = (hrp.Position - targetCFrame.Position).Magnitude
+    if dist > 400 then
+        local steps = math.clamp(math.floor(dist / 120), 3, 7)
+        for i = 1, steps do
+            if not isToggled or not character or not character.Parent or not hrp or not hrp.Parent or not humanoid or humanoid.Health <= 0 then break end
+            hrp.CFrame = hrp.CFrame:Lerp(targetCFrame, i / steps)
+            task.wait(0.02)
+        end
+    else
+        local tw = TweenService:Create(hrp, TweenInfo.new(0.08, Enum.EasingStyle.Linear), {CFrame = targetCFrame})
+        tw:Play()
+        tw.Completed:Wait()
+    end
+
+    pcall(function()
+        bv:Destroy()
+        bg:Destroy()
+        if humanoid and humanoid.Parent then humanoid.PlatformStand = false end
+        if isToggled and hrp and hrp.Parent then
+            hrp.AssemblyLinearVelocity = Vector3.zero
+            hrp.AssemblyAngularVelocity = Vector3.zero
+            hrp.CFrame = targetCFrame
+        end
+    end)
+end
+
+-- =======================================================
+-- PROCESS MOVEMENT
+-- =======================================================
+local function processMovement()
+    if not isToggled then return end
+    local character = LocalPlayer.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+
+    local eggCF = getEggCFrame()
+    local homeCF = getHomeCFrame()
+    if not eggCF or not homeCF then return end
+
+    local isVolcanicEgg = selectedEggInstance and string.find(string.lower(selectedEggInstance.Name), "volcan")
+    local entranceCF = getVolcanoEntranceCFrame()
+
+    if isVolcanicEgg and entranceCF then
+        if isTPMode then
+            instantWarpTo(entranceCF)
+        else
+            tweenTo(entranceCF, 350)
+        end
+        bypassVolcanoEntrance()
+        task.wait(0.15)
+    end
+
+    if not isToggled then return end
+
+    if isTPMode then
+        -- [ TP MODE ]
+        instantWarpTo(eggCF)
+        if not isToggled then return end
+        task.wait(0.15)
+        if not isToggled then return end
+        fireEggPrompt(selectedEggInstance)
+        if not isToggled then return end
+        task.wait(0.3)
+        safeTeleport(homeCF)
+        task.wait(0.2)
+    else
+        -- [ FLY MODE ]
+        tweenTo(eggCF, 300)
+        if not isToggled then return end
+        task.wait(0.15)
+        if not isToggled then return end
+        fireEggPrompt(selectedEggInstance)
+        if not isToggled then return end
+        task.wait(0.3)
+        tweenTo(homeCF, 300)
+        task.wait(0.2)
+    end
+end
+
+-- =======================================================
+-- TOGGLE HANDLER (PREVENT THREAD STACKING)
+-- =======================================================
+ToggleBg.MouseButton1Click:Connect(function()
+    isToggled = not isToggled
+    if isToggled then
+        startContinuousNoclip()
+        TweenService:Create(ToggleBg, TWEEN_FAST, {BackgroundColor3 = Color3.fromRGB(255, 255, 255)}):Play()
         TweenService:Create(ToggleCircle, TWEEN_ELASTIC, {
             Position = UDim2.new(1, -3, 0.5, 0),
             AnchorPoint = Vector2.new(1, 0.5),
             BackgroundColor3 = Color3.fromRGB(12, 13, 16)
         }):Play()
+
+        if not isLoopRunning then
+            isLoopRunning = true
+            task.spawn(function()
+                while isToggled do
+                    processMovement()
+                    if not isLoopEnabled then
+                        isToggled = false
+                        stopContinuousNoclip()
+                        TweenService:Create(ToggleBg, TWEEN_FAST, {BackgroundColor3 = Color3.fromRGB(32, 35, 44)}):Play()
+                        TweenService:Create(ToggleCircle, TWEEN_ELASTIC, {
+                            Position = UDim2.new(0, 3, 0.5, 0),
+                            AnchorPoint = Vector2.new(0, 0.5),
+                            BackgroundColor3 = Color3.fromRGB(150, 155, 165)
+                        }):Play()
+                        removeESP()
+                        break
+                    end
+                    task.wait(0.2)
+                end
+                isLoopRunning = false
+            end)
+        end
     else
-        TweenService:Create(ToggleFrame, TWEEN_FAST, {BackgroundColor3 = Color3.fromRGB(32, 35, 44)}):Play()
+        stopContinuousNoclip()
+        TweenService:Create(ToggleBg, TWEEN_FAST, {BackgroundColor3 = Color3.fromRGB(32, 35, 44)}):Play()
         TweenService:Create(ToggleCircle, TWEEN_ELASTIC, {
             Position = UDim2.new(0, 3, 0.5, 0),
             AnchorPoint = Vector2.new(0, 0.5),
             BackgroundColor3 = Color3.fromRGB(150, 155, 165)
         }):Play()
+        removeESP()
     end
 end)
 
--- -------------------------------------------------------------
--- [ HIGH-PRECISION UNIVERSAL DRAGGING ENGINE (NO TILT) ]
--- -------------------------------------------------------------
+-- =======================================================
+-- DRAGGING ENGINE
+-- =======================================================
 local isDragging = false
 local dragStartMouse = Vector2.new()
-local dragStartFramePos = UDim2.new()
+local dragStartAbsPos = Vector2.new()
 
 local targetPos = MainFrame.Position
 local currentVelocity = Vector2.new()
 local lastMousePos = Vector2.new()
+local tiltAngle = 0
 local flameWindVelocity = Vector2.new(0, 0)
 
 local function OnDragBegan(input)
@@ -1473,21 +1994,14 @@ local function OnDragBegan(input)
         isDragging = true
         dragStartMouse = Vector2.new(input.Position.X, input.Position.Y)
         lastMousePos = dragStartMouse
-        dragStartFramePos = MainFrame.Position
+        dragStartAbsPos = MainFrame.AbsolutePosition
 
-        local targetH = isEggExpanded and 440 or 242
-        TweenService:Create(MainFrame, TWEEN_FAST, {Size = UDim2.new(0, 340, 0, targetH - 4)}):Play()
         TweenService:Create(MainStroke, TWEEN_FAST, {Transparency = 0.02, Color = Color3.fromRGB(255, 255, 255)}):Play()
 
         input.Changed:Connect(function()
             if input.UserInputState == Enum.UserInputState.End then
                 isDragging = false
-                local resetH = isEggExpanded and 440 or 242
-                MainFrame.Rotation = 0
-                TweenService:Create(MainFrame, TWEEN_SPRING, {
-                    Size = UDim2.new(0, 345, 0, resetH),
-                    Rotation = 0
-                }):Play()
+                TweenService:Create(MainFrame, TWEEN_SPRING, {Rotation = 0}):Play()
                 TweenService:Create(MainStroke, TWEEN_FAST, {Transparency = 0.12}):Play()
             end
         end)
@@ -1505,53 +2019,33 @@ UserInputService.InputChanged:Connect(function(input)
         local delta = currentMouse - dragStartMouse
         local currentScale = UIScale.Scale
 
-        targetPos = UDim2.new(
-            dragStartFramePos.X.Scale,
-            dragStartFramePos.X.Offset + (delta.X / currentScale),
-            dragStartFramePos.Y.Scale,
-            dragStartFramePos.Y.Offset + (delta.Y / currentScale)
-        )
-        
+        local newAbsX = dragStartAbsPos.X + (delta.X / currentScale) + (MainFrame.Size.X.Offset * 0.5)
+        local newAbsY = dragStartAbsPos.Y + (delta.Y / currentScale) + (MainFrame.Size.Y.Offset * 0.5)
+
+        targetPos = UDim2.new(0, newAbsX, 0, newAbsY)
         currentVelocity = (currentMouse - lastMousePos)
         lastMousePos = currentMouse
     end
 end)
 
--- -------------------------------------------------------------
--- [ RENDER STEPPED ENGINE LOOP (FLAME & 360 3D MODELS SYNC) ]
--- -------------------------------------------------------------
+-- =======================================================
+-- RENDER STEPPED ENGINE LOOP
+-- =======================================================
 local clock = os.clock()
 
 RunService.RenderStepped:Connect(function(dt)
     clock = clock + dt
-    
-    -- 1. Position Update (No Tilt Rotation)
-    MainFrame.Rotation = 0
+
     if isDragging and isGuiVisible then
         MainFrame.Position = targetPos
+        local targetTilt = math.clamp(currentVelocity.X * 0.25, -6, 6)
+        tiltAngle = tiltAngle + (targetTilt - tiltAngle) * math.min(dt * 20, 1)
+        MainFrame.Rotation = tiltAngle
         flameWindVelocity = flameWindVelocity:Lerp(-currentVelocity * 1.65, math.min(dt * 25, 1))
     else
         flameWindVelocity = flameWindVelocity:Lerp(Vector2.new(0, 0), math.min(dt * 10, 1))
     end
 
-    -- 2. 3D Model Continuous 360 Rotation Engine for Main & Dropdown Cards
-    previewRotation = (previewRotation + dt * 45) % 360
-
-    if currentPreviewModel and currentPreviewModel.Parent then
-        currentPreviewModel:PivotTo(CFrame.new(previewCenter) * CFrame.Angles(0, math.rad(previewRotation), 0))
-    end
-
-    -- Safe Loop with Dead Reference Garbage Cleaning
-    for i = #dropdownPreviewModels, 1, -1 do
-        local item = dropdownPreviewModels[i]
-        if item and item.Model and item.Model.Parent then
-            item.Model:PivotTo(CFrame.new(item.Center) * CFrame.Angles(0, math.rad(previewRotation), 0))
-        else
-            table.remove(dropdownPreviewModels, i)
-        end
-    end
-
-    -- 3. Thermal Core Aura Pulsation
     local tSpeed = clock * 18
     local corePulse = 0.15 + math.sin(tSpeed) * 0.1 + (math.random() * 0.05)
     local auraPulse = 0.40 + math.cos(tSpeed * 1.2) * 0.12 + (math.random() * 0.08)
@@ -1561,12 +2055,11 @@ RunService.RenderStepped:Connect(function(dt)
 
     CoreGlow.Position = UDim2.new(0.5, windOffsetCoreX, 0.5, windOffsetCoreY)
     CoreGlow.BackgroundTransparency = math.clamp(corePulse, 0.05, 0.35)
-    
+
     AuraGlow.Position = UDim2.new(0.5, windOffsetCoreX * 1.2, 0.5, -4 + windOffsetCoreY * 1.2)
     AuraGlow.BackgroundTransparency = math.clamp(auraPulse, 0.2, 0.65)
     AuraGlow.Size = UDim2.new(0, 54 + math.sin(tSpeed) * 5, 0, 60 + math.cos(tSpeed * 1.5) * 6)
 
-    -- 4. Dynamic Flame Tendrils
     for i = 1, TENDRIL_COUNT do
         local ft = flameTendrils[i]
         ft.Life = ft.Life + dt
@@ -1589,7 +2082,7 @@ RunService.RenderStepped:Connect(function(dt)
 
         ft.PosY = ft.PosY + (totalVelY * dt)
         ft.PosX = ft.PosX + (totalVelX * dt) + math.sin(clock * ft.SwayFreq + i) * 0.6
-        
+
         local angle = math.deg(math.atan2(totalVelX + math.cos(clock * ft.SwayFreq) * 2, -totalVelY))
         local windStretch = math.clamp(flameWindVelocity.Magnitude * 0.015, 0, 0.8)
         local curWidth = ft.BaseWidth * (1 - prog ^ 1.4) * (1 - windStretch * 0.3)
@@ -1602,7 +2095,6 @@ RunService.RenderStepped:Connect(function(dt)
         ft.Object.BackgroundTransparency = math.clamp(fadeAlpha, 0.05, 1)
     end
 
-    -- 5. Micro Spark Particles
     for i = 1, SPARK_COUNT do
         local sp = sparkParticles[i]
         sp.Life = sp.Life + dt
@@ -1631,4 +2123,8 @@ RunService.RenderStepped:Connect(function(dt)
         sp.Object.Size = UDim2.new(0, sp.Size, 0, sp.Size * (1 + flameWindVelocity.Magnitude * 0.02))
         sp.Object.BackgroundTransparency = math.clamp(spFade + flickerFactor, 0, 1)
     end
+end)
+
+task.defer(function()
+    refreshEggDropdownList()
 end)

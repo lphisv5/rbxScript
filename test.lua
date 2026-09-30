@@ -1,15 +1,5 @@
 -- [[ YANZ HUB GUI - NEXT-GEN HYPER-REALISTIC FLAME & PHYSICS ENGINE ]] --
--- [ V2.3 : GLOBAL ERROR FIX + FULL AUTOMATION SUITE ] --
-
--- =============================================================
--- [ CRITICAL FIX : PREVENT "attempt to call a nil value" ]
--- =============================================================
-if type(firesignal) ~= "function" then
-    function firesignal(...) end
-end
-if type(fireproximityprompt) ~= "function" then
-    function fireproximityprompt(...) end
-end
+-- [ V2.2 : AUTO STEAL + PROTECTION + ARENA RESET + FLY MODE (300) ] --
 
 local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
@@ -26,12 +16,26 @@ local LocalPlayer = Players.LocalPlayer
 local FLY_SPEED = 300
 
 local PROTECT_NPC_NAMES = {
-    "Jeweler", "Grandpa", "Archeologist", "Astronaut",
-    "Mafia Boss", "Bodyguard 1", "Bodyguard 2",
-    "Fan 1", "Fan 2", "Fan 3", "Fan 4", "Fan 5",
-    "Gold Tycoon", "Museum Worker", "Pirate",
-    "Angel Beast (chaser)", "Angel Queen", "Demon Dragon",
-    "demon king", "dinosaur (active)",
+    "Jeweler",
+    "Grandpa",
+    "Archeologist",
+    "Astronaut",
+    "Mafia Boss",
+    "Bodyguard 1",
+    "Bodyguard 2",
+    "Fan 1",
+    "Fan 2",
+    "Fan 3",
+    "Fan 4",
+    "Fan 5",
+    "Gold Tycoon",
+    "Museum Worker",
+    "Pirate",
+    "Angel Beast (chaser)",
+    "Angel Queen",
+    "Demon Dragon",
+    "demon king",
+    "dinosaur (active)",
 }
 
 -- 1. Clear existing UI instances
@@ -957,6 +961,7 @@ end)
 SwapButton.MouseButton1Click:Connect(function()
     swapRotation = swapRotation + 180
     TweenService:Create(SwapButton, TWEEN_ELASTIC, {Rotation = swapRotation}):Play()
+    -- Manual arena reset toggle
     ResetArena(false, 0)
     ShowNotification("ARENA_RESET(false, 0) fired")
 end)
@@ -1018,6 +1023,7 @@ LoopLabel.TextXAlignment = Enum.TextXAlignment.Left
 
 LoopLabel.MouseButton1Click:Connect(ToggleLoopFunc)
 
+-- Label for steal toggle
 local StealLabel = Instance.new("TextLabel")
 StealLabel.Name = "StealLabel"
 StealLabel.Parent = ControlPanel
@@ -1081,6 +1087,7 @@ end)
 -- =============== AUTOMATION / GAMEPLAY MODULES ===============
 -- =============================================================
 
+-- Forward declarations
 local StartStealLoop, StopStealLoop
 
 -- -------------------------------------------------------------
@@ -1332,8 +1339,10 @@ end
 local stealRunning = false
 
 local function RunSingleStealCycle()
+    -- 0) Ensure prompts are zeroed
     ZeroAllPrompts()
 
+    -- 1) Get heaviest crate
     local crates = GetAllCrates()
     if #crates == 0 then
         return false, "No crates found"
@@ -1341,6 +1350,7 @@ local function RunSingleStealCycle()
     local target = crates[1]
     local crateName = GetArealdName(target)
 
+    -- 2) Fly to crate
     local cratePos = GetCratePosition(target)
     if not cratePos then
         return false, "Crate position unavailable"
@@ -1348,10 +1358,13 @@ local function RunSingleStealCycle()
     ShowNotification("Flying to: " .. crateName)
     FlyToAndWait(cratePos, FLY_SPEED, 8)
 
+    -- 3) Trigger prompts (HoldDuration = 0)
     TriggerCratePrompts(target)
     task.wait(0.35)
 
+    -- 4) Check if character is holding a crate
     if not IsHoldingCrate() then
+        -- retry once
         TriggerCratePrompts(target)
         task.wait(0.4)
     end
@@ -1361,12 +1374,14 @@ local function RunSingleStealCycle()
         return false, "Failed to pick up crate"
     end
 
+    -- 5) Protection - fire ChaseCaught for all listed NPCs (safety)
     for _, name in ipairs(PROTECT_NPC_NAMES) do
         if workspace:FindFirstChild(name) then
             FireChaseCaught(name)
         end
     end
 
+    -- 6) Fly to safe zone
     local safePos = GetSafeZonePosition()
     if safePos then
         ShowNotification("Returning to safe zone...")
@@ -1375,14 +1390,18 @@ local function RunSingleStealCycle()
         ShowNotification("Safe zone not found — firing escape")
     end
 
+    -- 7) Fire escape signal
     task.wait(0.15)
     FireStealEscaped()
     task.wait(0.25)
 
+    -- 8) Fire success signal with Areald name (verify item obtained)
     FireStealSuccess(crateName)
 
+    -- 9) Verification check
     task.wait(0.35)
     if IsHoldingCrate() then
+        -- still holding => possibly failed; try success once more
         FireStealSuccess(crateName)
     end
 
@@ -1395,6 +1414,7 @@ StartStealLoop = function()
     ShowNotification("Auto-Steal: ON")
 
     task.spawn(function()
+        -- Initial arena reset to enable stealing
         ResetArena(true, 10)
         task.wait(0.5)
         ResetArena(false, 0)
@@ -1404,6 +1424,7 @@ StartStealLoop = function()
             if not ok then
                 ShowNotification("Cycle: " .. tostring(msg))
             end
+            -- wait between cycles
             task.wait(0.4)
         until not stealRunning
 
@@ -1476,6 +1497,7 @@ local function CreateMiniCrateRow(crate, rank)
         SetupViewport(vp, crate)
     end)
 
+    -- ** Use Areald attribute instead of raw name **
     local areald = GetArealdName(crate)
     local kg     = tonumber(crate:GetAttribute("CrateKg")) or 0
     local tier   = crate:GetAttribute("CrateTier") or "Common"
@@ -1528,6 +1550,7 @@ local function CreateMiniCrateRow(crate, rank)
     rankLbl.TextXAlignment = Enum.TextXAlignment.Right
     rankLbl.Parent = item
 
+    -- ** CARD SELECTION : Click row -> select & auto-collapse **
     local rowButton = Instance.new("TextButton")
     rowButton.Name = "RowButton"
     rowButton.BackgroundTransparency = 1
@@ -1590,6 +1613,7 @@ local function PopulateCratesList(crates)
     end)
 end
 
+-- ** Selection handler : updates top card + auto-collapse **
 SelectCrateByRow = function(crate)
     selectedCrate = crate
     if not crate then return end
@@ -1607,6 +1631,7 @@ SelectCrateByRow = function(crate)
 
     ShowNotification("Selected: " .. areald)
 
+    -- Auto-collapse the list
     if listExpanded then
         listExpanded = false
         ApplyLayout()
@@ -1616,14 +1641,17 @@ end
 RefreshCratesUI = function()
     local crates = GetAllCrates()
 
+    -- If nothing selected yet, auto-select the heaviest crate
     if not selectedCrate and crates[1] then
         selectedCrate = crates[1]
     end
 
+    -- If the selected crate is no longer valid, reset
     if selectedCrate and selectedCrate.Parent == nil then
         selectedCrate = crates[1]
     end
 
+    -- 1. Update BEST/selected card
     local show = selectedCrate or crates[1]
     if show then
         local areald = GetArealdName(show)
@@ -1644,6 +1672,7 @@ RefreshCratesUI = function()
         for _, c in ipairs(ItemViewport:GetChildren()) do c:Destroy() end
     end
 
+    -- 2. Refresh the mini list if expanded
     if listExpanded then
         PopulateCratesList(crates)
     end
@@ -1653,6 +1682,7 @@ task.defer(function()
     RefreshCratesUI()
 end)
 
+-- Watchers
 local watchedCrates = {}
 local refreshQueued = false
 local function QueueRefresh()
@@ -1704,6 +1734,7 @@ workspace.ChildRemoved:Connect(function(child)
     end
 end)
 
+-- Periodic safety refresh
 task.spawn(function()
     while YanzHubUI and YanzHubUI.Parent do
         task.wait(4)
@@ -1711,6 +1742,7 @@ task.spawn(function()
     end
 end)
 
+-- Periodic ProximityPrompt zeroing (every 1.5s)
 task.spawn(function()
     while YanzHubUI and YanzHubUI.Parent do
         ZeroAllPrompts()
@@ -1745,6 +1777,7 @@ local function ClampMainFramePosition(position)
     local scale = math.max(UIScale.Scale, 0.01)
     local frameWidth = MAIN_WIDTH * scale
     local frameHeight = CurrentMainHeight() * scale
+    -- Reduced rotation padding so slight tilt does NOT overflow
     local rotationPadding = math.max(frameWidth, frameHeight) * 0.03
     local halfWidth = frameWidth * 0.5 + SCREEN_PADDING + rotationPadding
     local halfHeight = frameHeight * 0.5 + SCREEN_PADDING + rotationPadding
@@ -1786,6 +1819,7 @@ Header.InputBegan:Connect(OnDragBegan)
 EggCard.InputBegan:Connect(OnDragBegan)
 ControlPanel.InputBegan:Connect(OnDragBegan)
 MainFrame.InputBegan:Connect(OnDragBegan)
+-- NOTE: CratesScroll.InputBegan intentionally NOT connected so scrolling works.
 
 UserInputService.InputChanged:Connect(function(input)
     if isDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
@@ -1813,9 +1847,11 @@ local clock = os.clock()
 RunService.RenderStepped:Connect(function(dt)
     clock = clock + dt
 
+    -- 1. Position and Drag Update
     if isDragging and isGuiVisible then
         MainFrame.Position = ClampMainFramePosition(targetPos)
         targetPos = MainFrame.Position
+        -- ** REDUCED MAX TILT (3°) so slight tilt does NOT overflow **
         local targetTilt = math.clamp(currentVelocity.X * 0.12, -3, 3)
         tiltAngle = tiltAngle + (targetTilt - tiltAngle) * math.min(dt * 20, 1)
         MainFrame.Rotation = tiltAngle
@@ -1823,6 +1859,7 @@ RunService.RenderStepped:Connect(function(dt)
         flameWindVelocity = flameWindVelocity:Lerp(-currentVelocity * 1.65, math.min(dt * 25, 1))
     else
         MainFrame.Position = ClampMainFramePosition(MainFrame.Position)
+        -- Smoothly return rotation to 0
         if math.abs(MainFrame.Rotation) > 0.01 then
             MainFrame.Rotation = MainFrame.Rotation + (0 - MainFrame.Rotation) * math.min(dt * 12, 1)
         else
@@ -1831,6 +1868,7 @@ RunService.RenderStepped:Connect(function(dt)
         flameWindVelocity = flameWindVelocity:Lerp(Vector2.new(0, 0), math.min(dt * 10, 1))
     end
 
+    -- 2. Thermal Core Aura Pulsation
     local tSpeed = clock * 18
     local corePulse = 0.15 + math.sin(tSpeed) * 0.1 + (math.random() * 0.05)
     local auraPulse = 0.40 + math.cos(tSpeed * 1.2) * 0.12 + (math.random() * 0.08)
@@ -1845,6 +1883,7 @@ RunService.RenderStepped:Connect(function(dt)
     AuraGlow.BackgroundTransparency = math.clamp(auraPulse, 0.2, 0.65)
     AuraGlow.Size = UDim2.new(0, 54 + math.sin(tSpeed) * 5, 0, 60 + math.cos(tSpeed * 1.5) * 6)
 
+    -- 3. Fluid Flame Tendrils
     for i = 1, TENDRIL_COUNT do
         local ft = flameTendrils[i]
         ft.Life = ft.Life + dt
@@ -1882,6 +1921,7 @@ RunService.RenderStepped:Connect(function(dt)
         ft.Object.BackgroundTransparency = math.clamp(fadeAlpha, 0.05, 1)
     end
 
+    -- 4. Wind-Drifting Micro Sparks
     for i = 1, SPARK_COUNT do
         local sp = sparkParticles[i]
         sp.Life = sp.Life + dt

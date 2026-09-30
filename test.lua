@@ -132,7 +132,7 @@ do
 			LeftCenterHidden = true,
 		}
 
-		v2 = v:CreateWindow({ Name = "Chilli Hub - Steal An Egg", DefaultTab = "Farm" })
+		v2 = v:CreateWindow({ Name = "YANZ Hub - Steal An Egg", DefaultTab = "Farm" })
 		defaultTab = v2:GetDefaultTab()
 		Players = game:GetService("Players")
 		RunService = game:GetService("RunService")
@@ -2967,7 +2967,7 @@ do
 			end)
 
 			if not ok then
-				warn("[Chilli Hub] Lab egg pickers failed: " .. tostring(result))
+				warn("[YANZ HUB] Lab egg pickers failed: " .. tostring(result))
 			end
 
 			task.spawn(function()
@@ -29299,11 +29299,11 @@ do
 			title = arg,
 			description = table.concat(tbl17, "\n"),
 			color = fn24(v13.Color, string.upper(tostring(v13.Rarity)) == "SECRET"),
-			footer = { text = "Chilli Hub" .. dot .. "Steal An Egg", icon_url = tbl16.Logo },
+			footer = { text = "YANZ HUB" .. dot .. "Steal An Egg", icon_url = tbl16.Logo },
 			timestamp = DateTime.now():ToIsoDate(),
 		}
 
-		local tbl19 = { username = "Chilli Hub", avatar_url = tbl16.Logo, embeds = { tbl18 } }
+		local tbl19 = { username = "YANZ HUB", avatar_url = tbl16.Logo, embeds = { tbl18 } }
 		local icon = v13.Icon
 
 		if arg6 then
@@ -30568,7 +30568,7 @@ do
 		TextSize = 14,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = Color3.fromRGB(255, 255, 255),
-		Text = "Chilli Hub",
+		Text = "YANZ HUB",
 		ZIndex = 2,
 	}), { Color = ColorSequence.new(Color3.fromRGB(255, 120, 100), color3(255, 190, 110)) })
 
@@ -31762,7 +31762,7 @@ do
 			Height = 1.6,
 			Scale = 1.45,
 			Wrap = false,
-			Text = "<b>Chilli Hub</b>",
+			Text = "<b>YANZ HUB</b>",
 			Gradient = v18,
 			GradientRotation = 0,
 			TextStrokeTransparency = 1,

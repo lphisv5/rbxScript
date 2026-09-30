@@ -12,7 +12,7 @@ local Camera = Workspace.CurrentCamera
 -- GLOBAL STATE
 -- =======================================================
 local isToggled = false
-local isTPMode = false
+local currentModeIndex = 1 -- 1: FLY MODE, 2: TP MODE, 3: BRING MODE
 local isLoopEnabled = false
 local isDropdownOpen = false
 local isLoopRunning = false
@@ -832,7 +832,7 @@ ModeSub.BackgroundTransparency = 1
 ModeSub.Position = UDim2.new(0, 12, 0, 48)
 ModeSub.Size = UDim2.new(0, 80, 0, 12)
 ModeSub.Font = Enum.Font.GothamMedium
-ModeSub.Text = "ONE SHOT"
+ModeSub.Text = "FLY MODE"
 ModeSub.TextColor3 = Color3.fromRGB(110, 115, 125)
 ModeSub.TextSize = 9
 ModeSub.TextXAlignment = Enum.TextXAlignment.Left
@@ -1327,6 +1327,7 @@ local function selectEgg(eggObj)
     selectedEggInstance = eggObj
     local rarity = getEggRarity(eggObj)
 
+    EggCategory.Text = isManualSelect and "SELECTED EGG" or "BEST EGG"
     EggName.Text = eggObj.Name
     EggRarity.Text = rarity
     EggRarity.TextColor3 = RarityColors[rarity] or Color3.fromRGB(200, 200, 200)
@@ -1380,7 +1381,7 @@ local function enqueueMiniPreview(eggObj, viewport)
 end
 
 -- =======================================================
--- DROPDOWN RENDER (WITH EXCLUSIVE FILTER)
+-- DROPDOWN RENDER (EGG CARD EXCLUSIVE FILTER)
 -- =======================================================
 local function refreshEggDropdownList()
     clearPreviewQueue()
@@ -1418,10 +1419,6 @@ local function refreshEggDropdownList()
         return a.Weight > b.Weight
     end)
 
-    -- ==========================================================
-    -- [ AUTO-SELECT FROM FULL LIST (ก่อน filter) ]
-    -- เลือกใบแรกอัตโนมัติ ถ้ายังไม่มีการเลือกแบบ manual หรือใบเดิมหายไป
-    -- ==========================================================
     if #eggList > 0 then
         if not isManualSelect or not selectedEggInstance or not selectedEggInstance.Parent then
             isManualSelect = false
@@ -1429,107 +1426,99 @@ local function refreshEggDropdownList()
         end
     end
 
-    -- ==========================================================
-    -- [ EXCLUSIVE FILTER ]
-    -- ซ่อนการ์ดที่กำลังแสดงบน EggCard ออกจากรายการ ArrowBtn
-    -- เมื่อเปลี่ยนการเลือกใหม่ ใบเดิมจะกลับมาแสดงอัตโนมัติ
-    -- ==========================================================
-    local filteredList = {}
-    for _, item in ipairs(eggList) do
-        if item.Object ~= selectedEggInstance then
-            table.insert(filteredList, item)
-        end
-    end
-
     local totalHeight = 0
-    for _, item in ipairs(filteredList) do
-        local ItemBtn = Instance.new("TextButton")
-        ItemBtn.Size = UDim2.new(1, -8, 0, 42)
-        ItemBtn.BackgroundColor3 = Color3.fromRGB(24, 27, 34)
-        ItemBtn.Text = ""
-        ItemBtn.ZIndex = 11
-        ItemBtn.Parent = DropdownFrame
+    for _, item in ipairs(eggList) do
+        -- Exclusive Filter: ซ่อนไข่ที่กำลังแสดงอยู่บน EggCard ออกจากรายการ ArrowBtn
+        if item.Object ~= selectedEggInstance then
+            local ItemBtn = Instance.new("TextButton")
+            ItemBtn.Size = UDim2.new(1, -8, 0, 42)
+            ItemBtn.BackgroundColor3 = Color3.fromRGB(24, 27, 34)
+            ItemBtn.Text = ""
+            ItemBtn.ZIndex = 11
+            ItemBtn.Parent = DropdownFrame
 
-        local BtnCorner = Instance.new("UICorner")
-        BtnCorner.CornerRadius = UDim.new(0, 6)
-        BtnCorner.Parent = ItemBtn
+            local BtnCorner = Instance.new("UICorner")
+            BtnCorner.CornerRadius = UDim.new(0, 6)
+            BtnCorner.Parent = ItemBtn
 
-        local BtnStroke = Instance.new("UIStroke")
-        BtnStroke.Color = Color3.fromRGB(255, 255, 255)
-        BtnStroke.Thickness = 1
-        BtnStroke.Transparency = 0.92
-        BtnStroke.Parent = ItemBtn
+            local BtnStroke = Instance.new("UIStroke")
+            BtnStroke.Color = Color3.fromRGB(255, 255, 255)
+            BtnStroke.Thickness = 1
+            BtnStroke.Transparency = 0.92
+            BtnStroke.Parent = ItemBtn
 
-        local MiniViewport = Instance.new("ViewportFrame")
-        MiniViewport.Size = UDim2.new(0, 34, 0, 34)
-        MiniViewport.Position = UDim2.new(0, 5, 0.5, -17)
-        MiniViewport.BackgroundTransparency = 1
-        MiniViewport.ZIndex = 12
-        MiniViewport.Parent = ItemBtn
+            local MiniViewport = Instance.new("ViewportFrame")
+            MiniViewport.Size = UDim2.new(0, 34, 0, 34)
+            MiniViewport.Position = UDim2.new(0, 5, 0.5, -17)
+            MiniViewport.BackgroundTransparency = 1
+            MiniViewport.ZIndex = 12
+            MiniViewport.Parent = ItemBtn
 
-        enqueueMiniPreview(item.Object, MiniViewport)
+            enqueueMiniPreview(item.Object, MiniViewport)
 
-        local ItemNameLabel = Instance.new("TextLabel")
-        ItemNameLabel.Size = UDim2.new(0, 140, 0, 16)
-        ItemNameLabel.Position = UDim2.new(0, 45, 0, 5)
-        ItemNameLabel.Text = item.Name
-        ItemNameLabel.Font = Enum.Font.GothamBold
-        ItemNameLabel.TextSize = 11
-        ItemNameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-        ItemNameLabel.TextXAlignment = Enum.TextXAlignment.Left
-        ItemNameLabel.BackgroundTransparency = 1
-        ItemNameLabel.TextTruncate = Enum.TextTruncate.AtEnd
-        ItemNameLabel.ZIndex = 12
-        ItemNameLabel.Parent = ItemBtn
+            local ItemNameLabel = Instance.new("TextLabel")
+            ItemNameLabel.Size = UDim2.new(0, 140, 0, 16)
+            ItemNameLabel.Position = UDim2.new(0, 45, 0, 5)
+            ItemNameLabel.Text = item.Name
+            ItemNameLabel.Font = Enum.Font.GothamBold
+            ItemNameLabel.TextSize = 11
+            ItemNameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+            ItemNameLabel.TextXAlignment = Enum.TextXAlignment.Left
+            ItemNameLabel.BackgroundTransparency = 1
+            ItemNameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+            ItemNameLabel.ZIndex = 12
+            ItemNameLabel.Parent = ItemBtn
 
-        local ItemRarityLabel = Instance.new("TextLabel")
-        ItemRarityLabel.Size = UDim2.new(0, 100, 0, 14)
-        ItemRarityLabel.Position = UDim2.new(0, 45, 0, 22)
-        ItemRarityLabel.Text = item.Rarity
-        ItemRarityLabel.Font = Enum.Font.GothamMedium
-        ItemRarityLabel.TextSize = 9
-        ItemRarityLabel.TextColor3 = RarityColors[item.Rarity] or Color3.fromRGB(200, 200, 200)
-        ItemRarityLabel.TextXAlignment = Enum.TextXAlignment.Left
-        ItemRarityLabel.BackgroundTransparency = 1
-        ItemRarityLabel.ZIndex = 12
-        ItemRarityLabel.Parent = ItemBtn
+            local ItemRarityLabel = Instance.new("TextLabel")
+            ItemRarityLabel.Size = UDim2.new(0, 100, 0, 14)
+            ItemRarityLabel.Position = UDim2.new(0, 45, 0, 22)
+            ItemRarityLabel.Text = item.Rarity
+            ItemRarityLabel.Font = Enum.Font.GothamMedium
+            ItemRarityLabel.TextSize = 9
+            ItemRarityLabel.TextColor3 = RarityColors[item.Rarity] or Color3.fromRGB(200, 200, 200)
+            ItemRarityLabel.TextXAlignment = Enum.TextXAlignment.Left
+            ItemRarityLabel.BackgroundTransparency = 1
+            ItemRarityLabel.ZIndex = 12
+            ItemRarityLabel.Parent = ItemBtn
 
-        local ItemLuckIcon = Instance.new("ImageLabel")
-        ItemLuckIcon.Size = UDim2.new(0, 14, 0, 14)
-        ItemLuckIcon.Position = UDim2.new(1, -85, 0.5, -7)
-        ItemLuckIcon.BackgroundTransparency = 1
-        ItemLuckIcon.Image = "rbxassetid://134717036407560"
-        ItemLuckIcon.ZIndex = 12
-        ItemLuckIcon.Parent = ItemBtn
+            local ItemLuckIcon = Instance.new("ImageLabel")
+            ItemLuckIcon.Size = UDim2.new(0, 14, 0, 14)
+            ItemLuckIcon.Position = UDim2.new(1, -85, 0.5, -7)
+            ItemLuckIcon.BackgroundTransparency = 1
+            ItemLuckIcon.Image = "rbxassetid://134717036407560"
+            ItemLuckIcon.ZIndex = 12
+            ItemLuckIcon.Parent = ItemBtn
 
-        local ItemLuckLabel = Instance.new("TextLabel")
-        ItemLuckLabel.Size = UDim2.new(0, 65, 0, 18)
-        ItemLuckLabel.Position = UDim2.new(1, -68, 0.5, -9)
-        ItemLuckLabel.Text = getEggLuck(item.Object)
-        ItemLuckLabel.Font = Enum.Font.GothamBold
-        ItemLuckLabel.TextSize = 10
-        ItemLuckLabel.TextColor3 = Color3.fromRGB(46, 204, 113)
-        ItemLuckLabel.TextXAlignment = Enum.TextXAlignment.Left
-        ItemLuckLabel.BackgroundTransparency = 1
-        ItemLuckLabel.ZIndex = 12
-        ItemLuckLabel.Parent = ItemBtn
+            local ItemLuckLabel = Instance.new("TextLabel")
+            ItemLuckLabel.Size = UDim2.new(0, 65, 0, 18)
+            ItemLuckLabel.Position = UDim2.new(1, -68, 0.5, -9)
+            ItemLuckLabel.Text = getEggLuck(item.Object)
+            ItemLuckLabel.Font = Enum.Font.GothamBold
+            ItemLuckLabel.TextSize = 10
+            ItemLuckLabel.TextColor3 = Color3.fromRGB(46, 204, 113)
+            ItemLuckLabel.TextXAlignment = Enum.TextXAlignment.Left
+            ItemLuckLabel.BackgroundTransparency = 1
+            ItemLuckLabel.ZIndex = 12
+            ItemLuckLabel.Parent = ItemBtn
 
-        ItemBtn.MouseEnter:Connect(function()
-            TweenService:Create(ItemBtn, TWEEN_FAST, {BackgroundColor3 = Color3.fromRGB(35, 40, 50)}):Play()
-            TweenService:Create(BtnStroke, TWEEN_FAST, {Transparency = 0.7}):Play()
-        end)
-        ItemBtn.MouseLeave:Connect(function()
-            TweenService:Create(ItemBtn, TWEEN_FAST, {BackgroundColor3 = Color3.fromRGB(24, 27, 34)}):Play()
-            TweenService:Create(BtnStroke, TWEEN_FAST, {Transparency = 0.92}):Play()
-        end)
+            ItemBtn.MouseEnter:Connect(function()
+                TweenService:Create(ItemBtn, TWEEN_FAST, {BackgroundColor3 = Color3.fromRGB(35, 40, 50)}):Play()
+                TweenService:Create(BtnStroke, TWEEN_FAST, {Transparency = 0.7}):Play()
+            end)
+            ItemBtn.MouseLeave:Connect(function()
+                TweenService:Create(ItemBtn, TWEEN_FAST, {BackgroundColor3 = Color3.fromRGB(24, 27, 34)}):Play()
+                TweenService:Create(BtnStroke, TWEEN_FAST, {Transparency = 0.92}):Play()
+            end)
 
-        ItemBtn.MouseButton1Click:Connect(function()
-            isManualSelect = true
-            selectEgg(item.Object)
-            if toggleDropdown then toggleDropdown() end
-        end)
+            ItemBtn.MouseButton1Click:Connect(function()
+                isManualSelect = true
+                selectEgg(item.Object)
+                refreshEggDropdownList()
+                if toggleDropdown then toggleDropdown() end
+            end)
 
-        totalHeight = totalHeight + 47
+            totalHeight = totalHeight + 47
+        end
     end
 
     DropdownFrame.CanvasSize = UDim2.new(0, 0, 0, totalHeight + 10)
@@ -1666,12 +1655,22 @@ local function getHomeCFrame()
 end
 
 -- =======================================================
--- INSTANT SHUTDOWN MOVEMENT ENGINE
+-- MODE SELECTION & SWAP ENGINE (FLY / TP / BRING)
 -- =======================================================
+local modeList = {
+    {title = "TELEGUIADO", sub = "FLY MODE"},
+    {title = "TELEGUITP", sub = "TP MODE"},
+    {title = "BRING EGG", sub = "BRING MODE"}
+}
+
 SwapBtn.MouseButton1Click:Connect(function()
-    isTPMode = not isTPMode
-    TeleLabel.Text = isTPMode and "TELEGUITP" or "TELEGUIADO"
-    ModeSub.Text = isTPMode and "TP MODE" or "ONE SHOT"
+    currentModeIndex = currentModeIndex + 1
+    if currentModeIndex > #modeList then
+        currentModeIndex = 1
+    end
+
+    TeleLabel.Text = modeList[currentModeIndex].title
+    ModeSub.Text = modeList[currentModeIndex].sub
     swapRotation = swapRotation + 180
     TweenService:Create(SwapBtn, TWEEN_ELASTIC, {Rotation = swapRotation}):Play()
 end)
@@ -1705,6 +1704,35 @@ local function getEggCFrame()
         return baseCF + Vector3.new(0, 3.5, 0)
     end
     return nil
+end
+
+-- [ BRING EGG TO PLAYER ENGINE ]
+local function bringEggToPlayer(eggObj)
+    if not isToggled or not eggObj or not eggObj.Parent then return end
+    local char = LocalPlayer.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    local hrp = char.HumanoidRootPart
+
+    -- นำไข่มาไว้ตรงหน้าตัวผู้เล่น (ระยะ 3 Studs)
+    local targetCF = hrp.CFrame * CFrame.new(0, 0, -3)
+
+    pcall(function()
+        if eggObj:IsA("Model") then
+            eggObj:PivotTo(targetCF)
+        elseif eggObj:IsA("BasePart") then
+            eggObj.CFrame = targetCF
+        end
+
+        for _, part in ipairs(eggObj:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+                part.CFrame = targetCF
+            end
+        end
+    end)
+
+    task.wait(0.1)
+    fireEggPrompt(eggObj)
 end
 
 -- [ FLY+TWEEN ENGINE ]
@@ -1877,12 +1905,30 @@ local function safeTeleport(targetCFrame)
 end
 
 -- =======================================================
--- PROCESS MOVEMENT
+-- PROCESS MOVEMENT (FLY / TP / BRING)
 -- =======================================================
 local function processMovement()
     if not isToggled then return end
     local character = LocalPlayer.Character
     if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+
+    -- [ 3: BRING MODE ]
+    if currentModeIndex == 3 then
+        if selectedEggInstance and selectedEggInstance.Parent then
+            bringEggToPlayer(selectedEggInstance)
+            task.wait(0.3)
+        else
+            local renderedEggs = Workspace:FindFirstChild("RenderedEggs")
+            if renderedEggs and #renderedEggs:GetChildren() > 0 then
+                refreshEggDropdownList()
+                if selectedEggInstance and selectedEggInstance.Parent then
+                    bringEggToPlayer(selectedEggInstance)
+                    task.wait(0.3)
+                end
+            end
+        end
+        return
+    end
 
     local eggCF = getEggCFrame()
     local homeCF = getHomeCFrame()
@@ -1892,7 +1938,7 @@ local function processMovement()
     local entranceCF = getVolcanoEntranceCFrame()
 
     if isVolcanicEgg and entranceCF then
-        if isTPMode then
+        if currentModeIndex == 2 then
             instantWarpTo(entranceCF)
         else
             tweenTo(entranceCF, 350)
@@ -1903,8 +1949,8 @@ local function processMovement()
 
     if not isToggled then return end
 
-    if isTPMode then
-        -- [ TP MODE ]
+    if currentModeIndex == 2 then
+        -- [ 2: TP MODE ]
         instantWarpTo(eggCF)
         if not isToggled then return end
         task.wait(0.15)
@@ -1915,13 +1961,13 @@ local function processMovement()
         safeTeleport(homeCF)
         task.wait(0.2)
     else
-        -- [ FLY MODE ]
+        -- [ 1: FLY MODE ]
         tweenTo(eggCF, 300)
         if not isToggled then return end
         task.wait(0.15)
         if not isToggled then return end
         fireEggPrompt(selectedEggInstance)
-        if not isToggled then return end
+        if not isToggled me then return end
         task.wait(0.3)
         tweenTo(homeCF, 300)
         task.wait(0.2)

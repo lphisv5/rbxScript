@@ -1,4 +1,4 @@
--- [[ YANZ HUB - NEXT-GEN HYPER-REALISTIC FLAME & PHYSICS ENGINE + HOLD-E ENGINE + SPEEDBUBBLE BYPASS + NIGHT DETECTION + FISHTOOL VERIFICATION + ANTI-BOSS + ANTI-SNAP-BACK + 3-STAGE FALLBACK + IGNORE-MARKERS PRE-FLIGHT (ULTIMATE FAST ESCAPE BUILD) ]] --
+-- [[ YANZ HUB - NEXT-GEN HYPER-REALISTIC FLAME & PHYSICS ENGINE + FAST & ACCURATE FISH STEALER + MAGICFISHTOOL VERIFICATION + ANTI-BOSS + ANTI-SNAP-BACK + 3-STAGE FALLBACK ]] --
 
 local CoreGui            = game:GetService("CoreGui")
 local TweenService       = game:GetService("TweenService")
@@ -20,41 +20,40 @@ local DEFAULT_FOV      = Camera and Camera.FieldOfView or 70
 local cameraZoomActive = false
 
 -- =============================================================
--- [ CONSTANTS ]
+-- [ CONFIGURATION - ปรับให้เร็วและแม่นยำ ]
 -- =============================================================
 local CONFIG = {
     -- Movement
-    FLY_SPEED              = 250,
-    LANDING_DISTANCE       = 85,
-    LANDING_SPEED          = 75,
+    FLY_SPEED              = 300, -- เพิ่มความเร็วในการบิน
+    LANDING_DISTANCE       = 60,  -- ลดระยะการ Landing ลงเพื่อให้ถึงเป้าหมายเร็วขึ้น
+    LANDING_SPEED          = 100, -- เพิ่มความเร็วในการ Landing
     -- Warp detection
-    WARP_DETECT_THRESHOLD  = 65,
+    WARP_DETECT_THRESHOLD  = 80,
     -- Snap-back
-    SNAPBACK_DIST          = 120,
+    SNAPBACK_DIST          = 150,
     SNAPBACK_FRAMES        = 3,
     -- SafeZone
-    SAFE_ZONE_RADIUS       = 20,
+    SAFE_ZONE_RADIUS       = 25,
     -- Hold-E
-    HOLD_DURATION          = 2,
-    HOLD_VERIFY_WINDOW     = 0.3,
+    HOLD_DURATION          = 1.8, -- ลดเวลากด Hold-E ลงเล็กน้อย
+    HOLD_VERIFY_WINDOW     = 0.2,
     E_MAX_ATTEMPTS         = 2,
-    E_RETRY_DELAY          = 0.2,
-    -- Target Names & Folder
-    TARGET_NAMES           = {"Fish", "FishTool", "MagicFish", "Egg", "Magic"},
-    SPAWN_FOLDER_NAMES     = {"SpawnedFish", "SpawnedEggs", "SpawnedItems", "SpawnedTools"},
+    E_RETRY_DELAY          = 0.15,
+    -- MagicTool verify
     MAGIC_TOOL_NAME        = "MagicFishTool",
-    MAGIC_POLL_INTERVAL    = 0.05,
+    MAGIC_POLL_INTERVAL    = 0.03, -- ตรวจสอบเร็วขึ้น
     -- Deposit
-    DEPOSIT_MAX_WAIT       = 8,
-    DEPOSIT_CHECK_INTERVAL = 0.4,
-    DEPOSIT_SETTLE_WAIT    = 0.5,
+    DEPOSIT_MAX_WAIT       = 6,
+    DEPOSIT_CHECK_INTERVAL = 0.3,
+    DEPOSIT_SETTLE_WAIT    = 0.4,
     -- Main loop
-    LOOP_INTERVAL          = 0.1,
+    LOOP_INTERVAL          = 0.05, -- ลดเวลารอใน Loop หลัก
     -- Camera
-    CAMERA_ZOOM_FOV        = 25,
-    CAMERA_FOCUS_DISTANCE  = 3,
-    -- SpeedBubble
-    SPEEDBUBBLE_NAME       = "SpeedBubbleSpawn",
+    CAMERA_ZOOM_FOV        = 30,
+    CAMERA_FOCUS_DISTANCE  = 4,
+    -- Target Names
+    TARGET_NAMES           = {"Fish", "FishTool", "Egg", "Magic"},
+    SPAWN_FOLDER_NAMES     = {"SpawnedFish", "SpawnedEggs", "SpawnedItems", "SpawnedTools"},
 }
 
 local RARITY_COLOR_MAP = {
@@ -83,15 +82,16 @@ local RARITY_COLOR_MAP = {
 local toggled = false
 local SmoothFlyToWithLanding
 local ResetWarpBaseline
-local IsPlayerHoldingEgg
+local IsPlayerHoldingFish
 local IsPlayerInSafeZone
-local TryDepositEgg
+local TryDepositFish
 local GetReturnCFrame
 local GetCoralReefCFrame
 local GetIgnoreMarkerCFrame
 local GetBaseplateCFrame
 local EnableNoclip
 local DisableNoclip
+local CheckMagicFishTool
 
 -- =============================================================
 -- [ SHARED STATE ]
@@ -100,18 +100,20 @@ local stealConfirmed = false
 local noclipConnection = nil
 
 -- =============================================================
--- [ NOCLIP SYSTEM ]
+-- [ NOCLIP SYSTEM - OPTIMIZED FOR SPEED ]
 -- =============================================================
 EnableNoclip = function()
     if noclipConnection then return end
     noclipConnection = RunService.Stepped:Connect(function()
         local char = LocalPlayer.Character
         if char then
-            for _, v in ipairs(char:GetDescendants()) do
-                if v:IsA("BasePart") and v.CanCollide then
-                    v.CanCollide = false
-                end
-            end
+            -- ปรับให้ตรวจเฉพาะ BasePart หลัก เพื่อลดภาระการประมวลผล
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            if hrp then hrp.CanCollide = false end
+            local torso = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
+            if torso then torso.CanCollide = false end
+            local head = char:FindFirstChild("Head")
+            if head then head.CanCollide = false end
         end
     end)
 end
@@ -160,12 +162,12 @@ local function WaitForDaytime()
     if not IsNightTime() then return true end
     while toggled and IsNightTime() do
         if ResetWarpBaseline then ResetWarpBaseline() end
-        if IsPlayerHoldingEgg and IsPlayerHoldingEgg() then
+        if IsPlayerHoldingFish and IsPlayerHoldingFish() then
             if not IsPlayerInSafeZone() then
                 local cf = GetReturnCFrame and GetReturnCFrame()
                 if cf and SmoothFlyToWithLanding then SmoothFlyToWithLanding(cf, CONFIG.FLY_SPEED) end
             else
-                if TryDepositEgg then TryDepositEgg() end
+                if TryDepositFish then TryDepositFish() end
             end
         end
         task.wait(1)
@@ -215,29 +217,16 @@ local function HookSpeedBubblePart(part)
 end
 
 for _, v in ipairs(Workspace:GetDescendants()) do
-    if v.Name == CONFIG.SPEEDBUBBLE_NAME and v:IsA("BasePart") then
+    if v.Name == "SpeedBubbleSpawn" and v:IsA("BasePart") then
         HookSpeedBubblePart(v)
     end
 end
 
 Workspace.DescendantAdded:Connect(function(d)
-    if d.Name == CONFIG.SPEEDBUBBLE_NAME and d:IsA("BasePart") then
+    if d.Name == "SpeedBubbleSpawn" and d:IsA("BasePart") then
         HookSpeedBubblePart(d)
-    elseif d:IsA("TouchTransmitter") and d.Parent and d.Parent.Name == CONFIG.SPEEDBUBBLE_NAME then
+    elseif d:IsA("TouchTransmitter") and d.Parent and d.Parent.Name == "SpeedBubbleSpawn" then
         pcall(function() d:Destroy() end)
-    end
-end)
-
-task.spawn(function()
-    while task.wait(5) do
-        for _, v in ipairs(Workspace:GetDescendants()) do
-            if v.Name == CONFIG.SPEEDBUBBLE_NAME and v:IsA("BasePart") then
-                if v.CanTouch then v.CanTouch = false end
-                for _, c in ipairs(v:GetChildren()) do
-                    if c:IsA("TouchTransmitter") then pcall(function() c:Destroy() end) end
-                end
-            end
-        end
     end
 end)
 
@@ -449,6 +438,64 @@ IsPlayerInSafeZone = function()
     end
 
     return (hrp.Position - zonePos).Magnitude < CONFIG.SAFE_ZONE_RADIUS
+end
+
+-- =============================================================
+-- [ CORE LOGIC - ตรวจสอบ MagicFishTool และการถือของ ]
+-- =============================================================
+CheckMagicFishTool = function()
+    local char = LocalPlayer.Character
+    if not char then return false end
+
+    -- 1. ตรวจหาใน Character (Tool ที่ถืออยู่)
+    for _, child in ipairs(char:GetChildren()) do
+        if child:IsA("Tool") then
+            local low = string.lower(child.Name)
+            if string.find(low, "magicfishtool") or string.find(low, "magicfish") then
+                return true
+            end
+        end
+    end
+
+    -- 2. ตรวจหาใน Backpack (Tool ที่เก็บไว้)
+    local bp = LocalPlayer:FindFirstChildOfClass("Backpack")
+    if bp then
+        for _, child in ipairs(bp:GetChildren()) do
+            if child:IsA("Tool") then
+                local low = string.lower(child.Name)
+                if string.find(low, "magicfishtool") or string.find(low, "magicfish") then
+                    return true
+                end
+            end
+        end
+    end
+
+    return false
+end
+
+IsPlayerHoldingFish = function()
+    -- ใช้ CheckMagicFishTool เป็นหลัก
+    if CheckMagicFishTool() then return true end
+
+    local character = LocalPlayer.Character
+    if not character then return false end
+
+    -- ตรวจหา Tool อื่นๆ ที่มีคำว่า Fish หรือ Egg
+    for _, child in ipairs(character:GetChildren()) do
+        if child:IsA("Tool") then
+            local low = string.lower(child.Name)
+            if string.find(low, "fish") or string.find(low, "egg") then
+                return true, child
+            end
+        end
+    end
+
+    -- ตรวจสอบ Attributes ของตัวละคร
+    if character:GetAttribute("HasEgg") or character:GetAttribute("CarryingEgg") or character:GetAttribute("HasFish") or character:GetAttribute("CarryingFish") then
+        return true
+    end
+    
+    return false
 end
 
 -- =============================================================
@@ -793,7 +840,7 @@ SubtitleLabel.BackgroundTransparency = 1
 SubtitleLabel.Position = UDim2.new(0, 52, 0, 27)
 SubtitleLabel.Size = UDim2.new(0, 140, 0, 12)
 SubtitleLabel.Font = Enum.Font.GothamMedium
-SubtitleLabel.Text = "BEST FISH SYSTEM"
+SubtitleLabel.Text = "FAST & ACCURATE FISH"
 SubtitleLabel.TextColor3 = Color3.fromRGB(120, 122, 132)
 SubtitleLabel.TextSize = 9
 SubtitleLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -1111,201 +1158,6 @@ local function GetTargetRarity(targetModel)
 end
 
 -- =============================================================
--- [ HELD-FISH/EGG DETECTION ]
--- =============================================================
-IsPlayerHoldingEgg = function()
-    local character = LocalPlayer.Character
-    if not character then return false end
-
-    -- 1. ตรวจหา MagicFishTool โดยตรง (ตามที่คุณแจ้ง: ได้ Tool นี้หลังขโมยสำเร็จ)
-    for _, child in ipairs(character:GetChildren()) do
-        if child:IsA("Tool") then
-            local low = string.lower(child.Name)
-            if string.find(low, "magicfishtool") or string.find(low, "magicfish") then
-                return true, child
-            end
-        end
-    end
-
-    -- 2. ตรวจหา Tool ที่มีคำว่า Fish หรือ Egg
-    for _, child in ipairs(character:GetChildren()) do
-        if child:IsA("Tool") then
-            local low = string.lower(child.Name)
-            if string.find(low, "fish") or string.find(low, "egg") or child:FindFirstChild("EggKgBillboard", true) or child:FindFirstChild("FishKgBillboard", true) then
-                return true, child
-            end
-        end
-    end
-
-    -- 3. ตรวจหา Model หรือ BasePart ที่เป็นปลา/ไข่
-    for _, child in ipairs(character:GetChildren()) do
-        if (child:IsA("Model") or child:IsA("BasePart")) and not child:IsA("Accessory") then
-            local low = string.lower(child.Name)
-            if string.find(low, "fish") or string.find(low, "egg") or child:FindFirstChild("EggKgBillboard", true) or child:FindFirstChild("FishKgBillboard", true) or child:GetAttribute("IsFish") or child:GetAttribute("IsEgg") then
-                return true, child
-            end
-        end
-    end
-
-    -- 4. ตรวจสอบผ่าน Joint/Weld
-    local parts = {
-        character:FindFirstChild("RightHand"),
-        character:FindFirstChild("LeftHand"),
-        character:FindFirstChild("Right Arm"),
-        character:FindFirstChild("Left Arm"),
-        character:FindFirstChild("UpperTorso"),
-        character:FindFirstChild("Torso"),
-    }
-    for _, part in ipairs(parts) do
-        if part then
-            for _, joint in ipairs(part:GetChildren()) do
-                if joint:IsA("Weld") or joint:IsA("WeldConstraint") or joint:IsA("Motor6D") then
-                    local p0, p1 = joint.Part0, joint.Part1
-                    local other = (p0 == part) and p1 or p0
-                    if other and other:IsDescendantOf(character) then
-                        local pn = string.lower(other.Name)
-                        local par = other.Parent and string.lower(other.Parent.Name) or ""
-                        if string.find(pn, "fish") or string.find(pn, "egg") or string.find(par, "fish") or string.find(par, "egg")
-                            or (other.Parent and (other.Parent:FindFirstChild("EggKgBillboard", true) or other.Parent:FindFirstChild("FishKgBillboard", true))) then
-                            return true, other.Parent
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    -- 5. ตรวจสอบ Attributes ของตัวละคร
-    if character:GetAttribute("HasEgg") or character:GetAttribute("CarryingEgg") or character:GetAttribute("HasFish") or character:GetAttribute("CarryingFish")
-        or LocalPlayer:GetAttribute("CarryingEgg") or LocalPlayer:GetAttribute("CarryingFish") then
-        return true
-    end
-    if character:FindFirstChild("CarryingEgg") or character:FindFirstChild("EggValue") or character:FindFirstChild("CarryingFish") or character:FindFirstChild("FishValue")
-        or LocalPlayer:FindFirstChild("CarryingEgg") or LocalPlayer:FindFirstChild("CarryingFish") then
-        return true
-    end
-    return false
-end
-
--- =============================================================
--- [ MAGIC FISH TOOL VERIFICATION ]
--- =============================================================
-local MAGIC_TOOL_NAME_LOWER = string.lower(CONFIG.MAGIC_TOOL_NAME)
-
-local function FindMagicFishTool()
-    local character = LocalPlayer.Character
-    if not character then return nil, "NoCharacter" end
-
-    for _, child in ipairs(character:GetChildren()) do
-        if child:IsA("Tool") then
-            if child.Name == CONFIG.MAGIC_TOOL_NAME then
-                return child, "Character/Exact"
-            end
-            local low = string.lower(child.Name)
-            if string.find(low, "magicfish", 1, true)
-                or (string.find(low, "magic", 1, true) and string.find(low, "fish", 1, true)) then
-                return child, "Character/Fuzzy:" .. child.Name
-            end
-        end
-    end
-
-    local bp = LocalPlayer:FindFirstChildOfClass("Backpack")
-    if bp then
-        for _, child in ipairs(bp:GetChildren()) do
-            if child:IsA("Tool") then
-                local low = string.lower(child.Name)
-                if low == MAGIC_TOOL_NAME_LOWER
-                    or string.find(low, "magicfish", 1, true)
-                    or (string.find(low, "magic", 1, true) and string.find(low, "fish", 1, true)) then
-                    return child, "Backpack/Fuzzy:" .. child.Name
-                end
-            end
-        end
-    end
-    return nil, "NotFound"
-end
-
-local function InspectToolForFish(tool)
-    if not tool then return false, "Tool=nil" end
-
-    for _, child in ipairs(tool:GetChildren()) do
-        local low = string.lower(child.Name)
-        if string.find(low, "fish", 1, true) or string.find(low, "egg", 1, true) then return true, "L1_ChildName" end
-        if child:FindFirstChild("EggKgBillboard", true) or child:FindFirstChild("FishKgBillboard", true) then return true, "L2_Billboard" end
-    end
-
-    local attrs = {
-        "HasEgg","ContainsEgg","IsEgg","CarryingEgg","HasFish","HasCatch",
-        "EggValue","EggName","EggKg","EggId","Kg","Kgs","Weight",
-        "CurrentEgg","StoredEgg","EggRarity","Rarity", "FishName", "FishKg", "FishValue", "Value"
-    }
-    for _, an in ipairs(attrs) do
-        local ok, val = pcall(function() return tool:GetAttribute(an) end)
-        if ok and val ~= nil then
-            if type(val) == "boolean" and val then return true, "L3_Bool:" .. an end
-            if type(val) == "number" and val > 0 then return true, "L3_Num:" .. an end
-            if type(val) == "string" and val ~= "" and val ~= "0" and val ~= "nil" then
-                return true, "L3_Str:" .. an
-            end
-        end
-    end
-
-    for _, d in ipairs(tool:GetDescendants()) do
-        if d:IsA("BoolValue") and d.Value then
-            local low = string.lower(d.Name)
-            if string.find(low, "fish", 1, true) or string.find(low, "egg", 1, true) or string.find(low, "hold", 1, true)
-                or string.find(low, "carry", 1, true) or string.find(low, "has", 1, true) then
-                return true, "L4_BoolValue:" .. d.Name
-            end
-        elseif d:IsA("StringValue") and d.Value ~= "" then
-            local low = string.lower(d.Name)
-            if string.find(low, "fish", 1, true) or string.find(low, "egg", 1, true) or string.find(low, "name", 1, true) then
-                return true, "L4_StrValue:" .. d.Name
-            end
-        elseif (d:IsA("NumberValue") or d:IsA("IntValue")) and d.Value > 0 then
-            local low = string.lower(d.Name)
-            if string.find(low, "fish", 1, true) or string.find(low, "egg", 1, true) or string.find(low, "kg", 1, true)
-                or string.find(low, "weight", 1, true) or string.find(low, "value", 1, true) then
-                return true, "L4_NumValue:" .. d.Name
-            end
-        end
-    end
-
-    for _, d in ipairs(tool:GetDescendants()) do
-        if d:IsA("BasePart") then
-            local low = string.lower(d.Name)
-            if string.find(low, "fish", 1, true) or string.find(low, "egg", 1, true) then return true, "L5_BasePart" end
-            if d:FindFirstChild("EggKgBillboard", true) or d:FindFirstChild("FishKgBillboard", true) then return true, "L5_PartBillboard" end
-        end
-    end
-
-    for _, d in ipairs(tool:GetDescendants()) do
-        if d:IsA("Highlight") then
-            local n = FindClosestRarity(d.FillColor)
-            if n then return true, "L6_Highlight:" .. n end
-        end
-    end
-    return false, "NoFishInTool"
-end
-
-local function VerifyMagicToolHasFish()
-    local tool = FindMagicFishTool()
-    if not tool then return false end
-    local has = InspectToolForFish(tool)
-    return has
-end
-
-local function WaitForFishInMagicTool(timeout)
-    timeout = timeout or 0.5 -- รอ 0.5 วินาที
-    local t0 = os.clock()
-    while toggled and (os.clock() - t0) < timeout do
-        if VerifyMagicToolHasFish() or IsPlayerHoldingEgg() then return true end
-        task.wait(CONFIG.MAGIC_POLL_INTERVAL)
-    end
-    return IsPlayerHoldingEgg() or VerifyMagicToolHasFish()
-end
-
--- =============================================================
 -- [ VIEWPORT 3D ENGINE - ENHANCED CLEANUP ]
 -- =============================================================
 local activeEggClone = nil
@@ -1460,7 +1312,7 @@ local function Display3DTarget(targetObj)
 end
 
 -- =============================================================
--- [ TARGET LOCATOR - ค้นหาโมเดลปลา/FishTool ใน Workspace ]
+-- [ TARGET LOCATOR - ค้นหาโมเดลปลา/FishTool ที่เร็วและแม่นยำ ]
 -- =============================================================
 local function GetBestTarget()
     local bestTarget, bestW = nil, -1
@@ -1479,12 +1331,10 @@ local function GetBestTarget()
                     end
                 end
                 
-                -- ถ้าน้ำหนักดีกว่า หรือชื่อตรงกับเป้าหมาย
                 if nameMatch and w > bestW then
                     bestW = w
                     bestTarget = target
                 elseif w > bestW and bestW == -1 then
-                    -- Fallback กรณีไม่เจอชื่อที่ตรง แต่เจอของที่มีน้ำหนัก
                     bestW = w
                     bestTarget = target
                 end
@@ -1492,7 +1342,7 @@ local function GetBestTarget()
         end
     end
     
-    -- ถ้าไม่เจอใน Folder ให้ค้นหาทั่ว Workspace (กรณีปลาวางอยู่เฉยๆ)
+    -- ถ้าไม่เจอใน Folder ให้ค้นหาทั่ว Workspace
     if not bestTarget then
         for _, target in ipairs(Workspace:GetChildren()) do
             if target:IsA("Model") or target:IsA("Tool") then
@@ -1660,7 +1510,6 @@ local function BindFolderEvents(folder)
     folder.ChildRemoved:Connect(function() task.defer(RefreshSpawnedTargets) end)
 end
 
--- ผูก Event กับทุก Folder ที่เป็นไปได้
 for _, folderName in ipairs(CONFIG.SPAWN_FOLDER_NAMES) do
     local initFolder = Workspace:FindFirstChild(folderName)
     if initFolder then
@@ -1721,7 +1570,7 @@ ModeSub.BackgroundTransparency = 1
 ModeSub.Position = UDim2.new(0, 12, 0, 48)
 ModeSub.Size = UDim2.new(0, 80, 0, 12)
 ModeSub.Font = Enum.Font.GothamMedium
-ModeSub.Text = "HOLD-E 2.0s"
+ModeSub.Text = "HOLD-E 1.8s"
 ModeSub.TextColor3 = Color3.fromRGB(110, 115, 125)
 ModeSub.TextSize = 9
 ModeSub.TextXAlignment = Enum.TextXAlignment.Left
@@ -1853,7 +1702,7 @@ local function SmoothFlyTo(targetCFrame, speed)
 
     speed = speed or CONFIG.FLY_SPEED
     local dist = (hrp.Position - targetCFrame.Position).Magnitude
-    local t = math.max(dist / speed, 0.12)
+    local t = math.max(dist / speed, 0.1)
 
     EnableNoclip()
 
@@ -1895,7 +1744,7 @@ SmoothFlyToWithLanding = function(targetCFrame, normalSpeed)
         local approachCF = CFrame.lookAt(approachPos, targetCFrame.Position)
 
         local travelDist = (hrp.Position - approachPos).Magnitude
-        local travelTime = math.max(travelDist / normalSpeed, 0.2)
+        local travelTime = math.max(travelDist / normalSpeed, 0.15)
 
         local fastTween = TweenService:Create(hrp, TweenInfo.new(travelTime, Enum.EasingStyle.Linear), {CFrame = approachCF})
         currentFlyTween = fastTween
@@ -1919,7 +1768,7 @@ SmoothFlyToWithLanding = function(targetCFrame, normalSpeed)
     end
 
     local finalDist = (hrp.Position - targetCFrame.Position).Magnitude
-    local landTime = math.clamp(finalDist / CONFIG.LANDING_SPEED, 0.6, 2.0)
+    local landTime = math.clamp(finalDist / CONFIG.LANDING_SPEED, 0.4, 1.5)
 
     local slowTween = TweenService:Create(hrp, TweenInfo.new(landTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {CFrame = targetCFrame})
     currentFlyTween = slowTween
@@ -1940,7 +1789,7 @@ SmoothFlyToWithLanding = function(targetCFrame, normalSpeed)
     if sConn then sConn:Disconnect() end
 
     DisableNoclip()
-    task.wait(0.25)
+    task.wait(0.15)
 end
 
 -- =============================================================
@@ -2111,7 +1960,7 @@ local function FlyToBaseplate()
     SmoothFlyToWithLanding(bp, CONFIG.FLY_SPEED)
     local hrp = GetCurrentHRP()
     if hrp then pcall(function() hrp.AssemblyLinearVelocity = Vector3.zero end) end
-    task.wait(0.3)
+    task.wait(0.2)
     ResetWarpBaseline()
     return true
 end
@@ -2162,17 +2011,17 @@ local function TryDropTarget()
     return true
 end
 
-TryDepositEgg = function()
+TryDepositFish = function()
     local t0 = os.clock()
-    while toggled and IsPlayerHoldingEgg() and (os.clock() - t0) < CONFIG.DEPOSIT_MAX_WAIT do
+    while toggled and IsPlayerHoldingFish() and (os.clock() - t0) < CONFIG.DEPOSIT_MAX_WAIT do
         TryDropTarget()
         task.wait(CONFIG.DEPOSIT_CHECK_INTERVAL)
     end
-    return not IsPlayerHoldingEgg()
+    return not IsPlayerHoldingFish()
 end
 
 -- =============================================================
--- [ HOLD-E ENGINE - INSTANT ESCAPE & PROXIMITY FIRE ]
+-- [ HOLD-E ENGINE - FAST & ACCURATE STEAL ]
 -- =============================================================
 local function AdvancedHoldE(targetObj)
     if not targetObj or not targetObj:IsDescendantOf(Workspace) then return false end
@@ -2199,7 +2048,7 @@ local function AdvancedHoldE(targetObj)
 
     local targetCF = (promptAnchor:IsA("BasePart") and promptAnchor.CFrame) or targetObj:GetPivot()
 
-    if IsPlayerHoldingEgg() then return false end
+    if IsPlayerHoldingFish() then return false end
 
     if toggled then SmoothFlyTo(targetCF, CONFIG.FLY_SPEED) end
     if not toggled or not targetObj:IsDescendantOf(Workspace) then return false end
@@ -2219,11 +2068,11 @@ local function AdvancedHoldE(targetObj)
     RunService.Heartbeat:Wait()
     ResetWarpBaseline()
 
-    -- Executor Direct Fire Prompt Bypass (แก้ไขให้ตรวจสอบ Type ก่อนเรียกใช้)
+    -- Executor Direct Fire Prompt Bypass
     if type(firePrompt) == "function" then
         pcall(function() firePrompt(prompt) end)
         task.wait(0.05)
-        if stealConfirmed or IsPlayerHoldingEgg() then
+        if CheckMagicFishTool() or stealConfirmed then
             return true
         end
     end
@@ -2247,7 +2096,7 @@ local function AdvancedHoldE(targetObj)
 
     local t0 = os.clock()
     while toggled and (os.clock() - t0) < CONFIG.HOLD_DURATION do
-        if stealConfirmed or IsPlayerHoldingEgg() or warpedFlag then break end
+        if CheckMagicFishTool() or stealConfirmed or warpedFlag then break end
         task.wait(0.02)
     end
 
@@ -2258,17 +2107,18 @@ local function AdvancedHoldE(targetObj)
     if freezeConn then freezeConn:Disconnect() end
     RestoreCamera()
 
-    if stealConfirmed or IsPlayerHoldingEgg() then
+    -- ตรวจสอบ MagicFishTool ทันทีหลัง Hold-E
+    if CheckMagicFishTool() or stealConfirmed then
         return true
     end
 
     local vEnd = os.clock() + CONFIG.HOLD_VERIFY_WINDOW
     while toggled and os.clock() < vEnd do
-        if stealConfirmed or IsPlayerHoldingEgg() or warpedFlag then break end
+        if CheckMagicFishTool() or stealConfirmed or warpedFlag then break end
         task.wait(0.02)
     end
 
-    return stealConfirmed or IsPlayerHoldingEgg() or warpedFlag
+    return CheckMagicFishTool() or stealConfirmed or warpedFlag
 end
 
 local function AdvancedHoldEWithRetry(targetObj)
@@ -2301,7 +2151,7 @@ local function RunThreeStageFallback()
     local coralCF = GetCoralReefCFrame()
     if coralCF and toggled then
         SmoothFlyToWithLanding(coralCF, CONFIG.FLY_SPEED)
-        task.wait(0.35)
+        task.wait(0.2)
     end
 
     -- Stage 2: Baseplate
@@ -2309,7 +2159,7 @@ local function RunThreeStageFallback()
         local bp = GetBaseplateCFrame()
         if bp then
             FlyToBaseplate()
-            task.wait(0.3)
+            task.wait(0.2)
         end
     end
 
@@ -2323,7 +2173,7 @@ local function RunThreeStageFallback()
 end
 
 -- =============================================================
--- [ MAIN LOOP - INSTANT RETURN & ESCAPE ]
+-- [ MAIN LOOP - FAST & ACCURATE RETURN & ESCAPE ]
 -- =============================================================
 local isActionRunning = false
 local markerVisitDone = false
@@ -2357,7 +2207,7 @@ local function StartAutoTargetAction()
                 selectedEggObject = nil
             end
 
-            local holding = IsPlayerHoldingEgg()
+            local holding = IsPlayerHoldingFish()
             local inSafe  = IsPlayerInSafeZone()
 
             if not holding then markerVisitDone = false end
@@ -2371,7 +2221,7 @@ local function StartAutoTargetAction()
                     local markerCF = GetIgnoreMarkerCFrame()
                     if markerCF and toggled then
                         SmoothFlyToWithLanding(markerCF, CONFIG.FLY_SPEED)
-                        task.wait(0.2)
+                        task.wait(0.15)
                     end
                     if toggled then
                         local ret = GetReturnCFrame()
@@ -2380,7 +2230,7 @@ local function StartAutoTargetAction()
                 end
 
                 task.wait(CONFIG.DEPOSIT_SETTLE_WAIT)
-                if toggled then TryDepositEgg() end
+                if toggled then TryDepositFish() end
                 stealConfirmed = false
 
                 if not loopChecked or not toggled then
@@ -2418,15 +2268,12 @@ local function StartAutoTargetAction()
                     -- เช็คบอสขัดขวาง
                     if ragdollDetected or bossAttackDetected or snapBackDetected then
                         EmergencyEscapeFromBoss()
-                        task.wait(0.2)
+                        task.wait(0.15)
                     else
                         -- เช็คสถานะการถือของ (ถ้าถือแล้ว ให้บินหนีทันที)
-                        local success = stealConfirmed or IsPlayerHoldingEgg()
-                        if not success then
-                            success = WaitForFishInMagicTool(0.5) -- ตรวจหา MagicFishTool
-                        end
-
-                        if success or IsPlayerHoldingEgg() then
+                        local success = stealConfirmed or CheckMagicFishTool() or IsPlayerHoldingFish()
+                        
+                        if success then
                             -- ✅ บินกลับ SafeZone ทันที!
                             if not IsPlayerInSafeZone() then
                                 local ret = GetReturnCFrame()
@@ -2439,7 +2286,7 @@ local function StartAutoTargetAction()
                             RunThreeStageFallback()
                             
                             -- เพิ่ม Cooldown เล็กน้อยเพื่อป้องกันการวนลูปซ้ำซ้อน
-                            task.wait(0.5)
+                            task.wait(0.3)
 
                             if not loopChecked then
                                 StopToggleUI()

@@ -1,5 +1,3 @@
--- [[ YANZ HUB - NEXT-GEN HYPER-REALISTIC FLAME & PHYSICS ENGINE + HOLD-E ENGINE + SPEEDBUBBLE BYPASS + NIGHT DETECTION + MAGICFISHTOOL ENGINE + ANTI-BOSS + ANTI-SNAP-BACK + 3-STAGE FALLBACK + IGNORE-MARKERS PRE-FLIGHT (FULL UNABRIDGED BUILD) ]] --
-
 local CoreGui            = game:GetService("CoreGui")
 local TweenService       = game:GetService("TweenService")
 local UserInputService   = game:GetService("UserInputService")
@@ -13,13 +11,8 @@ local ReplicatedStorage  = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
 local Camera      = Workspace.CurrentCamera
 
--- Global functions for Executor Compatibility (Safeguarded)
-local firePrompt = nil
-if typeof(fireproximityprompt) == "function" then
-    firePrompt = fireproximityprompt
-elseif typeof(debug) == "table" and typeof(debug.fireproximityprompt) == "function" then
-    firePrompt = debug.fireproximityprompt
-end
+-- Global functions for Executor Compatibility
+local firePrompt = fireproximityprompt or (debug and debug.fireproximityprompt)
 
 local DEFAULT_FOV      = Camera and Camera.FieldOfView or 70
 local cameraZoomActive = false
@@ -41,7 +34,7 @@ local CONFIG = {
     SAFE_ZONE_RADIUS       = 20,
     -- Hold-E
     HOLD_DURATION          = 2,
-    HOLD_VERIFY_WINDOW     = 0.2,
+    HOLD_VERIFY_WINDOW     = 0.3,
     E_MAX_ATTEMPTS         = 2,
     E_RETRY_DELAY          = 0.2,
     -- MagicTool verify
@@ -282,10 +275,8 @@ end
 -- [ ANTI-KICK / ANTI-AFK ]
 -- =============================================================
 LocalPlayer.Idled:Connect(function()
-    pcall(function()
-        VirtualUser:CaptureController()
-        VirtualUser:ClickButton2(Vector2.zero)
-    end)
+    VirtualUser:CaptureController()
+    VirtualUser:ClickButton2(Vector2.zero)
 end)
 
 -- =============================================================
@@ -323,13 +314,13 @@ local E_KEYCODE = 69
 local E_ENUM    = Enum.KeyCode.E
 
 local function SendEDown()
-    pcall(function() VirtualInputManager:SendKeyEvent(true, E_ENUM, false, nil) end)
-    pcall(function() if typeof(keypress) == "function" then keypress(E_KEYCODE) end end)
+    pcall(function() VirtualInputManager:SendKeyEvent(true, E_ENUM, false, game) end)
+    pcall(function() if keypress then keypress(E_KEYCODE) end end)
 end
 
 local function SendEUp()
-    pcall(function() VirtualInputManager:SendKeyEvent(false, E_ENUM, false, nil) end)
-    pcall(function() if typeof(keyrelease) == "function" then keyrelease(E_KEYCODE) end end)
+    pcall(function() VirtualInputManager:SendKeyEvent(false, E_ENUM, false, game) end)
+    pcall(function() if keyrelease then keyrelease(E_KEYCODE) end end)
 end
 
 -- =============================================================
@@ -457,180 +448,7 @@ IsPlayerInSafeZone = function()
 end
 
 -- =============================================================
--- [ MAGIC FISH TOOL VERIFICATION ]
--- =============================================================
-local MAGIC_TOOL_NAME_LOWER = string.lower(CONFIG.MAGIC_TOOL_NAME)
-
-local function FindMagicFishTool()
-    local character = LocalPlayer.Character
-    if character then
-        for _, child in ipairs(character:GetChildren()) do
-            if child:IsA("Tool") then
-                local low = string.lower(child.Name)
-                if low == MAGIC_TOOL_NAME_LOWER or string.find(low, "magicfish", 1, true)
-                   or (string.find(low, "magic", 1, true) and string.find(low, "fish", 1, true)) then
-                    return child, "Character"
-                end
-            end
-        end
-    end
-
-    local bp = LocalPlayer:FindFirstChildOfClass("Backpack")
-    if bp then
-        for _, child in ipairs(bp:GetChildren()) do
-            if child:IsA("Tool") then
-                local low = string.lower(child.Name)
-                if low == MAGIC_TOOL_NAME_LOWER or string.find(low, "magicfish", 1, true)
-                   or (string.find(low, "magic", 1, true) and string.find(low, "fish", 1, true)) then
-                    return child, "Backpack"
-                end
-            end
-        end
-    end
-    return nil, "NotFound"
-end
-
-local function InspectToolForEgg(tool)
-    if not tool then return false, "Tool=nil" end
-
-    for _, child in ipairs(tool:GetChildren()) do
-        local low = string.lower(child.Name)
-        if string.find(low, "egg", 1, true) then return true, "L1_ChildName" end
-        if child:FindFirstChild("EggKgBillboard", true) then return true, "L2_Billboard" end
-    end
-
-    local attrs = {
-        "HasEgg","ContainsEgg","IsEgg","CarryingEgg","HasFish","HasCatch",
-        "EggValue","EggName","EggKg","EggId","Kg","Kgs","Weight",
-        "CurrentEgg","StoredEgg","EggRarity","Rarity"
-    }
-    for _, an in ipairs(attrs) do
-        local ok, val = pcall(function() return tool:GetAttribute(an) end)
-        if ok and val ~= nil then
-            if type(val) == "boolean" and val then return true, "L3_Bool:" .. an end
-            if type(val) == "number" and val > 0 then return true, "L3_Num:" .. an end
-            if type(val) == "string" and val ~= "" and val ~= "0" and val ~= "nil" then
-                return true, "L3_Str:" .. an
-            end
-        end
-    end
-
-    for _, d in ipairs(tool:GetDescendants()) do
-        if d:IsA("BoolValue") and d.Value then
-            return true, "L4_BoolValue:" .. d.Name
-        elseif (d:IsA("NumberValue") or d:IsA("IntValue")) and d.Value > 0 then
-            return true, "L4_NumValue:" .. d.Name
-        elseif d:IsA("StringValue") and d.Value ~= "" then
-            return true, "L4_StrValue:" .. d.Name
-        end
-    end
-
-    for _, d in ipairs(tool:GetDescendants()) do
-        if d:IsA("BasePart") then
-            local low = string.lower(d.Name)
-            if string.find(low, "egg", 1, true) then return true, "L5_BasePart" end
-            if d:FindFirstChild("EggKgBillboard", true) then return true, "L5_PartBillboard" end
-        end
-    end
-
-    return false, "NoEggInTool"
-end
-
-local function VerifyMagicToolHasEgg()
-    local tool = FindMagicFishTool()
-    if not tool then return false end
-    local has = InspectToolForEgg(tool)
-    return has
-end
-
-local function WaitForEggInMagicTool(timeout)
-    timeout = timeout or 0.3
-    local t0 = os.clock()
-    while toggled and (os.clock() - t0) < timeout do
-        if VerifyMagicToolHasEgg() or IsPlayerHoldingEgg() then return true end
-        task.wait(CONFIG.MAGIC_POLL_INTERVAL)
-    end
-    return IsPlayerHoldingEgg() or VerifyMagicToolHasEgg()
-end
-
--- =============================================================
--- [ HELD-EGG DETECTION ]
--- =============================================================
-IsPlayerHoldingEgg = function()
-    local character = LocalPlayer.Character
-    if not character then return false end
-
-    -- 1. Check MagicFishTool
-    local magicTool, location = FindMagicFishTool()
-    if magicTool then
-        local hasEgg, _ = InspectToolForEgg(magicTool)
-        if hasEgg then
-            return true, magicTool
-        end
-        if location == "Character" then
-            return true, magicTool
-        end
-    end
-
-    -- 2. Check Tools in Character
-    for _, child in ipairs(character:GetChildren()) do
-        if child:IsA("Tool") then
-            local low = string.lower(child.Name)
-            if string.find(low, "egg") or child:FindFirstChild("EggKgBillboard", true) then
-                return true, child
-            end
-        end
-    end
-
-    -- 3. Check Models or BaseParts
-    for _, child in ipairs(character:GetChildren()) do
-        if (child:IsA("Model") or child:IsA("BasePart")) and not child:IsA("Accessory") then
-            local low = string.lower(child.Name)
-            if string.find(low, "egg") or child:FindFirstChild("EggKgBillboard", true) or child:GetAttribute("IsEgg") then
-                return true, child
-            end
-        end
-    end
-
-    -- 4. Check Welds
-    local parts = {
-        character:FindFirstChild("RightHand"),
-        character:FindFirstChild("LeftHand"),
-        character:FindFirstChild("Right Arm"),
-        character:FindFirstChild("Left Arm"),
-        character:FindFirstChild("UpperTorso"),
-        character:FindFirstChild("Torso"),
-    }
-    for _, part in ipairs(parts) do
-        if part then
-            for _, joint in ipairs(part:GetChildren()) do
-                if joint:IsA("Weld") or joint:IsA("WeldConstraint") or joint:IsA("Motor6D") then
-                    local p0, p1 = joint.Part0, joint.Part1
-                    local other = (p0 == part) and p1 or p0
-                    if other and other:IsDescendantOf(character) then
-                        local pn = string.lower(other.Name)
-                        local par = other.Parent and string.lower(other.Parent.Name) or ""
-                        if string.find(pn, "egg") or string.find(par, "egg")
-                            or (other.Parent and other.Parent:FindFirstChild("EggKgBillboard", true)) then
-                            return true, other.Parent
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    -- 5. Check Attributes
-    if character:GetAttribute("HasEgg") or character:GetAttribute("CarryingEgg")
-        or LocalPlayer:GetAttribute("CarryingEgg") then
-        return true
-    end
-
-    return false
-end
-
--- =============================================================
--- [ UI SETUP ]
+-- [ UI ]
 -- =============================================================
 if CoreGui:FindFirstChild("YanzHubUI") then
     CoreGui.YanzHubUI:Destroy()
@@ -1005,7 +823,7 @@ DiscordButton.MouseLeave:Connect(function()
     TweenService:Create(DiscordButton, TWEEN_SPRING, {Size = UDim2.new(0, 30, 0, 30), Position = UDim2.new(1, -72, 0, 11)}):Play()
 end)
 DiscordButton.MouseButton1Click:Connect(function()
-    pcall(function() if typeof(setclipboard) == "function" then setclipboard("https://discord.gg/mNGeUVcjKB") end end)
+    pcall(function() if setclipboard then setclipboard("https://discord.gg/mNGeUVcjKB") end end)
     local s = TweenService:Create(DiscordButton, TWEEN_FAST, {Size = UDim2.new(0, 26, 0, 26), Position = UDim2.new(1, -70, 0, 13)})
     s:Play()
     s.Completed:Connect(function()
@@ -1289,7 +1107,196 @@ local function GetEggRarity(eggModel)
 end
 
 -- =============================================================
--- [ VIEWPORT 3D ENGINE ]
+-- [ HELD-EGG DETECTION ]
+-- =============================================================
+IsPlayerHoldingEgg = function()
+    local character = LocalPlayer.Character
+    if not character then return false end
+
+    -- ตรวจหา MagicFishTool โดยตรง (ตามที่คุณแจ้ง)
+    for _, child in ipairs(character:GetChildren()) do
+        if child:IsA("Tool") and string.find(string.lower(child.Name), "magicfishtool") then
+            return true, child
+        end
+    end
+
+    for _, child in ipairs(character:GetChildren()) do
+        if child:IsA("Tool") then
+            local low = string.lower(child.Name)
+            if string.find(low, "egg") or child:FindFirstChild("EggKgBillboard", true) then
+                return true, child
+            end
+        end
+    end
+
+    for _, child in ipairs(character:GetChildren()) do
+        if (child:IsA("Model") or child:IsA("BasePart")) and not child:IsA("Accessory") then
+            local low = string.lower(child.Name)
+            if string.find(low, "egg") or child:FindFirstChild("EggKgBillboard", true) or child:GetAttribute("IsEgg") then
+                return true, child
+            end
+        end
+    end
+
+    local parts = {
+        character:FindFirstChild("RightHand"),
+        character:FindFirstChild("LeftHand"),
+        character:FindFirstChild("Right Arm"),
+        character:FindFirstChild("Left Arm"),
+        character:FindFirstChild("UpperTorso"),
+        character:FindFirstChild("Torso"),
+    }
+    for _, part in ipairs(parts) do
+        if part then
+            for _, joint in ipairs(part:GetChildren()) do
+                if joint:IsA("Weld") or joint:IsA("WeldConstraint") or joint:IsA("Motor6D") then
+                    local p0, p1 = joint.Part0, joint.Part1
+                    local other = (p0 == part) and p1 or p0
+                    if other and other:IsDescendantOf(character) then
+                        local pn = string.lower(other.Name)
+                        local par = other.Parent and string.lower(other.Parent.Name) or ""
+                        if string.find(pn, "egg") or string.find(par, "egg")
+                            or (other.Parent and other.Parent:FindFirstChild("EggKgBillboard", true)) then
+                            return true, other.Parent
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    if character:GetAttribute("HasEgg") or character:GetAttribute("CarryingEgg")
+        or LocalPlayer:GetAttribute("CarryingEgg") then
+        return true
+    end
+    if character:FindFirstChild("CarryingEgg") or character:FindFirstChild("EggValue")
+        or LocalPlayer:FindFirstChild("CarryingEgg") then
+        return true
+    end
+    return false
+end
+
+-- =============================================================
+-- [ MAGIC FISH TOOL VERIFICATION ]
+-- =============================================================
+local MAGIC_TOOL_NAME_LOWER = string.lower(CONFIG.MAGIC_TOOL_NAME)
+
+local function FindMagicFishTool()
+    local character = LocalPlayer.Character
+    if not character then return nil, "NoCharacter" end
+
+    for _, child in ipairs(character:GetChildren()) do
+        if child:IsA("Tool") then
+            if child.Name == CONFIG.MAGIC_TOOL_NAME then
+                return child, "Character/Exact"
+            end
+            local low = string.lower(child.Name)
+            if string.find(low, "magicfish", 1, true)
+                or (string.find(low, "magic", 1, true) and string.find(low, "fish", 1, true)) then
+                return child, "Character/Fuzzy:" .. child.Name
+            end
+        end
+    end
+
+    local bp = LocalPlayer:FindFirstChildOfClass("Backpack")
+    if bp then
+        for _, child in ipairs(bp:GetChildren()) do
+            if child:IsA("Tool") then
+                local low = string.lower(child.Name)
+                if low == MAGIC_TOOL_NAME_LOWER
+                    or string.find(low, "magicfish", 1, true)
+                    or (string.find(low, "magic", 1, true) and string.find(low, "fish", 1, true)) then
+                    return child, "Backpack/Fuzzy:" .. child.Name
+                end
+            end
+        end
+    end
+    return nil, "NotFound"
+end
+
+local function InspectToolForEgg(tool)
+    if not tool then return false, "Tool=nil" end
+
+    for _, child in ipairs(tool:GetChildren()) do
+        local low = string.lower(child.Name)
+        if string.find(low, "egg", 1, true) then return true, "L1_ChildName" end
+        if child:FindFirstChild("EggKgBillboard", true) then return true, "L2_Billboard" end
+    end
+
+    local attrs = {
+        "HasEgg","ContainsEgg","IsEgg","CarryingEgg","HasFish","HasCatch",
+        "EggValue","EggName","EggKg","EggId","Kg","Kgs","Weight",
+        "CurrentEgg","StoredEgg","EggRarity","Rarity"
+    }
+    for _, an in ipairs(attrs) do
+        local ok, val = pcall(function() return tool:GetAttribute(an) end)
+        if ok and val ~= nil then
+            if type(val) == "boolean" and val then return true, "L3_Bool:" .. an end
+            if type(val) == "number" and val > 0 then return true, "L3_Num:" .. an end
+            if type(val) == "string" and val ~= "" and val ~= "0" and val ~= "nil" then
+                return true, "L3_Str:" .. an
+            end
+        end
+    end
+
+    for _, d in ipairs(tool:GetDescendants()) do
+        if d:IsA("BoolValue") and d.Value then
+            local low = string.lower(d.Name)
+            if string.find(low, "egg", 1, true) or string.find(low, "hold", 1, true)
+                or string.find(low, "carry", 1, true) or string.find(low, "has", 1, true) then
+                return true, "L4_BoolValue:" .. d.Name
+            end
+        elseif d:IsA("StringValue") and d.Value ~= "" then
+            local low = string.lower(d.Name)
+            if string.find(low, "egg", 1, true) or string.find(low, "name", 1, true)
+                or string.find(low, "fish", 1, true) then
+                return true, "L4_StrValue:" .. d.Name
+            end
+        elseif (d:IsA("NumberValue") or d:IsA("IntValue")) and d.Value > 0 then
+            local low = string.lower(d.Name)
+            if string.find(low, "egg", 1, true) or string.find(low, "kg", 1, true)
+                or string.find(low, "weight", 1, true) or string.find(low, "value", 1, true) then
+                return true, "L4_NumValue:" .. d.Name
+            end
+        end
+    end
+
+    for _, d in ipairs(tool:GetDescendants()) do
+        if d:IsA("BasePart") then
+            local low = string.lower(d.Name)
+            if string.find(low, "egg", 1, true) then return true, "L5_BasePart" end
+            if d:FindFirstChild("EggKgBillboard", true) then return true, "L5_PartBillboard" end
+        end
+    end
+
+    for _, d in ipairs(tool:GetDescendants()) do
+        if d:IsA("Highlight") then
+            local n = FindClosestRarity(d.FillColor)
+            if n then return true, "L6_Highlight:" .. n end
+        end
+    end
+    return false, "NoEggInTool"
+end
+
+local function VerifyMagicToolHasEgg()
+    local tool = FindMagicFishTool()
+    if not tool then return false end
+    local has = InspectToolForEgg(tool)
+    return has
+end
+
+local function WaitForEggInMagicTool(timeout)
+    timeout = timeout or 0.5 -- เพิ่มเวลาเป็น 0.5 วินาทีเพื่อรอเซิร์ฟเวอร์ตอบสนอง
+    local t0 = os.clock()
+    while toggled and (os.clock() - t0) < timeout do
+        if VerifyMagicToolHasEgg() or IsPlayerHoldingEgg() then return true end
+        task.wait(CONFIG.MAGIC_POLL_INTERVAL)
+    end
+    return IsPlayerHoldingEgg() or VerifyMagicToolHasEgg()
+end
+
+-- =============================================================
+-- [ VIEWPORT 3D ENGINE - ENHANCED CLEANUP ]
 -- =============================================================
 local activeEggClone = nil
 local egg3DRotationAngle = 0
@@ -2060,12 +2067,12 @@ local function TryDropEgg()
                         VirtualInputManager:SendMouseButtonEvent(
                             gui.AbsolutePosition.X + gui.AbsoluteSize.X / 2,
                             gui.AbsolutePosition.Y + gui.AbsoluteSize.Y / 2,
-                            0, true, nil, 0)
+                            0, true, game, 0)
                         task.wait(0.05)
                         VirtualInputManager:SendMouseButtonEvent(
                             gui.AbsolutePosition.X + gui.AbsoluteSize.X / 2,
                             gui.AbsolutePosition.Y + gui.AbsoluteSize.Y / 2,
-                            0, false, nil, 0)
+                            0, false, game, 0)
                     end)
                     return true
                 end
@@ -2074,12 +2081,12 @@ local function TryDropEgg()
     end
 
     pcall(function()
-        VirtualInputManager:SendKeyEvent(true, DROP_ENUM, false, nil)
+        VirtualInputManager:SendKeyEvent(true, DROP_ENUM, false, game)
         task.wait(0.05)
-        VirtualInputManager:SendKeyEvent(false, DROP_ENUM, false, nil)
+        VirtualInputManager:SendKeyEvent(false, DROP_ENUM, false, game)
     end)
     pcall(function()
-        if typeof(keypress) == "function" and typeof(keyrelease) == "function" then
+        if keypress and keyrelease then
             keypress(DROP_KEYCODE); task.wait(0.05); keyrelease(DROP_KEYCODE)
         end
     end)
@@ -2143,8 +2150,8 @@ local function AdvancedHoldE(targetEgg)
     RunService.Heartbeat:Wait()
     ResetWarpBaseline()
 
-    -- Executor Direct Fire Prompt Bypass
-    if firePrompt then
+    -- Executor Direct Fire Prompt Bypass (แก้ไขให้ตรวจสอบ Type ก่อนเรียกใช้)
+    if type(firePrompt) == "function" then
         pcall(function() firePrompt(prompt) end)
         task.wait(0.05)
         if stealConfirmed or IsPlayerHoldingEgg() then
@@ -2286,7 +2293,9 @@ local function StartAutoEggAction()
 
             if not holding then markerVisitDone = false end
 
+            -- =====================================================
             -- CASE 1: ถือไข่ + อยู่ SafeZone -> เดินเข้าจุด Marker -> ฝากไข่
+            -- =====================================================
             if holding and inSafe then
                 if not markerVisitDone then
                     markerVisitDone = true
@@ -2310,7 +2319,9 @@ local function StartAutoEggAction()
                     break
                 end
 
+            -- =====================================================
             -- CASE 2: ถือไข่ + นอก SafeZone -> บินกลับ SafeZone ทันที
+            -- =====================================================
             elseif holding and not inSafe then
                 local ret = GetReturnCFrame()
                 if ret and toggled then
@@ -2318,7 +2329,9 @@ local function StartAutoEggAction()
                 end
                 stealConfirmed = false
 
+            -- =====================================================
             -- CASE 3: ไม่ได้ถือไข่ -> บินไปขโมย
+            -- =====================================================
             else
                 local targetEgg = selectedEggObject or GetHeaviestEgg()
                 local hrp = GetCurrentHRP()
@@ -2338,12 +2351,14 @@ local function StartAutoEggAction()
                         EmergencyEscapeFromBoss()
                         task.wait(0.2)
                     else
+                        -- เช็คสถานะการถือไข่ (ถ้าถือแล้ว ให้บินหนีทันที)
                         local success = stealConfirmed or IsPlayerHoldingEgg()
                         if not success then
-                            success = WaitForEggInMagicTool(0.3)
+                            success = WaitForEggInMagicTool(0.5) -- ตรวจหา MagicFishTool
                         end
 
                         if success or IsPlayerHoldingEgg() then
+                            -- ✅ บินกลับ SafeZone ทันที!
                             if not IsPlayerInSafeZone() then
                                 local ret = GetReturnCFrame()
                                 if ret and toggled then
@@ -2351,7 +2366,11 @@ local function StartAutoEggAction()
                                 end
                             end
                         else
+                            -- ❌ ขโมยล้มเหลว ใช้ 3-Stage Fallback
                             RunThreeStageFallback()
+                            
+                            -- เพิ่ม Cooldown เล็กน้อยเพื่อป้องกันการวนลูปซ้ำซ้อน
+                            task.wait(0.5)
 
                             if not loopChecked then
                                 StopToggleUI()

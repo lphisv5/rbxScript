@@ -803,6 +803,7 @@ local function ScanCrateData(crate)
         ValueText = "0 Kg"
     }
     
+    -- 1. SCAN CRATE NAME
     local rawName = crate:GetAttribute("CrateName") 
         or crate:GetAttribute("RealName") 
         or crate:GetAttribute("ItemName") 
@@ -827,6 +828,7 @@ local function ScanCrateData(crate)
     end
     data.Name = rawName
     
+    -- 2. SCAN RARITY / TIER
     local rawRarity = crate:GetAttribute("CrateTier")
         or crate:GetAttribute("Rarity")
         or crate:GetAttribute("Tier")
@@ -852,8 +854,32 @@ local function ScanCrateData(crate)
         end
     end
     
-    data.Rarity = (rawRarity and rawRarity ~= "") and rawRarity or "Common"
+    local baseRarity = (rawRarity and rawRarity ~= "") and rawRarity or "Common"
+
+    -- 3. SCAN CRATE SIZE
+    local rawSize = crate:GetAttribute("CrateSize")
+        or crate:GetAttribute("Size")
+        or crate:GetAttribute("EggSize")
+        or crate:GetAttribute("CrateScale")
+        
+    if not rawSize then
+        for _, childName in ipairs({"CrateSize", "Size", "EggSize", "CrateScale"}) do
+            local v = crate:FindFirstChild(childName)
+            if v and (v:IsA("ValueObject") or v:IsA("StringValue")) then
+                rawSize = tostring(v.Value)
+                break
+            end
+        end
+    end
+
+    -- Combine Rarity and Size (e.g. "Cosmic - Huge" or "Cosmic")
+    if rawSize and tostring(rawSize) ~= "" then
+        data.Rarity = baseRarity .. " - " .. tostring(rawSize)
+    else
+        data.Rarity = baseRarity
+    end
     
+    -- 4. SCAN VALUE / KG
     local rawValue = crate:GetAttribute("CrateKg")
         or crate:GetAttribute("Kg")
         or crate:GetAttribute("Weight")
@@ -912,10 +938,8 @@ local function SetCardExpandedState(expanded)
     CrateListScroll.Visible = isEggExpanded
 
     if isEggExpanded then
-        -- โหลดรายการดร็อปดาวน์เมื่อผู้ใช้คลิกเปิดเมนูเท่านั้น
         PopulateCrateList()
     else
-        -- ล้างโมเดล 3D และ UI เมื่อปิดเมนู เพื่อคืนค่า FPS และหน่วยความจำทันที
         dropdownPreviewModels = {}
         for _, child in ipairs(CrateListScroll:GetChildren()) do
             if child:IsA("Frame") or child:IsA("TextButton") then
@@ -938,7 +962,6 @@ end)
 -- [ MINI EGGCARD BUILDER WITH LAZY ASYNC 3D LOADING ]
 -- -------------------------------------------------------------
 PopulateCrateList = function()
-    -- หากเมนูย่อยถูกปิดอยู่ จะไม่ทำรายการใดๆ เพื่อป้องกันอาการหน่วงสะสม
     if not isEggExpanded then return end
 
     populateSessionId = populateSessionId + 1
@@ -1081,7 +1104,7 @@ PopulateCrateList = function()
         mRarity.Parent = miniCard
         mRarity.BackgroundTransparency = 1
         mRarity.Position = UDim2.new(0, 68, 0, 42)
-        mRarity.Size = UDim2.new(0, 100, 0, 14)
+        mRarity.Size = UDim2.new(0, 120, 0, 14)
         mRarity.Font = Enum.Font.GothamBold
         mRarity.Text = data.Rarity
         mRarity.TextColor3 = GetRarityColor(data.Rarity)
@@ -1120,7 +1143,7 @@ PopulateCrateList = function()
     -- 5. Progressive Async 3D Loader Thread
     task.spawn(function()
         for _, loadTask in ipairs(pending3DTasks) do
-            if currentSession ~= populateSessionId or not isEggExpanded then return end -- หยุดการโหลดทันทีหากปิดเมนู
+            if currentSession ~= populateSessionId or not isEggExpanded then return end
 
             local child = loadTask.CrateModel
             local miniWorld = loadTask.WorldModel
@@ -1180,14 +1203,12 @@ ScanAndUpdateBestCrate = function()
         return
     end
 
-    -- Safety Check: Validate if manually selected model still exists in workspace
     if selectedCrateModel and selectedCrateModel.Parent ~= cratesFolder then
         selectedCrateModel = nil
     end
     
     local targetCrateData = nil
 
-    -- Check if user manually selected a crate
     if selectedCrateModel then
         targetCrateData = ScanCrateData(selectedCrateModel)
         TagLabel.Text = "SELECTED EGG"

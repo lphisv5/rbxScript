@@ -48,50 +48,41 @@ end
 Workspace.DescendantAdded:Connect(removeHoldTime)
 
 -- =======================================================
--- DETECT HOLDING EGG SYSTEM (ตรวจสอบการถือไข่ทั่วร่างกาย)
+-- PRECISION EGG DETECTION SYSTEM (แก้ไขจุดตรวจจับสับสน)
 -- =======================================================
 local function isHoldingEgg()
     local char = LocalPlayer.Character
     if not char then return false end
 
-    -- 1. ตรวจสอบ Tool / Model ที่เกาะอยู่กับตัวละครโดยตรง
+    -- 1. ตรวจสอบ Tool ไข่ที่ถืออยู่ในมือ
     for _, child in ipairs(char:GetChildren()) do
-        if child:IsA("Tool") or (child:IsA("Model") and string.find(string.lower(child.Name), "egg")) then
-            return true, child
+        if child:IsA("Tool") then
+            local nameLower = string.lower(child.Name)
+            if string.find(nameLower, "egg") then
+                return true, child
+            end
         end
     end
 
-    -- 2. ตรวจสอบข้อต่อ (Welds / Constraints) บนชิ้นส่วนร่างกายทั้งหมด
-    for _, part in ipairs(char:GetDescendants()) do
-        if part:IsA("Weld") or part:IsA("WeldConstraint") or part:IsA("Motor6D") then
-            local part0 = part.Part0
-            local part1 = part.Part1
-            if part0 and part1 then
-                local otherPart = (part0:IsDescendantOf(char) and part1) or (part1:IsDescendantOf(char) and part0)
-                if otherPart then
-                    local nameLower = string.lower(otherPart.Name)
-                    local parentNameLower = otherPart.Parent and string.lower(otherPart.Parent.Name) or ""
-                    if string.find(nameLower, "egg") or string.find(parentNameLower, "egg") then
-                        return true, otherPart
-                    end
+    -- 2. ตรวจสอบ Model ไข่ที่ถูกยึดติดกับตัวละคร (ไม่รวม Accessory)
+    for _, child in ipairs(char:GetChildren()) do
+        if child:IsA("Model") and not child:IsA("Accessory") then
+            local nameLower = string.lower(child.Name)
+            if string.find(nameLower, "egg") then
+                return true, child
+            end
+        end
+    end
+
+    -- 3. ตรวจสอบข้อต่อที่มือขวา/มือซ้าย สำหรับโมเดลไข่โดยตรง
+    local rightHand = char:FindFirstChild("RightHand") or char:FindFirstChild("Right Arm")
+    if rightHand then
+        for _, weld in ipairs(rightHand:GetChildren()) do
+            if weld:IsA("Weld") or weld:IsA("WeldConstraint") then
+                local part1 = weld.Part1
+                if part1 and part1.Parent and string.find(string.lower(part1.Parent.Name), "egg") then
+                    return true, part1.Parent
                 end
-            end
-        end
-
-        -- 3. ตรวจสอบวัตถุแปลกปลอมจำพวกไข่ที่ถูกยึดติดกับแขน/มือ/หลัง
-        if part:IsA("BasePart") and not part:IsA("Accessory") then
-            if string.find(string.lower(part.Name), "egg") then
-                return true, part
-            end
-        end
-    end
-
-    -- 4. ตรวจสอบใน Backpack
-    local backpack = LocalPlayer:FindFirstChild("Backpack")
-    if backpack then
-        for _, item in ipairs(backpack:GetChildren()) do
-            if string.find(string.lower(item.Name), "egg") then
-                return true, item
             end
         end
     end
@@ -1882,27 +1873,33 @@ local function instantWarpTo(targetCFrame)
 end
 
 -- =======================================================
--- PROCESS MOVEMENT (INTEGRATED WITH EGG DETECTION)
+-- PROCESS MOVEMENT (ปรับปรุงการวนลูปการทำงานใหม่)
 -- =======================================================
 local function processMovement()
     if not isToggled then return end
     local character = LocalPlayer.Character
     if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+    local hrp = character.HumanoidRootPart
 
     local homeCF = getHomeCFrame()
+    local distToHome = (hrp.Position - homeCF.Position).Magnitude
 
-    -- 🟢 กรณีที่ 1: ตรวจพบว่าผู้เล่นกำลังถือไข่อยู่ในตัว
+    -- 🟢 กรณีที่ 1: ตรวจพบว่ากำลังถือไข่อยู่ในมือจริงๆ
     if isHoldingEgg() then
-        if currentMode == 2 then
-            instantWarpTo(homeCF)
-        else
-            tweenTo(homeCF, 300)
+        -- เดินทางกลับบ้านเฉพาะตอนที่ยังอยู่ห่างจากบ้านเกิน 15 studs
+        if distToHome > 15 then
+            if currentMode == 2 then
+                instantWarpTo(homeCF)
+            else
+                tweenTo(homeCF, 300)
+            end
         end
-        task.wait(0.3)
+        -- เมื่ออยู่บ้านแล้ว ให้ยืนรอระบบเกมเคลียร์ไข่ลงตะกร้า/ส่งไข่
+        task.wait(0.5)
         return
     end
 
-    -- 🔴 กรณีที่ 2: ยังไม่มีไข่ในตัว ให้เริ่มค้นหาไข่เป้าหมาย
+    -- 🔴 กรณีที่ 2: ไม่มีไข่ในตัว ให้เริ่มเดินทางไปเก็บไข่เป้าหมาย
     if not selectedEggInstance or not selectedEggInstance.Parent then
         local renderedEggs = Workspace:FindFirstChild("RenderedEggs")
         if renderedEggs and #renderedEggs:GetChildren() > 0 then
@@ -1918,6 +1915,7 @@ local function processMovement()
     local isVolcanicEgg = selectedEggInstance and string.find(string.lower(selectedEggInstance.Name), "volcan")
     local entranceCF = getVolcanoEntranceCFrame()
 
+    -- ทะลุประตูภูเขาไฟเมื่อไข่เป้าหมายอยู่ข้างใน
     if isVolcanicEgg and entranceCF then
         if currentMode == 2 then
             instantWarpTo(entranceCF)
@@ -1939,8 +1937,8 @@ local function processMovement()
         fireEggPrompt(selectedEggInstance)
         task.wait(0.2)
 
-        -- ตรวจสอบว่าเก็บไข่ติดหรือไม่ หากติดแล้วจึงวาร์ปกลับทันที
-        if isHoldingEgg() or not selectedEggInstance.Parent then
+        -- ตรวจสอบว่าได้ไข่มาในมือหรือไม่ ถ้าได้จึงวาร์ปกลับบ้านทันที
+        if isHoldingEgg() then
             instantWarpTo(homeCF)
         end
         task.wait(0.2)
@@ -1953,8 +1951,8 @@ local function processMovement()
         fireEggPrompt(selectedEggInstance)
         task.wait(0.3)
 
-        -- ตรวจสอบว่าเก็บไข่ติดหรือไม่ หากติดแล้วจึงบินกลับทันที
-        if isHoldingEgg() or not selectedEggInstance.Parent then
+        -- ตรวจสอบว่าได้ไข่มาในมือหรือไม่ ถ้าได้จึงบินกลับบ้านทันที
+        if isHoldingEgg() then
             tweenTo(homeCF, 300)
         end
         task.wait(0.2)

@@ -48,6 +48,58 @@ end
 Workspace.DescendantAdded:Connect(removeHoldTime)
 
 -- =======================================================
+-- DETECT HOLDING EGG SYSTEM (ตรวจสอบการถือไข่ทั่วร่างกาย)
+-- =======================================================
+local function isHoldingEgg()
+    local char = LocalPlayer.Character
+    if not char then return false end
+
+    -- 1. ตรวจสอบ Tool / Model ที่เกาะอยู่กับตัวละครโดยตรง
+    for _, child in ipairs(char:GetChildren()) do
+        if child:IsA("Tool") or (child:IsA("Model") and string.find(string.lower(child.Name), "egg")) then
+            return true, child
+        end
+    end
+
+    -- 2. ตรวจสอบข้อต่อ (Welds / Constraints) บนชิ้นส่วนร่างกายทั้งหมด
+    for _, part in ipairs(char:GetDescendants()) do
+        if part:IsA("Weld") or part:IsA("WeldConstraint") or part:IsA("Motor6D") then
+            local part0 = part.Part0
+            local part1 = part.Part1
+            if part0 and part1 then
+                local otherPart = (part0:IsDescendantOf(char) and part1) or (part1:IsDescendantOf(char) and part0)
+                if otherPart then
+                    local nameLower = string.lower(otherPart.Name)
+                    local parentNameLower = otherPart.Parent and string.lower(otherPart.Parent.Name) or ""
+                    if string.find(nameLower, "egg") or string.find(parentNameLower, "egg") then
+                        return true, otherPart
+                    end
+                end
+            end
+        end
+
+        -- 3. ตรวจสอบวัตถุแปลกปลอมจำพวกไข่ที่ถูกยึดติดกับแขน/มือ/หลัง
+        if part:IsA("BasePart") and not part:IsA("Accessory") then
+            if string.find(string.lower(part.Name), "egg") then
+                return true, part
+            end
+        end
+    end
+
+    -- 4. ตรวจสอบใน Backpack
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
+    if backpack then
+        for _, item in ipairs(backpack:GetChildren()) do
+            if string.find(string.lower(item.Name), "egg") then
+                return true, item
+            end
+        end
+    end
+
+    return false
+end
+
+-- =======================================================
 -- ADVANCED EGG CLAIM ENGINE (PROXIMITY + TOUCH INTEREST)
 -- =======================================================
 local function fireEggPrompt(eggObj)
@@ -1830,13 +1882,27 @@ local function instantWarpTo(targetCFrame)
 end
 
 -- =======================================================
--- PROCESS MOVEMENT
+-- PROCESS MOVEMENT (INTEGRATED WITH EGG DETECTION)
 -- =======================================================
 local function processMovement()
     if not isToggled then return end
     local character = LocalPlayer.Character
     if not character or not character:FindFirstChild("HumanoidRootPart") then return end
 
+    local homeCF = getHomeCFrame()
+
+    -- 🟢 กรณีที่ 1: ตรวจพบว่าผู้เล่นกำลังถือไข่อยู่ในตัว
+    if isHoldingEgg() then
+        if currentMode == 2 then
+            instantWarpTo(homeCF)
+        else
+            tweenTo(homeCF, 300)
+        end
+        task.wait(0.3)
+        return
+    end
+
+    -- 🔴 กรณีที่ 2: ยังไม่มีไข่ในตัว ให้เริ่มค้นหาไข่เป้าหมาย
     if not selectedEggInstance or not selectedEggInstance.Parent then
         local renderedEggs = Workspace:FindFirstChild("RenderedEggs")
         if renderedEggs and #renderedEggs:GetChildren() > 0 then
@@ -1847,7 +1913,6 @@ local function processMovement()
     if not selectedEggInstance or not selectedEggInstance.Parent then return end
 
     local eggCF = getEggCFrame()
-    local homeCF = getHomeCFrame()
     if not eggCF or not homeCF then return end
 
     local isVolcanicEgg = selectedEggInstance and string.find(string.lower(selectedEggInstance.Name), "volcan")
@@ -1866,26 +1931,32 @@ local function processMovement()
     if not isToggled then return end
 
     if currentMode == 2 then
-        -- [ MODE 2: TELEGUITP - INSTANT WARP ทั้งไปและกลับ ]
+        -- [ MODE 2: TELEGUITP - INSTANT WARP ]
         instantWarpTo(eggCF)
         if not isToggled then return end
         task.wait(0.15)
-        if not isToggled then return end
+
         fireEggPrompt(selectedEggInstance)
-        if not isToggled then return end
         task.wait(0.2)
-        instantWarpTo(homeCF) -- วาร์ปกลับฐานทันที
+
+        -- ตรวจสอบว่าเก็บไข่ติดหรือไม่ หากติดแล้วจึงวาร์ปกลับทันที
+        if isHoldingEgg() or not selectedEggInstance.Parent then
+            instantWarpTo(homeCF)
+        end
         task.wait(0.2)
     else
-        -- [ MODE 1: TELEGUIADO - FLY TWEEN MODE ]
+        -- [ MODE 1: TELEGUIADO - FLY TWEEN ]
         tweenTo(eggCF, 300)
         if not isToggled then return end
         task.wait(0.15)
-        if not isToggled then return end
+
         fireEggPrompt(selectedEggInstance)
-        if not isToggled then return end
         task.wait(0.3)
-        tweenTo(homeCF, 300)
+
+        -- ตรวจสอบว่าเก็บไข่ติดหรือไม่ หากติดแล้วจึงบินกลับทันที
+        if isHoldingEgg() or not selectedEggInstance.Parent then
+            tweenTo(homeCF, 300)
+        end
         task.wait(0.2)
     end
 end

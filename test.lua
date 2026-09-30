@@ -12,7 +12,7 @@ local Camera = Workspace.CurrentCamera
 -- GLOBAL STATE
 -- =======================================================
 local isToggled = false
-local currentModeIndex = 1 -- 1: FLY MODE, 2: TP MODE, 3: BRING MODE
+local currentMode = 1 -- 1 = ONE SHOT (Fly), 2 = TP MODE, 3 = BRING EGG
 local isLoopEnabled = false
 local isDropdownOpen = false
 local isLoopRunning = false
@@ -85,7 +85,7 @@ if parentContainer:FindFirstChild("YanzHubUI") then
 end
 
 -- =======================================================
--- VOLCANO ENTRANCE BYPASS & NOCLIP ENGINE (OPTIMIZED)
+-- VOLCANO ENTRANCE BYPASS & NOCLIP ENGINE (DELTA READY)
 -- =======================================================
 local cachedVolcano = Workspace:FindFirstChild("Volcano")
 
@@ -832,7 +832,7 @@ ModeSub.BackgroundTransparency = 1
 ModeSub.Position = UDim2.new(0, 12, 0, 48)
 ModeSub.Size = UDim2.new(0, 80, 0, 12)
 ModeSub.Font = Enum.Font.GothamMedium
-ModeSub.Text = "FLY MODE"
+ModeSub.Text = "ONE SHOT"
 ModeSub.TextColor3 = Color3.fromRGB(110, 115, 125)
 ModeSub.TextSize = 9
 ModeSub.TextXAlignment = Enum.TextXAlignment.Left
@@ -1428,7 +1428,6 @@ local function refreshEggDropdownList()
 
     local totalHeight = 0
     for _, item in ipairs(eggList) do
-        -- Exclusive Filter: ซ่อนไข่ที่กำลังแสดงอยู่บน EggCard ออกจากรายการ ArrowBtn
         if item.Object ~= selectedEggInstance then
             local ItemBtn = Instance.new("TextButton")
             ItemBtn.Size = UDim2.new(1, -8, 0, 42)
@@ -1655,23 +1654,21 @@ local function getHomeCFrame()
 end
 
 -- =======================================================
--- MODE SELECTION & SWAP ENGINE (FLY / TP / BRING)
+-- MODE SWITCHING ENGINE (3 MODES)
 -- =======================================================
-local modeList = {
-    {title = "TELEGUIADO", sub = "FLY MODE"},
-    {title = "TELEGUITP", sub = "TP MODE"},
-    {title = "BRING EGG", sub = "BRING MODE"}
-}
-
 SwapBtn.MouseButton1Click:Connect(function()
-    currentModeIndex = currentModeIndex + 1
-    if currentModeIndex > #modeList then
-        currentModeIndex = 1
+    currentMode = currentMode % 3 + 1
+    if currentMode == 1 then
+        TeleLabel.Text = "TELEGUIADO"
+        ModeSub.Text = "ONE SHOT"
+    elseif currentMode == 2 then
+        TeleLabel.Text = "TELEGUITP"
+        ModeSub.Text = "TP MODE"
+    elseif currentMode == 3 then
+        TeleLabel.Text = "BRING EGG"
+        ModeSub.Text = "BRING MODE"
     end
-
-    TeleLabel.Text = modeList[currentModeIndex].title
-    ModeSub.Text = modeList[currentModeIndex].sub
-    swapRotation = swapRotation + 180
+    swapRotation = swapRotation + 120
     TweenService:Create(SwapBtn, TWEEN_ELASTIC, {Rotation = swapRotation}):Play()
 end)
 
@@ -1706,14 +1703,15 @@ local function getEggCFrame()
     return nil
 end
 
--- [ BRING EGG TO PLAYER ENGINE ]
+-- =======================================================
+-- BRING EGG ENGINE (ดึงไข่มาหาตัวผู้ใช้)
+-- =======================================================
 local function bringEggToPlayer(eggObj)
     if not isToggled or not eggObj or not eggObj.Parent then return end
     local char = LocalPlayer.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return end
     local hrp = char.HumanoidRootPart
 
-    -- นำไข่มาไว้ตรงหน้าตัวผู้เล่น (ระยะ 3 Studs)
     local targetCF = hrp.CFrame * CFrame.new(0, 0, -3)
 
     pcall(function()
@@ -1725,14 +1723,10 @@ local function bringEggToPlayer(eggObj)
 
         for _, part in ipairs(eggObj:GetDescendants()) do
             if part:IsA("BasePart") then
-                part.CanCollide = false
                 part.CFrame = targetCF
             end
         end
     end)
-
-    task.wait(0.1)
-    fireEggPrompt(eggObj)
 end
 
 -- [ FLY+TWEEN ENGINE ]
@@ -1905,72 +1899,72 @@ local function safeTeleport(targetCFrame)
 end
 
 -- =======================================================
--- PROCESS MOVEMENT (FLY / TP / BRING)
+-- PROCESS MOVEMENT
 -- =======================================================
 local function processMovement()
     if not isToggled then return end
     local character = LocalPlayer.Character
     if not character or not character:FindFirstChild("HumanoidRootPart") then return end
 
-    -- [ 3: BRING MODE ]
-    if currentModeIndex == 3 then
-        if selectedEggInstance and selectedEggInstance.Parent then
-            bringEggToPlayer(selectedEggInstance)
-            task.wait(0.3)
-        else
-            local renderedEggs = Workspace:FindFirstChild("RenderedEggs")
-            if renderedEggs and #renderedEggs:GetChildren() > 0 then
-                refreshEggDropdownList()
-                if selectedEggInstance and selectedEggInstance.Parent then
-                    bringEggToPlayer(selectedEggInstance)
-                    task.wait(0.3)
-                end
-            end
+    if not selectedEggInstance or not selectedEggInstance.Parent then
+        local renderedEggs = Workspace:FindFirstChild("RenderedEggs")
+        if renderedEggs and #renderedEggs:GetChildren() > 0 then
+            refreshEggDropdownList()
         end
-        return
     end
 
-    local eggCF = getEggCFrame()
-    local homeCF = getHomeCFrame()
-    if not eggCF or not homeCF then return end
+    if not selectedEggInstance or not selectedEggInstance.Parent then return end
 
-    local isVolcanicEgg = selectedEggInstance and string.find(string.lower(selectedEggInstance.Name), "volcan")
-    local entranceCF = getVolcanoEntranceCFrame()
-
-    if isVolcanicEgg and entranceCF then
-        if currentModeIndex == 2 then
-            instantWarpTo(entranceCF)
-        else
-            tweenTo(entranceCF, 350)
-        end
-        bypassVolcanoEntrance()
-        task.wait(0.15)
-    end
-
-    if not isToggled then return end
-
-    if currentModeIndex == 2 then
-        -- [ 2: TP MODE ]
-        instantWarpTo(eggCF)
-        if not isToggled then return end
-        task.wait(0.15)
+    if currentMode == 3 then
+        -- [ MODE 3: BRING EGG MODE ]
+        bringEggToPlayer(selectedEggInstance)
+        task.wait(0.1)
         if not isToggled then return end
         fireEggPrompt(selectedEggInstance)
-        if not isToggled then return end
-        task.wait(0.3)
-        safeTeleport(homeCF)
         task.wait(0.2)
     else
-        -- [ 1: FLY MODE ]
-        tweenTo(eggCF, 300)
+        local eggCF = getEggCFrame()
+        local homeCF = getHomeCFrame()
+        if not eggCF or not homeCF then return end
+
+        local isVolcanicEgg = selectedEggInstance and string.find(string.lower(selectedEggInstance.Name), "volcan")
+        local entranceCF = getVolcanoEntranceCFrame()
+
+        if isVolcanicEgg and entranceCF then
+            if currentMode == 2 then
+                instantWarpTo(entranceCF)
+            else
+                tweenTo(entranceCF, 350)
+            end
+            bypassVolcanoEntrance()
+            task.wait(0.15)
+        end
+
         if not isToggled then return end
-        task.wait(0.15)
-        if not isToggled then return end
-        fireEggPrompt(selectedEggInstance)
-        if not isToggled me then return end
-        task.wait(0.3)
-        tweenTo(homeCF, 300)
-        task.wait(0.2)
+
+        if currentMode == 2 then
+            -- [ MODE 2: TP MODE ]
+            instantWarpTo(eggCF)
+            if not isToggled then return end
+            task.wait(0.15)
+            if not isToggled then return end
+            fireEggPrompt(selectedEggInstance)
+            if not isToggled then return end
+            task.wait(0.3)
+            safeTeleport(homeCF)
+            task.wait(0.2)
+        else
+            -- [ MODE 1: FLY MODE ]
+            tweenTo(eggCF, 300)
+            if not isToggled then return end
+            task.wait(0.15)
+            if not isToggled then return end
+            fireEggPrompt(selectedEggInstance)
+            if not isToggled then return end
+            task.wait(0.3)
+            tweenTo(homeCF, 300)
+            task.wait(0.2)
+        end
     end
 end
 

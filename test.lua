@@ -1,3 +1,5 @@
+-- [[ YANZ HUB - NEXT-GEN HYPER-REALISTIC FLAME & PHYSICS ENGINE + HOLD-E ENGINE + SPEEDBUBBLE BYPASS + NIGHT DETECTION + FISHTOOL VERIFICATION + ANTI-BOSS + ANTI-SNAP-BACK + 3-STAGE FALLBACK + IGNORE-MARKERS PRE-FLIGHT (ULTIMATE FAST ESCAPE BUILD) ]] --
+
 local CoreGui            = game:GetService("CoreGui")
 local TweenService       = game:GetService("TweenService")
 local UserInputService   = game:GetService("UserInputService")
@@ -37,7 +39,9 @@ local CONFIG = {
     HOLD_VERIFY_WINDOW     = 0.3,
     E_MAX_ATTEMPTS         = 2,
     E_RETRY_DELAY          = 0.2,
-    -- MagicTool verify
+    -- Target Names & Folder
+    TARGET_NAMES           = {"Fish", "FishTool", "MagicFish", "Egg", "Magic"},
+    SPAWN_FOLDER_NAMES     = {"SpawnedFish", "SpawnedEggs", "SpawnedItems", "SpawnedTools"},
     MAGIC_TOOL_NAME        = "MagicFishTool",
     MAGIC_POLL_INTERVAL    = 0.05,
     -- Deposit
@@ -240,20 +244,20 @@ end)
 -- =============================================================
 -- [ ATTRIBUTE HELPERS ]
 -- =============================================================
-local function GetEggDisplayName(eggModel)
-    if not eggModel then return "Unknown Egg" end
-    local ok, v = pcall(function() return eggModel:GetAttribute("DisplayName") end)
+local function GetTargetDisplayName(targetModel)
+    if not targetModel then return "Unknown Fish" end
+    local ok, v = pcall(function() return targetModel:GetAttribute("DisplayName") end)
     if ok and type(v) == "string" and v ~= "" then return v end
-    ok, v = pcall(function() return eggModel:GetAttribute("Name") or eggModel:GetAttribute("EggName") end)
+    ok, v = pcall(function() return targetModel:GetAttribute("Name") or targetModel:GetAttribute("FishName") or targetModel:GetAttribute("EggName") end)
     if ok and type(v) == "string" and v ~= "" then return v end
-    return eggModel.Name
+    return targetModel.Name
 end
 
-local function GetEggKgAttribute(eggModel)
-    if not eggModel then return nil end
-    local ok, kg = pcall(function() return eggModel:GetAttribute("Kg") end)
+local function GetTargetKgAttribute(targetModel)
+    if not targetModel then return nil end
+    local ok, kg = pcall(function() return targetModel:GetAttribute("Kg") end)
     if ok and type(kg) == "number" and kg > 0 then return kg end
-    ok, kg = pcall(function() return eggModel:GetAttribute("Weight") or eggModel:GetAttribute("Kgs") end)
+    ok, kg = pcall(function() return targetModel:GetAttribute("Weight") or targetModel:GetAttribute("Value") or targetModel:GetAttribute("Kgs") end)
     if ok and type(kg) == "number" and kg > 0 then return kg end
     return nil
 end
@@ -285,11 +289,11 @@ end)
 local function HookStealConfirmationEvents()
     local function Attach(cs)
         if not cs then return end
-        local e1 = cs:FindFirstChild("EggStealReward")
+        local e1 = cs:FindFirstChild("EggStealReward") or cs:FindFirstChild("FishStealReward")
         if e1 and e1:IsA("RemoteEvent") then
             e1.OnClientEvent:Connect(function() stealConfirmed = true end)
         end
-        local e2 = cs:FindFirstChild("StoleEggNotice")
+        local e2 = cs:FindFirstChild("StoleEggNotice") or cs:FindFirstChild("StoleFishNotice")
         if e2 and e2:IsA("RemoteEvent") then
             e2.OnClientEvent:Connect(function() stealConfirmed = true end)
         end
@@ -448,7 +452,7 @@ IsPlayerInSafeZone = function()
 end
 
 -- =============================================================
--- [ UI ]
+-- [ UI ] (ส่วน UI ยังคงเดิมทั้งหมด)
 -- =============================================================
 if CoreGui:FindFirstChild("YanzHubUI") then
     CoreGui.YanzHubUI:Destroy()
@@ -789,7 +793,7 @@ SubtitleLabel.BackgroundTransparency = 1
 SubtitleLabel.Position = UDim2.new(0, 52, 0, 27)
 SubtitleLabel.Size = UDim2.new(0, 140, 0, 12)
 SubtitleLabel.Font = Enum.Font.GothamMedium
-SubtitleLabel.Text = "BEST EGG SYSTEM"
+SubtitleLabel.Text = "BEST FISH SYSTEM"
 SubtitleLabel.TextColor3 = Color3.fromRGB(120, 122, 132)
 SubtitleLabel.TextSize = 9
 SubtitleLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -904,7 +908,7 @@ TagLabel.BackgroundTransparency = 1
 TagLabel.Position = UDim2.new(0, 80, 0, 12)
 TagLabel.Size = UDim2.new(0, 100, 0, 10)
 TagLabel.Font = Enum.Font.GothamBold
-TagLabel.Text = "BESTSIZE EGG"
+TagLabel.Text = "BESTSIZE FISH"
 TagLabel.TextColor3 = Color3.fromRGB(110, 115, 125)
 TagLabel.TextSize = 9
 TagLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -1008,8 +1012,8 @@ local function FindClosestRarity(inputColor)
     return bestMatch.name, bestMatch.glow
 end
 
-local function GetRarityFromBillboard(eggModel)
-    local bb = eggModel:FindFirstChild("EggKgBillboard", true)
+local function GetRarityFromBillboard(targetModel)
+    local bb = targetModel:FindFirstChild("EggKgBillboard", true) or targetModel:FindFirstChild("FishKgBillboard", true) or targetModel:FindFirstChild("KgBillboard", true)
     if not bb then return nil, nil end
 
     local grad = bb:FindFirstChild("RarityVisualGradient", true)
@@ -1042,8 +1046,8 @@ local function GetRarityFromBillboard(eggModel)
     return nil, nil
 end
 
-local function GetRarityFromHighlight(eggModel)
-    local hl = eggModel:FindFirstChild("EggRangeHighlight", true)
+local function GetRarityFromHighlight(targetModel)
+    local hl = targetModel:FindFirstChild("EggRangeHighlight", true) or targetModel:FindFirstChild("FishRangeHighlight", true)
     if hl and hl:IsA("Highlight") then
         local n, g = FindClosestRarity(hl.FillColor)
         if n then return n, g end
@@ -1053,8 +1057,8 @@ local function GetRarityFromHighlight(eggModel)
     return nil, nil
 end
 
-local function GetRarityFromAmbient(eggModel)
-    for _, d in ipairs(eggModel:GetDescendants()) do
+local function GetRarityFromAmbient(targetModel)
+    for _, d in ipairs(targetModel:GetDescendants()) do
         if d:IsA("PointLight") or d:IsA("ParticleEmitter") then
             local n, g = FindClosestRarity(d.Color)
             if n then return n, g end
@@ -1063,11 +1067,11 @@ local function GetRarityFromAmbient(eggModel)
     return nil, nil
 end
 
-local function GetRarityFromParts(eggModel)
+local function GetRarityFromParts(targetModel)
     local parts = {}
-    local h = eggModel:FindFirstChild("Handle"); if h then table.insert(parts, h) end
-    local p = eggModel:FindFirstChild("PrimaryPart"); if p then table.insert(parts, p) end
-    local m = eggModel:FindFirstChild("MeshPart"); if m then table.insert(parts, m) end
+    local h = targetModel:FindFirstChild("Handle"); if h then table.insert(parts, h) end
+    local p = targetModel:FindFirstChild("PrimaryPart"); if p then table.insert(parts, p) end
+    local m = targetModel:FindFirstChild("MeshPart"); if m then table.insert(parts, m) end
     for _, pt in ipairs(parts) do
         if pt:IsA("BasePart") then
             local n, g = FindClosestRarity(pt.Color)
@@ -1093,51 +1097,57 @@ local function GetRarityColorFromName(rarityName)
     return Color3.fromRGB(150, 150, 150)
 end
 
-local function GetEggRarity(eggModel)
-    if not eggModel then return "Unknown", Color3.fromRGB(150, 150, 150) end
-    local ok, attr = pcall(function() return eggModel:GetAttribute("Rarity") end)
+local function GetTargetRarity(targetModel)
+    if not targetModel then return "Unknown", Color3.fromRGB(150, 150, 150) end
+    local ok, attr = pcall(function() return targetModel:GetAttribute("Rarity") end)
     if ok and type(attr) == "string" and attr ~= "" then
         return attr, GetRarityColorFromName(attr)
     end
-    local r, g = GetRarityFromBillboard(eggModel); if r then return r, g end
-    r, g = GetRarityFromHighlight(eggModel);       if r then return r, g end
-    r, g = GetRarityFromAmbient(eggModel);         if r then return r, g end
-    r, g = GetRarityFromParts(eggModel);           if r then return r, g end
+    local r, g = GetRarityFromBillboard(targetModel); if r then return r, g end
+    r, g = GetRarityFromHighlight(targetModel);       if r then return r, g end
+    r, g = GetRarityFromAmbient(targetModel);         if r then return r, g end
+    r, g = GetRarityFromParts(targetModel);           if r then return r, g end
     return "Unknown", Color3.fromRGB(150, 150, 150)
 end
 
 -- =============================================================
--- [ HELD-EGG DETECTION ]
+-- [ HELD-FISH/EGG DETECTION ]
 -- =============================================================
 IsPlayerHoldingEgg = function()
     local character = LocalPlayer.Character
     if not character then return false end
 
-    -- ตรวจหา MagicFishTool โดยตรง (ตามที่คุณแจ้ง)
-    for _, child in ipairs(character:GetChildren()) do
-        if child:IsA("Tool") and string.find(string.lower(child.Name), "magicfishtool") then
-            return true, child
-        end
-    end
-
+    -- 1. ตรวจหา MagicFishTool โดยตรง (ตามที่คุณแจ้ง: ได้ Tool นี้หลังขโมยสำเร็จ)
     for _, child in ipairs(character:GetChildren()) do
         if child:IsA("Tool") then
             local low = string.lower(child.Name)
-            if string.find(low, "egg") or child:FindFirstChild("EggKgBillboard", true) then
+            if string.find(low, "magicfishtool") or string.find(low, "magicfish") then
                 return true, child
             end
         end
     end
 
+    -- 2. ตรวจหา Tool ที่มีคำว่า Fish หรือ Egg
+    for _, child in ipairs(character:GetChildren()) do
+        if child:IsA("Tool") then
+            local low = string.lower(child.Name)
+            if string.find(low, "fish") or string.find(low, "egg") or child:FindFirstChild("EggKgBillboard", true) or child:FindFirstChild("FishKgBillboard", true) then
+                return true, child
+            end
+        end
+    end
+
+    -- 3. ตรวจหา Model หรือ BasePart ที่เป็นปลา/ไข่
     for _, child in ipairs(character:GetChildren()) do
         if (child:IsA("Model") or child:IsA("BasePart")) and not child:IsA("Accessory") then
             local low = string.lower(child.Name)
-            if string.find(low, "egg") or child:FindFirstChild("EggKgBillboard", true) or child:GetAttribute("IsEgg") then
+            if string.find(low, "fish") or string.find(low, "egg") or child:FindFirstChild("EggKgBillboard", true) or child:FindFirstChild("FishKgBillboard", true) or child:GetAttribute("IsFish") or child:GetAttribute("IsEgg") then
                 return true, child
             end
         end
     end
 
+    -- 4. ตรวจสอบผ่าน Joint/Weld
     local parts = {
         character:FindFirstChild("RightHand"),
         character:FindFirstChild("LeftHand"),
@@ -1155,8 +1165,8 @@ IsPlayerHoldingEgg = function()
                     if other and other:IsDescendantOf(character) then
                         local pn = string.lower(other.Name)
                         local par = other.Parent and string.lower(other.Parent.Name) or ""
-                        if string.find(pn, "egg") or string.find(par, "egg")
-                            or (other.Parent and other.Parent:FindFirstChild("EggKgBillboard", true)) then
+                        if string.find(pn, "fish") or string.find(pn, "egg") or string.find(par, "fish") or string.find(par, "egg")
+                            or (other.Parent and (other.Parent:FindFirstChild("EggKgBillboard", true) or other.Parent:FindFirstChild("FishKgBillboard", true))) then
                             return true, other.Parent
                         end
                     end
@@ -1165,12 +1175,13 @@ IsPlayerHoldingEgg = function()
         end
     end
 
-    if character:GetAttribute("HasEgg") or character:GetAttribute("CarryingEgg")
-        or LocalPlayer:GetAttribute("CarryingEgg") then
+    -- 5. ตรวจสอบ Attributes ของตัวละคร
+    if character:GetAttribute("HasEgg") or character:GetAttribute("CarryingEgg") or character:GetAttribute("HasFish") or character:GetAttribute("CarryingFish")
+        or LocalPlayer:GetAttribute("CarryingEgg") or LocalPlayer:GetAttribute("CarryingFish") then
         return true
     end
-    if character:FindFirstChild("CarryingEgg") or character:FindFirstChild("EggValue")
-        or LocalPlayer:FindFirstChild("CarryingEgg") then
+    if character:FindFirstChild("CarryingEgg") or character:FindFirstChild("EggValue") or character:FindFirstChild("CarryingFish") or character:FindFirstChild("FishValue")
+        or LocalPlayer:FindFirstChild("CarryingEgg") or LocalPlayer:FindFirstChild("CarryingFish") then
         return true
     end
     return false
@@ -1214,19 +1225,19 @@ local function FindMagicFishTool()
     return nil, "NotFound"
 end
 
-local function InspectToolForEgg(tool)
+local function InspectToolForFish(tool)
     if not tool then return false, "Tool=nil" end
 
     for _, child in ipairs(tool:GetChildren()) do
         local low = string.lower(child.Name)
-        if string.find(low, "egg", 1, true) then return true, "L1_ChildName" end
-        if child:FindFirstChild("EggKgBillboard", true) then return true, "L2_Billboard" end
+        if string.find(low, "fish", 1, true) or string.find(low, "egg", 1, true) then return true, "L1_ChildName" end
+        if child:FindFirstChild("EggKgBillboard", true) or child:FindFirstChild("FishKgBillboard", true) then return true, "L2_Billboard" end
     end
 
     local attrs = {
         "HasEgg","ContainsEgg","IsEgg","CarryingEgg","HasFish","HasCatch",
         "EggValue","EggName","EggKg","EggId","Kg","Kgs","Weight",
-        "CurrentEgg","StoredEgg","EggRarity","Rarity"
+        "CurrentEgg","StoredEgg","EggRarity","Rarity", "FishName", "FishKg", "FishValue", "Value"
     }
     for _, an in ipairs(attrs) do
         local ok, val = pcall(function() return tool:GetAttribute(an) end)
@@ -1242,19 +1253,18 @@ local function InspectToolForEgg(tool)
     for _, d in ipairs(tool:GetDescendants()) do
         if d:IsA("BoolValue") and d.Value then
             local low = string.lower(d.Name)
-            if string.find(low, "egg", 1, true) or string.find(low, "hold", 1, true)
+            if string.find(low, "fish", 1, true) or string.find(low, "egg", 1, true) or string.find(low, "hold", 1, true)
                 or string.find(low, "carry", 1, true) or string.find(low, "has", 1, true) then
                 return true, "L4_BoolValue:" .. d.Name
             end
         elseif d:IsA("StringValue") and d.Value ~= "" then
             local low = string.lower(d.Name)
-            if string.find(low, "egg", 1, true) or string.find(low, "name", 1, true)
-                or string.find(low, "fish", 1, true) then
+            if string.find(low, "fish", 1, true) or string.find(low, "egg", 1, true) or string.find(low, "name", 1, true) then
                 return true, "L4_StrValue:" .. d.Name
             end
         elseif (d:IsA("NumberValue") or d:IsA("IntValue")) and d.Value > 0 then
             local low = string.lower(d.Name)
-            if string.find(low, "egg", 1, true) or string.find(low, "kg", 1, true)
+            if string.find(low, "fish", 1, true) or string.find(low, "egg", 1, true) or string.find(low, "kg", 1, true)
                 or string.find(low, "weight", 1, true) or string.find(low, "value", 1, true) then
                 return true, "L4_NumValue:" .. d.Name
             end
@@ -1264,8 +1274,8 @@ local function InspectToolForEgg(tool)
     for _, d in ipairs(tool:GetDescendants()) do
         if d:IsA("BasePart") then
             local low = string.lower(d.Name)
-            if string.find(low, "egg", 1, true) then return true, "L5_BasePart" end
-            if d:FindFirstChild("EggKgBillboard", true) then return true, "L5_PartBillboard" end
+            if string.find(low, "fish", 1, true) or string.find(low, "egg", 1, true) then return true, "L5_BasePart" end
+            if d:FindFirstChild("EggKgBillboard", true) or d:FindFirstChild("FishKgBillboard", true) then return true, "L5_PartBillboard" end
         end
     end
 
@@ -1275,24 +1285,24 @@ local function InspectToolForEgg(tool)
             if n then return true, "L6_Highlight:" .. n end
         end
     end
-    return false, "NoEggInTool"
+    return false, "NoFishInTool"
 end
 
-local function VerifyMagicToolHasEgg()
+local function VerifyMagicToolHasFish()
     local tool = FindMagicFishTool()
     if not tool then return false end
-    local has = InspectToolForEgg(tool)
+    local has = InspectToolForFish(tool)
     return has
 end
 
-local function WaitForEggInMagicTool(timeout)
-    timeout = timeout or 0.5 -- เพิ่มเวลาเป็น 0.5 วินาทีเพื่อรอเซิร์ฟเวอร์ตอบสนอง
+local function WaitForFishInMagicTool(timeout)
+    timeout = timeout or 0.5 -- รอ 0.5 วินาที
     local t0 = os.clock()
     while toggled and (os.clock() - t0) < timeout do
-        if VerifyMagicToolHasEgg() or IsPlayerHoldingEgg() then return true end
+        if VerifyMagicToolHasFish() or IsPlayerHoldingEgg() then return true end
         task.wait(CONFIG.MAGIC_POLL_INTERVAL)
     end
-    return IsPlayerHoldingEgg() or VerifyMagicToolHasEgg()
+    return IsPlayerHoldingEgg() or VerifyMagicToolHasFish()
 end
 
 -- =============================================================
@@ -1389,15 +1399,15 @@ local function FitViewportCamera(renderModel)
     ViewportCam.FieldOfView = 45
 end
 
-local function UpdateViewportModel(eggObj)
+local function UpdateViewportModel(targetObj)
     if activeEggClone then activeEggClone:Destroy(); activeEggClone = nil end
-    if not eggObj or not eggObj.Parent then
+    if not targetObj or not targetObj.Parent then
         for _, c in ipairs(EggViewport:GetChildren()) do
             if c ~= ViewportCam then c:Destroy() end
         end
         return
     end
-    local cloned = ExtractRenderableClone(eggObj)
+    local cloned = ExtractRenderableClone(targetObj)
     if not cloned then return end
     activeEggClone = cloned
     FitViewportCamera(cloned)
@@ -1406,11 +1416,11 @@ end
 local lastHeaviestEggRef = nil
 local lastHeaviestWeight = -1
 
-local function GetEggWeight(eggModel)
-    if not eggModel or not eggModel:IsA("Instance") then return 0 end
-    local attrKg = GetEggKgAttribute(eggModel)
+local function GetTargetWeight(targetModel)
+    if not targetModel or not targetModel:IsA("Instance") then return 0 end
+    local attrKg = GetTargetKgAttribute(targetModel)
     if attrKg then return attrKg end
-    local bb = eggModel:FindFirstChild("EggKgBillboard", true)
+    local bb = targetModel:FindFirstChild("EggKgBillboard", true) or targetModel:FindFirstChild("FishKgBillboard", true) or targetModel:FindFirstChild("KgBillboard", true)
     if bb then
         local tl = bb:FindFirstChild("Text")
         if tl and tl:IsA("TextLabel") then
@@ -1422,9 +1432,9 @@ local function GetEggWeight(eggModel)
     return 0
 end
 
-local function Display3DEgg(eggObj)
-    if not eggObj or not (eggObj:IsA("Model") or eggObj:IsA("BasePart")) then
-        ItemName.Text = "No Eggs Found"
+local function Display3DTarget(targetObj)
+    if not targetObj or not (targetObj:IsA("Model") or targetObj:IsA("BasePart")) then
+        ItemName.Text = "No Fish Found"
         RarityLabel.Text = "---"
         RarityLabel.TextColor3 = Color3.fromRGB(150, 155, 165)
         ValueLabel.Text = "0 kg"
@@ -1434,30 +1444,77 @@ local function Display3DEgg(eggObj)
         lastHeaviestWeight = -1
         return
     end
-    selectedEggObject = eggObj
-    ItemName.Text = GetEggDisplayName(eggObj)
-    local w = GetEggWeight(eggObj)
+    selectedEggObject = targetObj
+    ItemName.Text = GetTargetDisplayName(targetObj)
+    local w = GetTargetWeight(targetObj)
     ValueLabel.Text = FormatNumberWithCommas(w) .. " kg"
-    local rn, gc = GetEggRarity(eggObj)
+    local rn, gc = GetTargetRarity(targetObj)
     RarityLabel.Text = rn
     RarityLabel.TextColor3 = gc
     if gc then
         TweenService:Create(EggCardStroke, TWEEN_FAST, {Color = gc, Transparency = 0.3}):Play()
     end
-    UpdateViewportModel(eggObj)
-    lastHeaviestEggRef = eggObj
+    UpdateViewportModel(targetObj)
+    lastHeaviestEggRef = targetObj
     lastHeaviestWeight = w
 end
 
-local function GetHeaviestEgg()
-    local folder = Workspace:FindFirstChild("SpawnedEggs")
-    if not folder then return nil, 0 end
-    local best, bestW = nil, -1
-    for _, egg in ipairs(folder:GetChildren()) do
-        local w = GetEggWeight(egg)
-        if w > bestW then bestW = w; best = egg end
+-- =============================================================
+-- [ TARGET LOCATOR - ค้นหาโมเดลปลา/FishTool ใน Workspace ]
+-- =============================================================
+local function GetBestTarget()
+    local bestTarget, bestW = nil, -1
+    
+    -- ค้นหาทุก Folder ที่เกี่ยวข้อง
+    for _, folderName in ipairs(CONFIG.SPAWN_FOLDER_NAMES) do
+        local folder = Workspace:FindFirstChild(folderName)
+        if folder then
+            for _, target in ipairs(folder:GetChildren()) do
+                local w = GetTargetWeight(target)
+                local nameMatch = false
+                for _, keyword in ipairs(CONFIG.TARGET_NAMES) do
+                    if string.find(string.lower(target.Name), string.lower(keyword)) then
+                        nameMatch = true
+                        break
+                    end
+                end
+                
+                -- ถ้าน้ำหนักดีกว่า หรือชื่อตรงกับเป้าหมาย
+                if nameMatch and w > bestW then
+                    bestW = w
+                    bestTarget = target
+                elseif w > bestW and bestW == -1 then
+                    -- Fallback กรณีไม่เจอชื่อที่ตรง แต่เจอของที่มีน้ำหนัก
+                    bestW = w
+                    bestTarget = target
+                end
+            end
+        end
     end
-    return best, bestW
+    
+    -- ถ้าไม่เจอใน Folder ให้ค้นหาทั่ว Workspace (กรณีปลาวางอยู่เฉยๆ)
+    if not bestTarget then
+        for _, target in ipairs(Workspace:GetChildren()) do
+            if target:IsA("Model") or target:IsA("Tool") then
+                local nameMatch = false
+                for _, keyword in ipairs(CONFIG.TARGET_NAMES) do
+                    if string.find(string.lower(target.Name), string.lower(keyword)) then
+                        nameMatch = true
+                        break
+                    end
+                end
+                if nameMatch then
+                    local w = GetTargetWeight(target)
+                    if w > bestW then
+                        bestW = w
+                        bestTarget = target
+                    end
+                end
+            end
+        end
+    end
+    
+    return bestTarget, bestW
 end
 
 local function ToggleEggDropdown(forceState)
@@ -1492,22 +1549,24 @@ local function UpdateEggDropdownList()
         if c:IsA("TextButton") or c:IsA("Frame") then c:Destroy() end
     end
 
-    local folder = Workspace:FindFirstChild("SpawnedEggs")
-    if not folder then return end
-
     local items = {}
-    for _, egg in ipairs(folder:GetChildren()) do
-        table.insert(items, {Model = egg, Weight = GetEggWeight(egg)})
+    for _, folderName in ipairs(CONFIG.SPAWN_FOLDER_NAMES) do
+        local folder = Workspace:FindFirstChild(folderName)
+        if folder then
+            for _, target in ipairs(folder:GetChildren()) do
+                table.insert(items, {Model = target, Weight = GetTargetWeight(target)})
+            end
+        end
     end
     table.sort(items, function(a, b) return a.Weight > b.Weight end)
 
     task.spawn(function()
         for _, item in ipairs(items) do
             if currentDropdownToken ~= myToken then break end
-            local egg = item.Model
-            if egg and egg.Parent then
+            local target = item.Model
+            if target and target.Parent then
                 local card = Instance.new("TextButton")
-                card.Name = egg.Name
+                card.Name = target.Name
                 card.Parent = EggDropdownFrame
                 card.BackgroundColor3 = Color3.fromRGB(20, 23, 30)
                 card.Size = UDim2.new(1, -6, 0, 52)
@@ -1539,7 +1598,7 @@ local function UpdateEggDropdownList()
                 miniCam.Parent = miniV
 
                 pcall(function()
-                    local cloned = ExtractRenderableClone(egg)
+                    local cloned = ExtractRenderableClone(target)
                     if not cloned then return end
                     local bCF, bSz = GetAccurateBounds(cloned)
                     local off = bCF.Position
@@ -1560,7 +1619,7 @@ local function UpdateEggDropdownList()
                 nl.Position = UDim2.new(0, 54, 0, 8)
                 nl.Size = UDim2.new(1, -120, 0, 16)
                 nl.Font = Enum.Font.GothamBold
-                nl.Text = GetEggDisplayName(egg)
+                nl.Text = GetTargetDisplayName(target)
                 nl.TextColor3 = Color3.fromRGB(255, 255, 255)
                 nl.TextSize = 11
                 nl.TextXAlignment = Enum.TextXAlignment.Left
@@ -1577,7 +1636,7 @@ local function UpdateEggDropdownList()
                 wl.TextXAlignment = Enum.TextXAlignment.Left
 
                 card.MouseButton1Click:Connect(function()
-                    Display3DEgg(egg)
+                    Display3DTarget(target)
                     TweenService:Create(cs, TWEEN_FAST, {Transparency = 0.2}):Play()
                     ToggleEggDropdown(false)
                 end)
@@ -1588,33 +1647,36 @@ local function UpdateEggDropdownList()
     end)
 end
 
-local function RefreshSpawnedEggs()
+local function RefreshSpawnedTargets()
     if not selectedEggObject then
-        local heaviest = GetHeaviestEgg()
-        if heaviest then Display3DEgg(heaviest) else Display3DEgg(nil) end
+        local bestTarget = GetBestTarget()
+        if bestTarget then Display3DTarget(bestTarget) else Display3DTarget(nil) end
     end
     UpdateEggDropdownList()
 end
 
 local function BindFolderEvents(folder)
-    folder.ChildAdded:Connect(function() task.defer(RefreshSpawnedEggs) end)
-    folder.ChildRemoved:Connect(function() task.defer(RefreshSpawnedEggs) end)
+    folder.ChildAdded:Connect(function() task.defer(RefreshSpawnedTargets) end)
+    folder.ChildRemoved:Connect(function() task.defer(RefreshSpawnedTargets) end)
 end
 
-local initFolder = Workspace:FindFirstChild("SpawnedEggs")
-if initFolder then
-    BindFolderEvents(initFolder)
-else
-    local waitConn
-    waitConn = Workspace.ChildAdded:Connect(function(child)
-        if child.Name == "SpawnedEggs" then
-            waitConn:Disconnect()
-            BindFolderEvents(child)
-            RefreshSpawnedEggs()
-        end
-    end)
+-- ผูก Event กับทุก Folder ที่เป็นไปได้
+for _, folderName in ipairs(CONFIG.SPAWN_FOLDER_NAMES) do
+    local initFolder = Workspace:FindFirstChild(folderName)
+    if initFolder then
+        BindFolderEvents(initFolder)
+    else
+        local waitConn
+        waitConn = Workspace.ChildAdded:Connect(function(child)
+            if child.Name == folderName then
+                waitConn:Disconnect()
+                BindFolderEvents(child)
+                RefreshSpawnedTargets()
+            end
+        end)
+    end
 end
-RefreshSpawnedEggs()
+RefreshSpawnedTargets()
 
 -- [ REAL-TIME VIEWPORT REFRESH ]
 task.spawn(function()
@@ -1624,18 +1686,18 @@ task.spawn(function()
             if not selectedEggObject.Parent then
                 selectedEggObject = nil
             else
-                local nw = GetEggWeight(selectedEggObject)
-                if math.abs(nw - lastHeaviestWeight) > 0.1 then Display3DEgg(selectedEggObject) end
+                local nw = GetTargetWeight(selectedEggObject)
+                if math.abs(nw - lastHeaviestWeight) > 0.1 then Display3DTarget(selectedEggObject) end
             end
         else
-            local heaviest, w = GetHeaviestEgg()
-            if heaviest then
+            local bestTarget, w = GetBestTarget()
+            if bestTarget then
                 local refresh = false
-                if heaviest ~= lastHeaviestEggRef then refresh = true
+                if bestTarget ~= lastHeaviestEggRef then refresh = true
                 elseif math.abs(w - lastHeaviestWeight) > 0.1 then refresh = true end
-                if refresh then Display3DEgg(heaviest) end
+                if refresh then Display3DTarget(bestTarget) end
             else
-                if lastHeaviestEggRef ~= nil then Display3DEgg(nil) end
+                if lastHeaviestEggRef ~= nil then Display3DTarget(nil) end
             end
         end
     end
@@ -1693,17 +1755,24 @@ end)
 SwapButton.MouseButton1Click:Connect(function()
     swapRotation = swapRotation + 180
     TweenService:Create(SwapButton, TWEEN_ELASTIC, {Rotation = swapRotation}):Play()
-    local folder = Workspace:FindFirstChild("SpawnedEggs")
-    if folder then
-        local children = folder:GetChildren()
-        if #children > 0 then
-            local idx = 1
-            for i, c in ipairs(children) do
-                if c == selectedEggObject then idx = i; break end
+    
+    local items = {}
+    for _, folderName in ipairs(CONFIG.SPAWN_FOLDER_NAMES) do
+        local folder = Workspace:FindFirstChild(folderName)
+        if folder then
+            for _, target in ipairs(folder:GetChildren()) do
+                table.insert(items, target)
             end
-            idx = (idx % #children) + 1
-            Display3DEgg(children[idx])
         end
+    end
+    
+    if #items > 0 then
+        local idx = 1
+        for i, c in ipairs(items) do
+            if c == selectedEggObject then idx = i; break end
+        end
+        idx = (idx % #items) + 1
+        Display3DTarget(items[idx])
     end
 end)
 
@@ -2048,12 +2117,12 @@ local function FlyToBaseplate()
 end
 
 -- =============================================================
--- [ DROP EGG ]
+-- [ DROP FISH/EGG ]
 -- =============================================================
 local DROP_KEYCODE = 81
 local DROP_ENUM = Enum.KeyCode.Q
 
-local function TryDropEgg()
+local function TryDropTarget()
     local pg = LocalPlayer:FindFirstChild("PlayerGui")
     if pg then
         for _, gui in ipairs(pg:GetDescendants()) do
@@ -2096,7 +2165,7 @@ end
 TryDepositEgg = function()
     local t0 = os.clock()
     while toggled and IsPlayerHoldingEgg() and (os.clock() - t0) < CONFIG.DEPOSIT_MAX_WAIT do
-        TryDropEgg()
+        TryDropTarget()
         task.wait(CONFIG.DEPOSIT_CHECK_INTERVAL)
     end
     return not IsPlayerHoldingEgg()
@@ -2105,35 +2174,35 @@ end
 -- =============================================================
 -- [ HOLD-E ENGINE - INSTANT ESCAPE & PROXIMITY FIRE ]
 -- =============================================================
-local function AdvancedHoldE(targetEgg)
-    if not targetEgg or not targetEgg:IsDescendantOf(Workspace) then return false end
+local function AdvancedHoldE(targetObj)
+    if not targetObj or not targetObj:IsDescendantOf(Workspace) then return false end
 
     local char = LocalPlayer.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     if not hrp then return false end
 
-    local promptAnchor = targetEgg:FindFirstChild("StealPromptAnchor", true)
-                      or targetEgg:FindFirstChild("PrimaryPart")
-                      or targetEgg
+    local promptAnchor = targetObj:FindFirstChild("StealPromptAnchor", true)
+                      or targetObj:FindFirstChild("PrimaryPart")
+                      or targetObj
 
     local prompt = nil
     if promptAnchor then
-        local ep = promptAnchor:FindFirstChild("EggPrompt")
+        local ep = promptAnchor:FindFirstChild("EggPrompt") or promptAnchor:FindFirstChild("FishPrompt")
         if ep and ep:IsA("ProximityPrompt") then prompt = ep end
     end
     if not prompt then
-        for _, d in ipairs(targetEgg:GetDescendants()) do
+        for _, d in ipairs(targetObj:GetDescendants()) do
             if d:IsA("ProximityPrompt") then prompt = d; break end
         end
     end
     if not prompt then return false end
 
-    local eggCF = (promptAnchor:IsA("BasePart") and promptAnchor.CFrame) or targetEgg:GetPivot()
+    local targetCF = (promptAnchor:IsA("BasePart") and promptAnchor.CFrame) or targetObj:GetPivot()
 
     if IsPlayerHoldingEgg() then return false end
 
-    if toggled then SmoothFlyTo(eggCF, CONFIG.FLY_SPEED) end
-    if not toggled or not targetEgg:IsDescendantOf(Workspace) then return false end
+    if toggled then SmoothFlyTo(targetCF, CONFIG.FLY_SPEED) end
+    if not toggled or not targetObj:IsDescendantOf(Workspace) then return false end
 
     if warpAttachedChar ~= LocalPlayer.Character then StartWarpDetector() end
 
@@ -2145,7 +2214,7 @@ local function AdvancedHoldE(targetEgg)
 
     pcall(function()
         hrp.AssemblyLinearVelocity = Vector3.zero
-        hrp.CFrame = eggCF
+        hrp.CFrame = targetCF
     end)
     RunService.Heartbeat:Wait()
     ResetWarpBaseline()
@@ -2159,7 +2228,7 @@ local function AdvancedHoldE(targetEgg)
         end
     end
 
-    ZoomCameraTo(eggCF)
+    ZoomCameraTo(targetCF)
 
     warpedFlag = false
     local frozen = true
@@ -2168,7 +2237,7 @@ local function AdvancedHoldE(targetEgg)
         if hrp and hrp.Parent then
             pcall(function()
                 hrp.AssemblyLinearVelocity = Vector3.zero
-                hrp.CFrame = eggCF
+                hrp.CFrame = targetCF
             end)
         end
     end)
@@ -2202,14 +2271,14 @@ local function AdvancedHoldE(targetEgg)
     return stealConfirmed or IsPlayerHoldingEgg() or warpedFlag
 end
 
-local function AdvancedHoldEWithRetry(targetEgg)
-    if not targetEgg or not targetEgg.Parent then return false end
+local function AdvancedHoldEWithRetry(targetObj)
+    if not targetObj or not targetObj.Parent then return false end
     for attempt = 1, CONFIG.E_MAX_ATTEMPTS do
-        local ok = AdvancedHoldE(targetEgg)
+        local ok = AdvancedHoldE(targetObj)
         if ok then return true end
 
         if not toggled then return false end
-        if not targetEgg or not targetEgg.Parent then return false end
+        if not targetObj or not targetObj.Parent then return false end
 
         warpedFlag = false
         stealConfirmed = false
@@ -2218,7 +2287,7 @@ local function AdvancedHoldEWithRetry(targetEgg)
         if attempt < CONFIG.E_MAX_ATTEMPTS then
             task.wait(CONFIG.E_RETRY_DELAY)
             if not toggled then return false end
-            if not targetEgg or not targetEgg.Parent then return false end
+            if not targetObj or not targetObj.Parent then return false end
         end
     end
     return false
@@ -2269,7 +2338,7 @@ local function StopToggleUI()
     ToggleCircle.BackgroundColor3 = Color3.fromRGB(150, 155, 165)
 end
 
-local function StartAutoEggAction()
+local function StartAutoTargetAction()
     if isActionRunning then return end
     isActionRunning = true
     markerVisitDone = false
@@ -2294,7 +2363,7 @@ local function StartAutoEggAction()
             if not holding then markerVisitDone = false end
 
             -- =====================================================
-            -- CASE 1: ถือไข่ + อยู่ SafeZone -> เดินเข้าจุด Marker -> ฝากไข่
+            -- CASE 1: ถือของ + อยู่ SafeZone -> เดินเข้าจุด Marker -> ฝากของ
             -- =====================================================
             if holding and inSafe then
                 if not markerVisitDone then
@@ -2320,7 +2389,7 @@ local function StartAutoEggAction()
                 end
 
             -- =====================================================
-            -- CASE 2: ถือไข่ + นอก SafeZone -> บินกลับ SafeZone ทันที
+            -- CASE 2: ถือของ + นอก SafeZone -> บินกลับ SafeZone ทันที
             -- =====================================================
             elseif holding and not inSafe then
                 local ret = GetReturnCFrame()
@@ -2330,13 +2399,13 @@ local function StartAutoEggAction()
                 stealConfirmed = false
 
             -- =====================================================
-            -- CASE 3: ไม่ได้ถือไข่ -> บินไปขโมย
+            -- CASE 3: ไม่ได้ถือของ -> บินไปขโมย
             -- =====================================================
             else
-                local targetEgg = selectedEggObject or GetHeaviestEgg()
+                local targetObj = selectedEggObject or GetBestTarget()
                 local hrp = GetCurrentHRP()
 
-                if targetEgg and hrp then
+                if targetObj and hrp then
                     stealConfirmed     = false
                     warpedFlag         = false
                     ragdollDetected    = false
@@ -2344,17 +2413,17 @@ local function StartAutoEggAction()
                     snapBackDetected   = false
                     snapCounter        = 0
 
-                    AdvancedHoldEWithRetry(targetEgg)
+                    AdvancedHoldEWithRetry(targetObj)
 
                     -- เช็คบอสขัดขวาง
                     if ragdollDetected or bossAttackDetected or snapBackDetected then
                         EmergencyEscapeFromBoss()
                         task.wait(0.2)
                     else
-                        -- เช็คสถานะการถือไข่ (ถ้าถือแล้ว ให้บินหนีทันที)
+                        -- เช็คสถานะการถือของ (ถ้าถือแล้ว ให้บินหนีทันที)
                         local success = stealConfirmed or IsPlayerHoldingEgg()
                         if not success then
-                            success = WaitForEggInMagicTool(0.5) -- ตรวจหา MagicFishTool
+                            success = WaitForFishInMagicTool(0.5) -- ตรวจหา MagicFishTool
                         end
 
                         if success or IsPlayerHoldingEgg() then
@@ -2416,7 +2485,7 @@ ToggleFrame.MouseButton1Click:Connect(function()
             BackgroundColor3 = Color3.fromRGB(12, 13, 16)
         }):Play()
 
-        StartAutoEggAction()
+        StartAutoTargetAction()
     else
         if currentFlyTween then currentFlyTween:Cancel() end
         RestoreCamera()

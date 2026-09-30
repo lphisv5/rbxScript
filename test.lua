@@ -1,5 +1,5 @@
 -- [[ YANZ HUB GUI - NEXT-GEN HYPER-REALISTIC FLAME & PHYSICS ENGINE ]] --
--- [ V2.2 : OVERFLOW-SAFE LAYOUT + RESPONSIVE FIT + DRAG BOUNDS ] --
+-- [ V2.1 : AUTO CRATE SCANNER + 3D VIEWPORT PREVIEW SYSTEM (FIXED) ] --
 
 local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
@@ -18,7 +18,6 @@ YanzHubUI.Name = "YanzHubUI"
 YanzHubUI.Parent = CoreGui
 YanzHubUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 YanzHubUI.ResetOnSpawn = false
-YanzHubUI.IgnoreGuiInset = false
 
 -- -------------------------------------------------------------
 -- [ CONFIG & TWEEN PROFILES ]
@@ -28,20 +27,14 @@ local TWEEN_ELASTIC = TweenInfo.new(0.5, Enum.EasingStyle.Elastic, Enum.EasingDi
 local TWEEN_FAST    = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
 -- Layout constants
-local MAIN_WIDTH             = 345
-local HEADER_HEIGHT          = 52
-local BEST_CARD_HEIGHT       = 82
-local CONTROL_HEIGHT         = 84
-local CONTENT_GAP            = 8
-local LIST_HEIGHT            = 170
-local LIST_TOP               = 140
-local COLLAPSED_HEIGHT       = 242
-local EXPANDED_HEIGHT        = LIST_TOP + LIST_HEIGHT + CONTENT_GAP + CONTROL_HEIGHT + 8
-local CONTROL_TOP_COLLAPSED  = 144
-local CONTROL_TOP_EXPANDED   = LIST_TOP + LIST_HEIGHT + CONTENT_GAP
-local SCREEN_MARGIN_X        = 12
-local SCREEN_MARGIN_TOP      = 58
-local SCREEN_MARGIN_BOTTOM   = 12
+local MAIN_WIDTH           = 345
+local COLLAPSED_HEIGHT     = 242
+local LIST_HEIGHT          = 170 -- ปรับให้สูงขึ้นเพื่อแสดงผลได้หลายรายการ
+local LIST_TOP             = 140
+local EXPANDED_HEIGHT      = COLLAPSED_HEIGHT + LIST_HEIGHT + 8  -- 420
+local CONTROL_TOP_COLLAPSED = 144
+local CONTROL_TOP_EXPANDED  = 144 + LIST_HEIGHT + 8              -- 322
+local SCREEN_PADDING        = 12
 
 -- -------------------------------------------------------------
 -- [ CRATE DATA HELPERS ]
@@ -194,11 +187,9 @@ MainFrame.Parent = YanzHubUI
 MainFrame.BackgroundColor3 = Color3.fromRGB(11, 12, 15)
 MainFrame.BackgroundTransparency = 0.05
 MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-MainFrame.Position = UDim2.new(0.5, 0, 0.45, 0)
+MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 MainFrame.Size = UDim2.new(0, MAIN_WIDTH, 0, COLLAPSED_HEIGHT)
--- Hard clipping boundary. The old false value let the crate rows render
--- beyond the rounded main window.
-MainFrame.ClipsDescendants = true
+MainFrame.ClipsDescendants = false
 
 local MainCorner = Instance.new("UICorner")
 MainCorner.CornerRadius = UDim.new(0, 14)
@@ -216,40 +207,42 @@ local UIScale = Instance.new("UIScale")
 UIScale.Parent = MainFrame
 
 local targetScaleValue = 1.0
-
-local function IsTouchDevice()
-    -- Touch-enabled desktop monitors can report TouchEnabled=true.
-    return UserInputService.TouchEnabled and not UserInputService.MouseEnabled
-end
-
-local function GetFitScale(viewportSize)
-    local widthScale = (viewportSize.X - (SCREEN_MARGIN_X * 2)) / MAIN_WIDTH
-    local heightScale = (viewportSize.Y - SCREEN_MARGIN_TOP - SCREEN_MARGIN_BOTTOM) / EXPANDED_HEIGHT
-    return math.clamp(math.min(widthScale, heightScale, 1), 0.35, 1)
-end
+local viewportConnection
 
 local function UpdateAutoScaler()
-    local viewportSize = Camera.ViewportSize
-    local fitScale = GetFitScale(viewportSize)
-
-    if IsTouchDevice() then
-        local mobileScale = math.clamp(viewportSize.Y / 620, 0.62, 1)
-        targetScaleValue = math.min(fitScale, mobileScale)
-    else
-        -- PC remains at 1 when there is enough space. Very small windows are
-        -- fitted down just enough to keep the expanded layout on-screen.
-        targetScaleValue = fitScale
+    if not Camera then
+        return
     end
 
+    local viewport = Camera.ViewportSize
+    local rotationAllowance = EXPANDED_HEIGHT * 0.12
+    local widthScale = (viewport.X - SCREEN_PADDING * 2) / (MAIN_WIDTH + rotationAllowance)
+    local heightScale = (viewport.Y - SCREEN_PADDING * 2) / (EXPANDED_HEIGHT + rotationAllowance)
+    targetScaleValue = math.max(0.01, math.min(1, widthScale, heightScale))
     UIScale.Scale = targetScaleValue
 end
 
-UpdateAutoScaler()
+local function BindCurrentCamera()
+    if viewportConnection then
+        viewportConnection:Disconnect()
+        viewportConnection = nil
+    end
+
+    Camera = workspace.CurrentCamera
+    if not Camera then
+        return
+    end
+
+    viewportConnection = Camera:GetPropertyChangedSignal("ViewportSize"):Connect(UpdateAutoScaler)
+    UpdateAutoScaler()
+end
+
+workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(BindCurrentCamera)
+BindCurrentCamera()
 
 -- ENTRANCE ANIMATION
-local initialScale = targetScaleValue
 UIScale.Scale = 0
-TweenService:Create(UIScale, TWEEN_SPRING, {Scale = initialScale}):Play()
+TweenService:Create(UIScale, TWEEN_SPRING, {Scale = targetScaleValue}):Play()
 
 -- -------------------------------------------------------------
 -- [ SLIDING NOTIFICATION BANNER ]
@@ -259,10 +252,10 @@ NotifFrame.Name = "NotifFrame"
 NotifFrame.Parent = MainFrame
 NotifFrame.BackgroundColor3 = Color3.fromRGB(16, 18, 22)
 NotifFrame.BackgroundTransparency = 1
-NotifFrame.Position = UDim2.new(0, 12, 0, 6)
+NotifFrame.Position = UDim2.new(0, 12, 0, 10)
 NotifFrame.Size = UDim2.new(1, -24, 0, 34)
 NotifFrame.Visible = false
-NotifFrame.ZIndex = 20
+NotifFrame.ZIndex = 0
 
 local NotifCorner = Instance.new("UICorner")
 NotifCorner.CornerRadius = UDim.new(0, 9)
@@ -308,7 +301,7 @@ local function ShowNotification(text)
     notifDebounce = true
 
     NotifText.Text = text or "Discord Link Copied to Clipboard!"
-    NotifFrame.Position = UDim2.new(0, 12, 0, 6)
+    NotifFrame.Position = UDim2.new(0, 12, 0, 10)
     NotifFrame.BackgroundTransparency = 1
     NotifStroke.Transparency = 1
     NotifText.TextTransparency = 1
@@ -316,7 +309,7 @@ local function ShowNotification(text)
     NotifFrame.Visible = true
 
     TweenService:Create(NotifFrame, TWEEN_SPRING, {
-        Position = UDim2.new(0, 12, 0, 0),
+        Position = UDim2.new(0, 12, 0, -38),
         BackgroundTransparency = 0.05
     }):Play()
     TweenService:Create(NotifStroke, TWEEN_FAST, {Transparency = 0.25}):Play()
@@ -744,7 +737,7 @@ ItemName.Name = "ItemName"
 ItemName.Parent = EggCard
 ItemName.BackgroundTransparency = 1
 ItemName.Position = UDim2.new(0, 80, 0, 26)
-ItemName.Size = UDim2.new(1, -150, 0, 18) -- ปรับความกว้างให้มากขึ้น
+ItemName.Size = UDim2.new(1, -170, 0, 18)
 ItemName.Font = Enum.Font.GothamBold
 ItemName.Text = "Loading..."
 ItemName.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -800,11 +793,8 @@ CratesScroll.Size = UDim2.new(1, -20, 0, LIST_HEIGHT)
 CratesScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 CratesScroll.ScrollBarThickness = 3
 CratesScroll.ScrollBarImageColor3 = Color3.fromRGB(120, 125, 135)
-CratesScroll.ScrollingDirection = Enum.ScrollingDirection.Y
-CratesScroll.ScrollingEnabled = true
 CratesScroll.Visible = false
 CratesScroll.ClipsDescendants = true
-CratesScroll.ZIndex = 3
 
 local CratesScrollCorner = Instance.new("UICorner")
 CratesScrollCorner.CornerRadius = UDim.new(0, 10)
@@ -856,36 +846,17 @@ ControlStroke.Transparency = 0.88
 -- ArrowBtn toggle : show / hide crates list
 local listExpanded = false
 
-local function GetMainHeight(expanded)
-    return expanded and EXPANDED_HEIGHT or COLLAPSED_HEIGHT
-end
-
-local function ApplyLayout(animated)
-    local mainHeight = GetMainHeight(listExpanded)
-    local tweenInfo = animated == false and TweenInfo.new(0) or TWEEN_SPRING
-
+local function ApplyLayout()
     if listExpanded then
         CratesScroll.Visible = true
-        TweenService:Create(CratesScroll, tweenInfo, {
-            Size = UDim2.new(1, -20, 0, LIST_HEIGHT)
-        }):Play()
-        TweenService:Create(ControlPanel, tweenInfo, {
-            Position = UDim2.new(0, 10, 0, CONTROL_TOP_EXPANDED)
-        }):Play()
-        TweenService:Create(MainFrame, tweenInfo, {
-            Size = UDim2.new(0, MAIN_WIDTH, 0, mainHeight)
-        }):Play()
+        TweenService:Create(CratesScroll, TWEEN_SPRING, {Size = UDim2.new(1, -20, 0, LIST_HEIGHT)}):Play()
+        TweenService:Create(ControlPanel, TWEEN_SPRING, {Position = UDim2.new(0, 10, 0, CONTROL_TOP_EXPANDED)}):Play()
+        TweenService:Create(MainFrame, TWEEN_SPRING, {Size = UDim2.new(0, MAIN_WIDTH, 0, EXPANDED_HEIGHT)}):Play()
         TweenService:Create(ArrowBtn, TWEEN_ELASTIC, {Rotation = 180}):Play()
     else
-        TweenService:Create(CratesScroll, tweenInfo, {
-            Size = UDim2.new(1, -20, 0, 0)
-        }):Play()
-        TweenService:Create(ControlPanel, tweenInfo, {
-            Position = UDim2.new(0, 10, 0, CONTROL_TOP_COLLAPSED)
-        }):Play()
-        TweenService:Create(MainFrame, tweenInfo, {
-            Size = UDim2.new(0, MAIN_WIDTH, 0, mainHeight)
-        }):Play()
+        TweenService:Create(CratesScroll, TWEEN_SPRING, {Size = UDim2.new(1, -20, 0, 0)}):Play()
+        TweenService:Create(ControlPanel, TWEEN_SPRING, {Position = UDim2.new(0, 10, 0, CONTROL_TOP_COLLAPSED)}):Play()
+        TweenService:Create(MainFrame, TWEEN_SPRING, {Size = UDim2.new(0, MAIN_WIDTH, 0, COLLAPSED_HEIGHT)}):Play()
         TweenService:Create(ArrowBtn, TWEEN_ELASTIC, {Rotation = 0}):Play()
         task.delay(0.3, function()
             if not listExpanded then
@@ -900,11 +871,8 @@ ArrowBtn.MouseButton1Click:Connect(function()
     if listExpanded and RefreshCratesUI then
         RefreshCratesUI()
     end
-    ApplyLayout(true)
+    ApplyLayout()
 end)
-
--- Initial synchronous layout: never expose list children while MainFrame is collapsed.
-ApplyLayout(false)
 
 -- Title "TELEGUIADO"
 local ModeTitle = Instance.new("TextLabel")
@@ -1084,7 +1052,6 @@ local function CreateMiniCrateRow(crate, rank)
     item.Size = UDim2.new(1, 0, 0, ITEM_HEIGHT)
     item.BorderSizePixel = 0
     item.LayoutOrder = rank
-    item.ZIndex = 4
 
     local itemCorner = Instance.new("UICorner")
     itemCorner.CornerRadius = UDim.new(0, 8)
@@ -1212,7 +1179,7 @@ local function PopulateCratesList(crates)
     -- wait a tick for layout to compute then set canvas size
     task.defer(function()
         if CratesScroll and CratesScroll.Parent then
-            CratesScroll.CanvasSize = UDim2.new(0, 0, 0, math.max(CratesListLayout.AbsoluteContentSize.Y + 12, LIST_HEIGHT))
+            CratesScroll.CanvasSize = UDim2.new(0, 0, 0, CratesListLayout.AbsoluteContentSize.Y + 12)
         end
     end)
 end
@@ -1328,45 +1295,33 @@ local tiltAngle = 0
 local flameWindVelocity = Vector2.new(0, 0)
 
 local function CurrentMainHeight()
-    return GetMainHeight(listExpanded)
+    return listExpanded and EXPANDED_HEIGHT or COLLAPSED_HEIGHT
 end
 
-local function ClampMainPosition(pos)
+local function ClampMainFramePosition(position)
+    if not Camera then
+        return position
+    end
+
     local viewport = Camera.ViewportSize
     local scale = math.max(UIScale.Scale, 0.01)
-    local currentHeight = CurrentMainHeight()
+    local frameWidth = MAIN_WIDTH * scale
+    local frameHeight = CurrentMainHeight() * scale
+    local rotationPadding = math.max(frameWidth, frameHeight) * 0.06
+    local halfWidth = frameWidth * 0.5 + SCREEN_PADDING + rotationPadding
+    local halfHeight = frameHeight * 0.5 + SCREEN_PADDING + rotationPadding
+    local minX = math.min(halfWidth, viewport.X * 0.5)
+    local maxX = math.max(viewport.X - halfWidth, viewport.X * 0.5)
+    local minY = math.min(halfHeight, viewport.Y * 0.5)
+    local maxY = math.max(viewport.Y - halfHeight, viewport.Y * 0.5)
+    local centerX = position.X.Scale * viewport.X + position.X.Offset
+    local centerY = position.Y.Scale * viewport.Y + position.Y.Offset
 
-    local halfW = (MAIN_WIDTH * scale) * 0.5
-    local halfH = (currentHeight * scale) * 0.5
+    centerX = math.clamp(centerX, minX, maxX)
+    centerY = math.clamp(centerY, minY, maxY)
 
-    local minX = halfW + SCREEN_MARGIN_X
-    local maxX = math.max(minX, viewport.X - halfW - SCREEN_MARGIN_X)
-    local minY = halfH + SCREEN_MARGIN_TOP
-    local maxY = math.max(minY, viewport.Y - halfH - SCREEN_MARGIN_BOTTOM)
-
-    local x = viewport.X * pos.X.Scale + pos.X.Offset
-    local y = viewport.Y * pos.Y.Scale + pos.Y.Offset
-
-    x = math.clamp(x, minX, maxX)
-    y = math.clamp(y, minY, maxY)
-
-    return UDim2.new(
-        pos.X.Scale,
-        x - (viewport.X * pos.X.Scale),
-        pos.Y.Scale,
-        y - (viewport.Y * pos.Y.Scale)
-    )
+    return UDim2.new(0.5, centerX - viewport.X * 0.5, 0.5, centerY - viewport.Y * 0.5)
 end
-
-local function KeepMainFrameOnScreen()
-    targetPos = ClampMainPosition(MainFrame.Position)
-    MainFrame.Position = targetPos
-end
-
-Camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
-    UpdateAutoScaler()
-    KeepMainFrameOnScreen()
-end)
 
 local function OnDragBegan(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -1381,8 +1336,6 @@ local function OnDragBegan(input)
         input.Changed:Connect(function()
             if input.UserInputState == Enum.UserInputState.End then
                 isDragging = false
-                currentVelocity = Vector2.new(0, 0)
-                targetPos = ClampMainPosition(MainFrame.Position)
                 TweenService:Create(MainFrame, TWEEN_SPRING, {
                     Size = UDim2.new(0, MAIN_WIDTH, 0, CurrentMainHeight()),
                     Rotation = 0
@@ -1405,14 +1358,12 @@ UserInputService.InputChanged:Connect(function(input)
         local delta = currentMouse - dragStartMouse
         local currentScale = math.max(UIScale.Scale, 0.01)
 
-        local rawTargetPos = UDim2.new(
+        targetPos = ClampMainFramePosition(UDim2.new(
             dragStartFramePos.X.Scale,
             dragStartFramePos.X.Offset + (delta.X / currentScale),
             dragStartFramePos.Y.Scale,
             dragStartFramePos.Y.Offset + (delta.Y / currentScale)
-        )
-
-        targetPos = ClampMainPosition(rawTargetPos)
+        ))
 
         currentVelocity = (currentMouse - lastMousePos)
         lastMousePos = currentMouse
@@ -1429,21 +1380,16 @@ RunService.RenderStepped:Connect(function(dt)
 
     -- 1. Position and Drag Update
     if isDragging and isGuiVisible then
-        MainFrame.Position = targetPos
+        MainFrame.Position = ClampMainFramePosition(targetPos)
+        targetPos = MainFrame.Position
         local targetTilt = math.clamp(currentVelocity.X * 0.25, -6, 6)
         tiltAngle = tiltAngle + (targetTilt - tiltAngle) * math.min(dt * 20, 1)
         MainFrame.Rotation = tiltAngle
 
         flameWindVelocity = flameWindVelocity:Lerp(-currentVelocity * 1.65, math.min(dt * 25, 1))
     else
+        MainFrame.Position = ClampMainFramePosition(MainFrame.Position)
         flameWindVelocity = flameWindVelocity:Lerp(Vector2.new(0, 0), math.min(dt * 10, 1))
-        if not isDragging then
-            local safePos = ClampMainPosition(MainFrame.Position)
-            if safePos.X.Offset ~= MainFrame.Position.X.Offset or safePos.Y.Offset ~= MainFrame.Position.Y.Offset then
-                MainFrame.Position = safePos
-                targetPos = safePos
-            end
-        end
     end
 
     -- 2. Thermal Core Aura Pulsation

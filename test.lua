@@ -876,7 +876,7 @@ local function ScanCrateData(crate)
     return data
 end
 
--- Forward declaration
+-- Forward declarations
 local PopulateCrateList
 local ScanAndUpdateBestCrate
 
@@ -911,6 +911,19 @@ local function SetCardExpandedState(expanded)
 
     CrateListScroll.Visible = isEggExpanded
 
+    if isEggExpanded then
+        -- โหลดรายการดร็อปดาวน์เมื่อผู้ใช้คลิกเปิดเมนูเท่านั้น
+        PopulateCrateList()
+    else
+        -- ล้างโมเดล 3D และ UI เมื่อปิดเมนู เพื่อคืนค่า FPS และหน่วยความจำทันที
+        dropdownPreviewModels = {}
+        for _, child in ipairs(CrateListScroll:GetChildren()) do
+            if child:IsA("Frame") or child:IsA("TextButton") then
+                child:Destroy()
+            end
+        end
+    end
+
     TweenService:Create(ArrowBtn, TWEEN_ELASTIC, {Rotation = targetRot}):Play()
     TweenService:Create(EggCard, TWEEN_SPRING, {Size = UDim2.new(1, -20, 0, targetEggH)}):Play()
     TweenService:Create(ControlPanel, TWEEN_SPRING, {Position = UDim2.new(0, 10, 0, targetControlY)}):Play()
@@ -922,9 +935,12 @@ ArrowBtn.MouseButton1Click:Connect(function()
 end)
 
 -- -------------------------------------------------------------
--- [ MINI EGGCARD BUILDER WITH PROGRESSIVE ASYNC 3D LOADING & FILTERING ]
+-- [ MINI EGGCARD BUILDER WITH LAZY ASYNC 3D LOADING ]
 -- -------------------------------------------------------------
 PopulateCrateList = function()
+    -- หากเมนูย่อยถูกปิดอยู่ จะไม่ทำรายการใดๆ เพื่อป้องกันอาการหน่วงสะสม
+    if not isEggExpanded then return end
+
     populateSessionId = populateSessionId + 1
     local currentSession = populateSessionId
 
@@ -955,7 +971,7 @@ PopulateCrateList = function()
         return a.ValueNum > b.ValueNum
     end)
 
-    -- 3. Filter out currently displayed/selected EggCard (ไม่แสดงในการ์ดรายการเมื่อถูกเลือกไปแสดงในการ์ดหลัก)
+    -- 3. Filter out currently displayed/selected EggCard
     local filteredItems = {}
     for _, data in ipairs(crateItems) do
         if data.Model ~= currentTargetCrate then
@@ -963,11 +979,11 @@ PopulateCrateList = function()
         end
     end
 
-    -- 4. Fast UI Frame Creation (สร้างกรอบและข้อความขึ้นมาทันทีโดยไม่ต้องรอโหลด 3D)
+    -- 4. Fast UI Frame Creation
     local pending3DTasks = {}
 
     for index, data in ipairs(filteredItems) do
-        if currentSession ~= populateSessionId then return end
+        if currentSession ~= populateSessionId or not isEggExpanded then return end
         local child = data.Model
 
         local miniCard = Instance.new("TextButton")
@@ -1101,10 +1117,10 @@ PopulateCrateList = function()
         end)
     end
 
-    -- 5. Progressive Async 3D Loader Thread (โหลดโมเดล 3D ทีละการ์ดพร้อมการเว้นจังหวะเพื่อป้องกันการกระตุก/ค้าง)
+    -- 5. Progressive Async 3D Loader Thread
     task.spawn(function()
         for _, loadTask in ipairs(pending3DTasks) do
-            if currentSession ~= populateSessionId then return end -- Abort if newer scan started
+            if currentSession ~= populateSessionId or not isEggExpanded then return end -- หยุดการโหลดทันทีหากปิดเมนู
 
             local child = loadTask.CrateModel
             local miniWorld = loadTask.WorldModel
@@ -1144,7 +1160,7 @@ PopulateCrateList = function()
                     end
                 end)
             end
-            task.wait(0.01) -- Yield microsecond per card to prevent freezing
+            task.wait(0.01)
         end
     end)
 end
@@ -1160,7 +1176,7 @@ ScanAndUpdateBestCrate = function()
         currentPreviewModel = nil
         currentTargetCrate = nil
         ItemIcon.Visible = true
-        PopulateCrateList()
+        if isEggExpanded then PopulateCrateList() end
         return
     end
 
@@ -1189,8 +1205,6 @@ ScanAndUpdateBestCrate = function()
             end
         end
     end
-    
-    local previousTarget = currentTargetCrate
 
     if targetCrateData then
         ItemName.Text = targetCrateData.Name
@@ -1201,6 +1215,7 @@ ScanAndUpdateBestCrate = function()
         if currentTargetCrate ~= targetCrateData.Model then
             currentTargetCrate = targetCrateData.Model
             Setup3DModelPreview(targetCrateData.Model)
+            if isEggExpanded then PopulateCrateList() end
         end
     else
         ItemName.Text = "Waiting..."
@@ -1211,10 +1226,8 @@ ScanAndUpdateBestCrate = function()
         currentPreviewModel = nil
         currentTargetCrate = nil
         ItemIcon.Visible = true
+        if isEggExpanded then PopulateCrateList() end
     end
-
-    -- Regenerate ArrowBtn list so the active card moves to main EggCard and vanishes from ArrowBtn list
-    PopulateCrateList()
 end
 
 -- Debounce engine to safely handle rapid child added/removed events

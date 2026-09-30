@@ -1,7 +1,14 @@
 -- [[ YANZ HUB GUI - NEXT-GEN HYPER-REALISTIC FLAME & PHYSICS ENGINE ]] --
 -- [ V2.2 : AUTO STEAL + PROTECTION + ARENA RESET + FLY MODE (300) ] --
 
-local CoreGui = game:GetService("CoreGui")
+-- Robust CoreGui fallback for mobile executors (prevents Line 1 nil errors)
+local CoreGui
+if type(gethui) == "function" then
+    CoreGui = gethui()
+else
+    CoreGui = game:GetService("CoreGui")
+end
+
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")

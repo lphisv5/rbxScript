@@ -1,13 +1,12 @@
--- [[ YANZ HUB GUI - NEXT-GEN HYPER-REALISTIC FLAME & 3D CRATE ENGINE + STEAL ENGINE ]] --
+-- [[ YANZ HUB GUI - NEXT-GEN HYPER-REALISTIC FLAME & 3D CRATE ENGINE ]] --
 
 local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 local Camera = workspace.CurrentCamera
 local Players = game:GetService("Players")
-local VirtualInputManager = game:GetService("VirtualInputManager")
-
 local LocalPlayer = Players.LocalPlayer
 
 -- -------------------------------------------------------------
@@ -43,7 +42,8 @@ local TWEEN_SPRING = TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirect
 local TWEEN_ELASTIC = TweenInfo.new(0.5, Enum.EasingStyle.Elastic, Enum.EasingDirection.Out)
 local TWEEN_FAST = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
-local FLY_SPEED = 275 -- Speed 275 studs/s
+local FLY_SPEED = 275
+local SAFE_ZONE_CFRAME = CFrame.new(2435.00024, -12.4999971, -940, 1, 0, 0, 0, 1, 0, 0, 0, 1)
 
 -- -------------------------------------------------------------
 -- [ MAIN CONTAINER & SMART AUTO-SCALE ]
@@ -148,7 +148,7 @@ local function ShowNotification(text)
     if notifDebounce then return end
     notifDebounce = true
     
-    NotifText.Text = text or "Notification"
+    NotifText.Text = text or "Discord Link Copied to Clipboard!"
     NotifFrame.Position = UDim2.new(0, 12, 0, 10)
     NotifFrame.BackgroundTransparency = 1
     NotifStroke.Transparency = 1
@@ -877,6 +877,7 @@ local function ScanCrateData(crate)
         end
     end
 
+    -- Combine Rarity and Size (e.g. "Cosmic - Huge" or "Cosmic")
     if rawSize and tostring(rawSize) ~= "" then
         data.Rarity = baseRarity .. " - " .. tostring(rawSize)
     else
@@ -909,208 +910,6 @@ end
 -- Forward declarations
 local PopulateCrateList
 local ScanAndUpdateBestCrate
-
--- -------------------------------------------------------------
--- [ ADVANCED FLY & STEAL ENGINE - SPEED 275 ]
--- -------------------------------------------------------------
-local isStealingActive = false
-
--- Get Safe Zone Target CFrame
-local function GetSafeZoneCFrame()
-    local stealMap = workspace:FindFirstChild("Steal Map")
-    if stealMap then
-        local lobby = stealMap:FindFirstChild("Lobby")
-        if lobby then
-            local safeZone = lobby:FindFirstChild("safe zone")
-            if safeZone then
-                if safeZone:IsA("BasePart") then
-                    return safeZone.CFrame + Vector3.new(0, 3, 0)
-                elseif safeZone:IsA("Model") then
-                    return safeZone:GetPivot() + Vector3.new(0, 3, 0)
-                end
-            end
-        end
-    end
-    return nil
-end
-
--- Get CFrame Target of Crate Model
-local function GetCrateTargetCFrame(crateModel)
-    if not crateModel then return nil end
-    if crateModel:IsA("Model") then
-        local cf, sz = crateModel:GetBoundingBox()
-        return cf
-    elseif crateModel:IsA("BasePart") then
-        return crateModel.CFrame
-    end
-    return nil
-end
-
--- High-Precision Fly Engine at Speed 275
-local function FlyToCFrame(targetCFrame)
-    if not targetCFrame then return end
-    local char = LocalPlayer.Character
-    if not char then return end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-
-    -- Noclip Connection During Flight
-    local noclipConnection = RunService.Stepped:Connect(function()
-        if char then
-            for _, part in ipairs(char:GetDescendants()) do
-                if part:IsA("BasePart") then
-                    part.CanCollide = false
-                end
-            end
-        end
-    end)
-
-    local startPos = hrp.Position
-    local targetPos = targetCFrame.Position
-    local distance = (targetPos - startPos).Magnitude
-    local duration = math.clamp(distance / FLY_SPEED, 0.05, 10)
-
-    local startTime = os.clock()
-
-    while (os.clock() - startTime) < duration do
-        if not LocalPlayer.Character or not hrp or not hrp.Parent then break end
-        local elapsed = os.clock() - startTime
-        local alpha = math.clamp(elapsed / duration, 0, 1)
-        
-        local currentPos = startPos:Lerp(targetPos, alpha)
-        hrp.CFrame = CFrame.new(currentPos) * targetCFrame.Rotation
-        hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-        
-        RunService.RenderStepped:Wait()
-    end
-
-    if hrp then
-        hrp.CFrame = targetCFrame
-        hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-    end
-
-    noclipConnection:Disconnect()
-end
-
--- Check if Character is currently holding or equipped with crate
-local function IsHoldingCrate(crateModel)
-    local char = LocalPlayer.Character
-    if not char then return false end
-
-    -- 1. Check if original crate model is destroyed/removed from Workspace Crates
-    if crateModel and (not crateModel.Parent or crateModel.Parent == char or crateModel:IsDescendantOf(char)) then
-        return true
-    end
-
-    -- 2. Check joints and welds attached to Character
-    for _, item in ipairs(char:GetDescendants()) do
-        if item:IsA("Weld") or item:IsA("WeldConstraint") or item:IsA("Motor6D") then
-            if (item.Part0 and item.Part0:IsDescendantOf(crateModel)) or (item.Part1 and item.Part1:IsDescendantOf(crateModel)) then
-                return true
-            end
-        end
-        if item:IsA("Tool") or item:IsA("Model") or item:IsA("BasePart") then
-            local n = item.Name:lower()
-            if n:find("crate") or n:find("egg") or n:find("box") then
-                return true
-            end
-        end
-    end
-
-    return false
-end
-
--- Simulate ProximityPrompt / E key press & Hold Until Secured
-local function TriggerStealInteraction(crateModel)
-    if not crateModel or not crateModel.Parent then return end
-
-    -- Attempt 1: Fire ProximityPrompts if available
-    for _, prompt in ipairs(crateModel:GetDescendants()) do
-        if prompt:IsA("ProximityPrompt") then
-            pcall(function()
-                fireproximityprompt(prompt, 0)
-                fireproximityprompt(prompt, 1)
-            end)
-        end
-    end
-
-    -- Attempt 2: Double Tap 'E'
-    pcall(function()
-        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
-        task.wait(0.04)
-        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
-        task.wait(0.04)
-        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
-        task.wait(0.04)
-        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
-    end)
-
-    -- Retry Loop: Hold 'E' Key Until Held or Timeout
-    local maxHoldTime = 3.5
-    local startHold = os.clock()
-
-    pcall(function()
-        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
-    end)
-
-    while (os.clock() - startHold) < maxHoldTime do
-        if IsHoldingCrate(crateModel) then break end
-
-        -- Retrigger ProximityPrompts
-        for _, prompt in ipairs(crateModel:GetDescendants()) do
-            if prompt:IsA("ProximityPrompt") then
-                pcall(function() fireproximityprompt(prompt, 0) end)
-            end
-        end
-        task.wait(0.08)
-    end
-
-    pcall(function()
-        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
-    end)
-end
-
--- Full Steal & Safe Return Execution Sequence
-local function ExecuteStealSequence()
-    if isStealingActive then return end
-    isStealingActive = true
-
-    local crateToSteal = currentTargetCrate or selectedCrateModel
-    if not crateToSteal or not crateToSteal.Parent then
-        ShowNotification("No Crate Target Selected!")
-        isStealingActive = false
-        return
-    end
-
-    local crateCF = GetCrateTargetCFrame(crateToSteal)
-    local safeZoneCF = GetSafeZoneCFrame()
-
-    if not crateCF then
-        ShowNotification("Invalid Crate CFrame!")
-        isStealingActive = false
-        return
-    end
-
-    ShowNotification("Flying to Crate (Speed 275)...")
-
-    -- 1. Fly Speed 275 to Crate
-    FlyToCFrame(crateCF + Vector3.new(0, 2.5, 0))
-
-    -- 2. Steal Interaction & Double Tap / Hold 'E'
-    ShowNotification("Stealing Crate...")
-    TriggerStealInteraction(crateToSteal)
-
-    -- 3. Fly Speed 275 Back to Safe Zone Immediately
-    if safeZoneCF then
-        ShowNotification("Returning to Safe Zone...")
-        FlyToCFrame(safeZoneCF)
-        ShowNotification("Steal Complete!")
-    else
-        ShowNotification("Safe Zone Not Found!")
-    end
-
-    isStealingActive = false
-end
 
 -- -------------------------------------------------------------
 -- [ CONTROL PANEL & AUTO EXPAND / COLLAPSE SYSTEM ]
@@ -1248,7 +1047,7 @@ PopulateCrateList = function()
         mItemCorner.Parent = mItemFrame
 
         local mItemStroke = Instance.new("UIStroke")
-        mItemStroke.Parent = mItemFrame
+        mItemStroke.Parent = miniCard
         mItemStroke.Color = Color3.fromRGB(255, 255, 255)
         mItemStroke.Thickness = 1
         mItemStroke.Transparency = 0.88
@@ -1493,6 +1292,219 @@ task.spawn(function()
 end)
 
 -- -------------------------------------------------------------
+-- [ HIGH-SPEED FLY (275 SPEED) & CRATE STEALING ENGINE ]
+-- -------------------------------------------------------------
+local isStealingInProcess = false
+
+local function GetSafeZoneCFrame()
+    pcall(function()
+        local stealMap = workspace:FindFirstChild("Steal Map")
+        if stealMap then
+            local lobby = stealMap:FindFirstChild("Lobby")
+            if lobby then
+                local safeZone = lobby:FindFirstChild("safe zone")
+                if safeZone then
+                    if safeZone:IsA("BasePart") then
+                        return safeZone.CFrame
+                    elseif safeZone:IsA("Model") then
+                        return safeZone:GetBoundingBox()
+                    end
+                end
+            end
+        end
+    end)
+    return SAFE_ZONE_CFRAME
+end
+
+local function GetCharacterHRP()
+    local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    return char:FindFirstChild("HumanoidRootPart") or char:WaitForChild("HumanoidRootPart", 2)
+end
+
+-- Fly at exact 275 speed with smooth linear interpolation and active Noclip Engine
+local function FlyToTarget(targetCF)
+    local hrp = GetCharacterHRP()
+    if not hrp or not targetCF then return end
+
+    local startCF = hrp.CFrame
+    local distance = (targetCF.Position - startCF.Position).Magnitude
+    if distance < 1 then return end
+
+    local travelTime = distance / FLY_SPEED
+    local startTime = os.clock()
+
+    -- Zero Physics forces to avoid anti-fling/death triggers
+    pcall(function()
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
+    end)
+
+    -- Active Noclip Connection during flight
+    local noclipConnection
+    noclipConnection = RunService.Stepped:Connect(function()
+        local char = LocalPlayer.Character
+        if char then
+            for _, part in ipairs(char:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.CanCollide = false
+                end
+            end
+        end
+    end)
+
+    while (os.clock() - startTime) < travelTime do
+        local elapsed = os.clock() - startTime
+        local alpha = math.clamp(elapsed / travelTime, 0, 1)
+        hrp.CFrame = startCF:Lerp(targetCF, alpha)
+        
+        pcall(function()
+            hrp.AssemblyLinearVelocity = Vector3.zero
+            hrp.AssemblyAngularVelocity = Vector3.zero
+        end)
+        
+        task.wait()
+    end
+
+    hrp.CFrame = targetCF
+    if noclipConnection then
+        noclipConnection:Disconnect()
+    end
+
+    -- Restore collision state safely
+    pcall(function()
+        local char = LocalPlayer.Character
+        if char then
+            for _, part in ipairs(char:GetDescendants()) do
+                if part:IsA("BasePart") and part.Name == "HumanoidRootPart" then
+                    part.CanCollide = true
+                end
+            end
+        end
+    end)
+end
+
+-- Check character inventory/hand/body/workspace to verify if crate is secured
+local function IsCrateSecured(crateModel)
+    local char = LocalPlayer.Character
+    if not char then return false end
+
+    -- 1. Check if Crate model is no longer in workspace.Crates (Destroyed/Taken)
+    if not crateModel or not crateModel.Parent or not crateModel:IsDescendantOf(workspace) then
+        return true
+    end
+
+    -- 2. Check if Crate model is attached to Character or Player Backpack
+    if crateModel:IsDescendantOf(char) then
+        return true
+    end
+
+    -- 3. Check for any held tools or welded parts inside Character
+    for _, item in ipairs(char:GetChildren()) do
+        if item:IsA("Tool") or item:IsA("Model") or item:IsA("BasePart") then
+            if item.Name == crateModel.Name or item:FindFirstChild("Weld") or item:FindFirstChild("WeldConstraint") then
+                return true
+            end
+        end
+    end
+
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
+    if backpack then
+        for _, tool in ipairs(backpack:GetChildren()) do
+            if tool.Name == crateModel.Name then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
+-- Smart Pickup Mechanism: Double Press + Hold E fallback
+local function AttemptStealInteraction(crateModel)
+    if not crateModel then return false end
+
+    local prompt = crateModel:FindFirstChildOfClass("ProximityPrompt", true)
+
+    -- Step 1: Double Press Attempt (กดย้ำ 2 รอบ)
+    for i = 1, 2 do
+        if prompt then
+            pcall(function() fireproximityprompt(prompt) end)
+        else
+            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+            task.wait(0.05)
+            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+        end
+        task.wait(0.12)
+        if IsCrateSecured(crateModel) then
+            return true
+        end
+    end
+
+    -- Step 2: Hold 'E' Simulated Key & Prompt Hold until secured or timeout
+    if prompt then
+        pcall(function() prompt:InputHoldBegin() end)
+    end
+    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+
+    local holdStartTime = os.clock()
+    while (os.clock() - holdStartTime) < 4 do -- 4 seconds max threshold
+        if IsCrateSecured(crateModel) then break end
+        if prompt then
+            pcall(function() fireproximityprompt(prompt) end)
+        end
+        task.wait(0.08)
+    end
+
+    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+    if prompt then
+        pcall(function() prompt:InputHoldEnd() end)
+    end
+
+    return IsCrateSecured(crateModel)
+end
+
+-- Full Steal & Return Routine
+local function ExecuteStealSequence()
+    if isStealingInProcess or not currentTargetCrate or not currentTargetCrate.Parent then return end
+    isStealingInProcess = true
+
+    local targetModel = currentTargetCrate
+    local targetCF
+    if targetModel:IsA("Model") then
+        targetCF = targetModel:GetBoundingBox()
+    elseif targetModel:IsA("BasePart") then
+        targetCF = targetModel.CFrame
+    end
+
+    if not targetCF then
+        isStealingInProcess = false
+        return
+    end
+
+    ShowNotification("Flying to Crate (Speed 275)...")
+
+    -- 1. Fly to Target Crate
+    FlyToTarget(targetCF)
+
+    -- 2. Attempt Pickup
+    ShowNotification("Stealing Crate...")
+    local success = AttemptStealInteraction(targetModel)
+
+    -- 3. Fly back immediately to Safe Zone
+    ShowNotification("Returning to Safe Zone...")
+    local safeZoneCF = GetSafeZoneCFrame()
+    FlyToTarget(safeZoneCF)
+
+    if success then
+        ShowNotification("Crate Steal Successful!")
+    else
+        ShowNotification("Returned to Safe Zone!")
+    end
+
+    isStealingInProcess = false
+end
+
+-- -------------------------------------------------------------
 -- [ CONTROL PANEL DETAILS & LOOP ENGINE ]
 -- -------------------------------------------------------------
 local ModeTitle = Instance.new("TextLabel")
@@ -1551,14 +1563,11 @@ SwapButton.MouseLeave:Connect(function()
     TweenService:Create(SwapStroke, TWEEN_FAST, {Transparency = 0.5}):Play()
 end)
 
--- Click Swap Button to execute ONE SHOT Steal Sequence
+-- Click SwapButton to trigger One-Shot Steal
 SwapButton.MouseButton1Click:Connect(function()
     swapRotation = swapRotation + 180
     TweenService:Create(SwapButton, TWEEN_ELASTIC, {Rotation = swapRotation}):Play()
-    
-    task.spawn(function()
-        ExecuteStealSequence()
-    end)
+    task.spawn(ExecuteStealSequence)
 end)
 
 -- LOOP CHECKBOX & LOOP PROCESSOR
@@ -1617,7 +1626,7 @@ LoopLabel.TextXAlignment = Enum.TextXAlignment.Left
 
 LoopLabel.MouseButton1Click:Connect(ToggleLoopFunc)
 
--- Neon Toggle Switch (Clean Pure Toggle UI State)
+-- Neon Toggle Switch
 local ToggleFrame = Instance.new("TextButton")
 ToggleFrame.Name = "ToggleFrame"
 ToggleFrame.Parent = ControlPanel
@@ -1662,14 +1671,14 @@ ToggleFrame.MouseButton1Click:Connect(function()
     end
 end)
 
--- Background Continuous Loop Steal Routine
+-- Continuous Auto Steal Background Thread
 task.spawn(function()
     while true do
         task.wait(0.5)
-        if (loopChecked or toggled) and not isStealingActive then
+        if (loopChecked or toggled) and not isStealingInProcess then
             pcall(function()
                 RequestSystemRefresh()
-                if currentTargetCrate or selectedCrateModel then
+                if currentTargetCrate and currentTargetCrate.Parent then
                     ExecuteStealSequence()
                 end
             end)

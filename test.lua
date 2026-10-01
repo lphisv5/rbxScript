@@ -1,17 +1,111 @@
-local CoreGui = game:GetService("CoreGui")
-local TweenService = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
-local Workspace = game:GetService("Workspace")
-local Players = game:GetService("Players")
-local VirtualUser = game:GetService("VirtualUser")
-local VirtualInputManager = game:GetService("VirtualInputManager")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local LocalPlayer = Players.LocalPlayer
-local CurrentCamera = Workspace.CurrentCamera
+local getgenv = getgenv or function() return _G end
+local checkcaller = checkcaller or function() return false end
+local newcclosure = newcclosure or function(f) return f end
+local hookmetamethod = hookmetamethod or function(...) end
+local hookfunction = hookfunction or function(...) end
+local getnamecallmethod = getnamecallmethod or function() return "" end
 
-local firePrompt = fireproximityprompt or (debug and debug.fireproximityprompt)
-local fireTouch  = firetouchinterest or (debug and debug.firetouchinterest)
+if not getgenv().ED_AntiKick then
+    getgenv().ED_AntiKick = {
+        Enabled = true,
+        SendNotifications = true,
+        CheckCaller = true
+    }
+
+    local cloneref = cloneref or function(obj) return obj end
+    local clonefunction = clonefunction or function(fn) return fn end
+
+    local Players = cloneref(game:GetService("Players"))
+    local LocalPlayer = Players.LocalPlayer
+    local StarterGui = cloneref(game:GetService("StarterGui"))
+
+    local SetCore = clonefunction(StarterGui.SetCore)
+    local FindFirstChild = clonefunction(game.FindFirstChild)
+
+    local function CanCastToSTDString(...)
+        return pcall(FindFirstChild, game, ...)
+    end
+
+    local function ShowAntiKickNotif(msg)
+        if getgenv().ED_AntiKick.SendNotifications then
+            pcall(function()
+                SetCore(StarterGui, "SendNotification", {
+                    Title = "Yanz Anti-Kick",
+                    Text = msg or "Successfully intercepted an attempted kick.",
+                    Icon = "rbxassetid://6238540373",
+                    Duration = 3
+                })
+            end)
+        end
+    end
+
+    local OldNamecall
+    OldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+        local args = {...}
+        local method = getnamecallmethod()
+        local lowerMethod = string.lower(method)
+
+        if lowerMethod == "kick" and getgenv().ED_AntiKick.Enabled then
+            if (not checkcaller() or not getgenv().ED_AntiKick.CheckCaller) and self == LocalPlayer then
+                ShowAntiKickNotif("Intercepted Local Player Kick Attempt!")
+                return nil
+            end
+        end
+
+        if (lowerMethod == "fireserver" or lowerMethod == "invokeserver") and getgenv().ED_AntiKick.Enabled then
+            local remoteName = string.lower(tostring(self.Name))
+            local suspectKeywords = { "cheat", "ban", "kick", "teleport", "speed", "detection", "exploit", "security", "flag", "anticheat" }
+            for _, kw in ipairs(suspectKeywords) do
+                if string.find(remoteName, kw) then
+                    ShowAntiKickNotif("Blocked Anti-Cheat Remote: " .. self.Name)
+                    return nil
+                end
+            end
+            
+            if args[1] and type(args[1]) == "string" then
+                local argStr = string.lower(args[1])
+                for _, kw in ipairs(suspectKeywords) do
+                    if string.find(argStr, kw) then
+                        ShowAntiKickNotif("Blocked Security Payload Event!")
+                        return nil
+                    end
+                end
+            end
+        end
+
+        return OldNamecall(self, ...)
+    end))
+
+    local OldKick
+    OldKick = hookfunction(LocalPlayer.Kick, newcclosure(function(self, ...)
+        if getgenv().ED_AntiKick.Enabled and self == LocalPlayer then
+            ShowAntiKickNotif("Direct LocalPlayer:Kick() Intercepted!")
+            return nil
+        end
+        return OldKick(self, ...)
+    end))
+
+    ShowAntiKickNotif("Anti-Kick System Successfully Initialized!")
+end
+
+-- =============================================================
+-- [ 2. CORE SERVICES & DEPENDENCIES ]
+-- =============================================================
+local CoreGui             = game:GetService("CoreGui")
+local TweenService        = game:GetService("TweenService")
+local UserInputService    = game:GetService("UserInputService")
+local RunService          = game:GetService("RunService")
+local Workspace           = game:GetService("Workspace")
+local Players             = game:GetService("Players")
+local VirtualUser         = game:GetService("VirtualUser")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local ReplicatedStorage   = game:GetService("ReplicatedStorage")
+
+local LocalPlayer         = Players.LocalPlayer
+local CurrentCamera       = Workspace.CurrentCamera
+
+local firePrompt = fireproximityprompt or (debug and debug.fireproximityprompt) or (getgenv and getgenv().fireproximityprompt)
+local fireTouch  = firetouchinterest or (debug and debug.firetouchinterest) or (getgenv and getgenv().firetouchinterest)
 
 -- =============================================================
 -- [ MODEL DATABASE ]
@@ -33,28 +127,29 @@ local MODEL_LIST = {
 -- [ ENGINE CONFIGURATION ]
 -- =============================================================
 local CONFIG = {
-    FLY_SPEED = 300,
-    LANDING_DISTANCE = 100,
-    LANDING_SPEED = 90,
-    WARP_DETECT_THRESHOLD = 75,
-    SNAPBACK_DIST = 140,
-    SNAPBACK_FRAMES = 3,
-    SAFE_ZONE_RADIUS = 25,
-    HOLD_DURATION = 1.8,
-    HOLD_VERIFY_WINDOW = 0.1,
-    E_MAX_ATTEMPTS = 2,
-    E_RETRY_DELAY = 0.1,
-    TARGET_NAMES = { "Fish", "FishTool", "MagicFish", "Egg", "Magic" },
-    SPAWN_FOLDER_NAMES = { "SpawnedFish", "SpawnedEggs", "SpawnedItems", "SpawnedTools" },
-    MAGIC_TOOL_NAME = "MagicFishTool",
-    MAGIC_POLL_INTERVAL = 0.03,
-    DEPOSIT_MAX_WAIT = 8,
+    FLY_SPEED              = 300,
+    BYPASS_TP_SPEED        = 1200,
+    LANDING_DISTANCE       = 100,
+    LANDING_SPEED          = 90,
+    WARP_DETECT_THRESHOLD  = 75,
+    SNAPBACK_DIST          = 140,
+    SNAPBACK_FRAMES        = 3,
+    SAFE_ZONE_RADIUS       = 25,
+    HOLD_DURATION          = 1.8,
+    HOLD_VERIFY_WINDOW     = 0.1,
+    E_MAX_ATTEMPTS         = 2,
+    E_RETRY_DELAY          = 0.1,
+    TARGET_NAMES           = { "Fish", "FishTool", "MagicFish", "Egg", "Magic" },
+    SPAWN_FOLDER_NAMES     = { "SpawnedFish", "SpawnedEggs", "SpawnedItems", "SpawnedTools" },
+    MAGIC_TOOL_NAME        = "MagicFishTool",
+    MAGIC_POLL_INTERVAL    = 0.03,
+    DEPOSIT_MAX_WAIT       = 8,
     DEPOSIT_CHECK_INTERVAL = 0.4,
-    DEPOSIT_SETTLE_WAIT = 0.4,
-    LOOP_INTERVAL = 0.1,
-    CAMERA_ZOOM_FOV = 25,
-    CAMERA_FOCUS_DISTANCE = 3,
-    SPEEDBUBBLE_NAME = "SpeedBubbleSpawn",
+    DEPOSIT_SETTLE_WAIT    = 0.4,
+    LOOP_INTERVAL          = 0.1,
+    CAMERA_ZOOM_FOV        = 25,
+    CAMERA_FOCUS_DISTANCE  = 3,
+    SPEEDBUBBLE_NAME       = "SpeedBubbleSpawn",
 }
 
 -- =============================================================
@@ -81,38 +176,34 @@ local RARITY_COLOR_MAP = {
 }
 
 -- =============================================================
--- [ STATE & FORWARD DECLARATIONS ]
+-- [ CENTRALIZED STATE MANAGER ]
 -- =============================================================
-local isAutoStealEnabled = false
-local stealConfirmed     = false
-local warpedFlag         = false
-local isLoopEnabled      = false
-local isDropdownOpen     = false
-local uiVisible          = true
-local isDragging         = false
+local SystemState = {
+    AutoStealEnabled = false,
+    LoopModeEnabled  = false,
+    TeleportMode     = true,
+    StealConfirmed   = false,
+    Warped           = false,
+    Ragdolled        = false,
+    SnapbackFlagged  = false,
+    TargetItem       = nil,
+    CachedWeight     = -1,
+    Connections      = {}
+}
 
-local noclipConnection   = nil
-local warpDetectorConn   = nil
-local lastKnownPos       = nil
-local warpAttachedChar   = nil
-local theLinePart        = nil
-local activeMoveTween    = nil
+function SystemState:ResetStealFlags()
+    self.StealConfirmed = false
+    self.Warped = false
+    self.Ragdolled = false
+    self.SnapbackFlagged = false
+end
 
-local selectedTargetItem = nil
-local lastScannedItem    = nil
-local currentViewportItem= nil
-local cachedWeight       = -1
-local dropdownBuildCount = 0
-local viewportRotationY  = 0
-
-local isRagdolledAttr    = false
-local isPhysicsRagdolled = false
-local isSnapbackFlagged  = false
-local snapbackFrameCount = 0
-
-local ragdollAttrConn    = nil
-local stateChangeConn    = nil
-local snapbackCheckConn  = nil
+function SystemState:ClearConnections()
+    for name, conn in pairs(self.Connections) do
+        if conn then pcall(function() conn:Disconnect() end) end
+    end
+    self.Connections = {}
+end
 
 -- Forward Declarations
 local TriggerRedPart
@@ -129,17 +220,16 @@ local GetCoralReefCFrame
 local GetIgnoreMarkerCFrame
 local SmoothFlyTo
 local SmoothFlyToWithLanding
+local SafeBypassTeleport
 local TrySellItem
 local SelectTargetItem
 local FindBestSpawnedItem
+local PopulateDropdownList
 local ToggleDropdown
 local DisableAutoSteal
 local DisconnectRagdollEvents
 local RecoverFromRagdoll
 local IsRagdolled
-local HookRagdollDetector
-local HookSnapbackDetector
-local HookStateDetector
 local InitCharacterDetectors
 local TryStealTarget
 local AdvancedHoldE
@@ -148,6 +238,8 @@ local StartAutoStealLoop
 -- =============================================================
 -- [ RED PART TOUCH BYPASS ]
 -- =============================================================
+local theLinePart = nil
+
 TriggerRedPart = function()
     local character = LocalPlayer.Character
     if not character then return false end
@@ -155,16 +247,12 @@ TriggerRedPart = function()
     local root = character:FindFirstChild("HumanoidRootPart") 
               or character:FindFirstChild("Torso") 
               or character:FindFirstChild("UpperTorso")
-
     if not root then return false end
 
     if not theLinePart or not theLinePart.Parent then
         local theLine = Workspace:FindFirstChild("TheLine")
-        if theLine then
-            theLinePart = theLine:FindFirstChild("TheLinePart")
-        end
+        if theLine then theLinePart = theLine:FindFirstChild("TheLinePart") end
     end
-
     if not theLinePart then return false end
 
     local redPart = theLinePart:FindFirstChild("RedPart") or theLinePart
@@ -176,7 +264,6 @@ TriggerRedPart = function()
             end
         end
     end
-
     if not redPart then return false end
 
     if type(fireTouch) == "function" then
@@ -189,11 +276,10 @@ TriggerRedPart = function()
     return true
 end
 
--- Loop firing RedPart touch interest
 task.spawn(function()
     while true do
-        task.wait()
-        if isAutoStealEnabled then
+        task.wait(0.1)
+        if SystemState.AutoStealEnabled then
             local char = LocalPlayer.Character
             if char and char:FindFirstChild("HumanoidRootPart") then
                 pcall(TriggerRedPart)
@@ -203,8 +289,11 @@ task.spawn(function()
 end)
 
 -- =============================================================
--- [ NOCLIP CONTROLLER ]
+-- [ NOCLIP & PHYSICAL BYPASS ENGINE ]
 -- =============================================================
+local noclipConnection = nil
+local activeMoveTween  = nil
+
 DisableNoclip = function()
     if noclipConnection then
         noclipConnection:Disconnect()
@@ -229,57 +318,33 @@ end
 -- =============================================================
 -- [ SPEED BUBBLE BYPASS ]
 -- =============================================================
-local function RemoveTouchInterests(part)
-    if not part or not part.Parent then return 0 end
-    local count = 0
-    for _, child in ipairs(part:GetChildren()) do
-        if child:IsA("TouchTransmitter") then
-            pcall(function() child:Destroy() end)
-            count = count + 1
-        end
-    end
-    return count
-end
-
-local function BypassPart(part)
-    if not part or not part:IsA("BasePart") then return end
-    pcall(function() part.CanTouch = false end)
-    RemoveTouchInterests(part)
-end
-
 local hookedSpeedBubbles = setmetatable({}, { __mode = "k" })
 
 local function HookSpeedBubblePart(part)
     if not part or not part:IsA("BasePart") or hookedSpeedBubbles[part] then return end
     hookedSpeedBubbles[part] = true
 
-    BypassPart(part)
-
-    part:GetPropertyChangedSignal("CanTouch"):Connect(function()
-        if part.CanTouch then
-            pcall(function() part.CanTouch = false end)
+    pcall(function()
+        part.CanTouch = false
+        for _, child in ipairs(part:GetChildren()) do
+            if child:IsA("TouchTransmitter") then pcall(function() child:Destroy() end) end
         end
     end)
 
+    part:GetPropertyChangedSignal("CanTouch"):Connect(function()
+        if part.CanTouch then pcall(function() part.CanTouch = false end) end
+    end)
+
     part.ChildAdded:Connect(function(child)
-        if child:IsA("TouchTransmitter") then
-            pcall(function() child:Destroy() end)
-        end
+        if child:IsA("TouchTransmitter") then pcall(function() child:Destroy() end) end
     end)
 end
 
 for _, descendant in ipairs(Workspace:GetDescendants()) do
-    if descendant.Name == CONFIG.SPEEDBUBBLE_NAME and descendant:IsA("BasePart") then
-        HookSpeedBubblePart(descendant)
-    end
+    if descendant.Name == CONFIG.SPEEDBUBBLE_NAME and descendant:IsA("BasePart") then HookSpeedBubblePart(descendant) end
 end
-
 Workspace.DescendantAdded:Connect(function(descendant)
-    if descendant.Name == CONFIG.SPEEDBUBBLE_NAME and descendant:IsA("BasePart") then
-        HookSpeedBubblePart(descendant)
-    elseif descendant:IsA("TouchTransmitter") and descendant.Parent and descendant.Parent.Name == CONFIG.SPEEDBUBBLE_NAME then
-        pcall(function() descendant:Destroy() end)
-    end
+    if descendant.Name == CONFIG.SPEEDBUBBLE_NAME and descendant:IsA("BasePart") then HookSpeedBubblePart(descendant) end
 end)
 
 task.spawn(function()
@@ -305,7 +370,7 @@ end
 
 WaitForDaytime = function()
     if not IsNightTime() then return true end
-    while isAutoStealEnabled and IsNightTime() do
+    while SystemState.AutoStealEnabled and IsNightTime() do
         ResetWarpBaseline()
         if IsPlayerHoldingFishOrEgg and IsPlayerHoldingFishOrEgg() then
             if not IsPlayerInSafeZone() then
@@ -337,51 +402,41 @@ end
 
 local function GetDisplayName(itemModel)
     if not itemModel then return "Unknown Fish" end
-
     local ok, name = pcall(function() return itemModel:GetAttribute("DisplayName") end)
     if ok and type(name) == "string" and name ~= "" then return name end
-
     ok, name = pcall(function()
-        local attrName = itemModel:GetAttribute("Name") or itemModel:GetAttribute("FishName") or itemModel:GetAttribute("EggName")
-        return attrName
+        return itemModel:GetAttribute("Name") or itemModel:GetAttribute("FishName") or itemModel:GetAttribute("EggName")
     end)
     if ok and type(name) == "string" and name ~= "" then return name end
-
     return itemModel.Name
 end
 
 local function GetKgAttribute(itemModel)
     if not itemModel then return nil end
-
     local ok, kg = pcall(function() return itemModel:GetAttribute("Kg") end)
     if ok and type(kg) == "number" and kg > 0 then return kg end
-
     ok, kg = pcall(function()
-        local w = itemModel:GetAttribute("Weight") or itemModel:GetAttribute("Value") or itemModel:GetAttribute("Kgs")
-        return w
+        return itemModel:GetAttribute("Weight") or itemModel:GetAttribute("Value") or itemModel:GetAttribute("Kgs")
     end)
     if ok and type(kg) == "number" and kg > 0 then return kg end
-
     return nil
 end
 
--- Anti-AFK Listener
 LocalPlayer.Idled:Connect(function()
     VirtualUser:CaptureController()
     VirtualUser:ClickButton2(Vector2.zero)
 end)
 
--- Steal Confirmation Remotes
 local function HookStealConfirmationEvents()
     local function Attach(remotes)
         if not remotes then return end
         local r1 = remotes:FindFirstChild("EggStealReward") or remotes:FindFirstChild("FishStealReward")
         if r1 and r1:IsA("RemoteEvent") then
-            r1.OnClientEvent:Connect(function() stealConfirmed = true end)
+            r1.OnClientEvent:Connect(function() SystemState.StealConfirmed = true end)
         end
         local r2 = remotes:FindFirstChild("StoleEggNotice") or remotes:FindFirstChild("StoleFishNotice")
         if r2 and r2:IsA("RemoteEvent") then
-            r2.OnClientEvent:Connect(function() stealConfirmed = true end)
+            r2.OnClientEvent:Connect(function() SystemState.StealConfirmed = true end)
         end
     end
 
@@ -402,6 +457,10 @@ HookStealConfirmationEvents()
 -- =============================================================
 -- [ WARP DETECTOR ]
 -- =============================================================
+local warpDetectorConn = nil
+local lastKnownPos     = nil
+local warpAttachedChar = nil
+
 local function StartWarpDetector()
     if warpDetectorConn then pcall(function() warpDetectorConn:Disconnect() end); warpDetectorConn = nil end
     local character = LocalPlayer.Character
@@ -411,7 +470,7 @@ local function StartWarpDetector()
 
     warpAttachedChar = character
     lastKnownPos     = hrp.Position
-    warpedFlag       = false
+    SystemState.Warped = false
 
     warpDetectorConn = RunService.Heartbeat:Connect(function()
         if warpAttachedChar ~= LocalPlayer.Character then return end
@@ -420,7 +479,7 @@ local function StartWarpDetector()
         local currentPos = root.Position
         if lastKnownPos then
             if (currentPos - lastKnownPos).Magnitude > CONFIG.WARP_DETECT_THRESHOLD then
-                warpedFlag = true
+                SystemState.Warped = true
             end
         end
         lastKnownPos = currentPos
@@ -431,7 +490,7 @@ ResetWarpBaseline = function()
     local character = LocalPlayer.Character
     local hrp = character and character:FindFirstChild("HumanoidRootPart")
     if hrp then lastKnownPos = hrp.Position end
-    warpedFlag = false
+    SystemState.Warped = false
 end
 
 LocalPlayer.CharacterAdded:Connect(function()
@@ -562,7 +621,6 @@ UpdateAutoScaler()
 UIScaleComp.Scale = 0
 TweenService:Create(UIScaleComp, TWEEN_SPRING, { Scale = targetScale }):Play()
 
--- Notification System
 local NotifFrame = Instance.new("Frame")
 NotifFrame.Name = "NotifFrame"
 NotifFrame.Parent = MainFrame
@@ -612,7 +670,7 @@ local function ShowNotification(message)
     if isNotifShowing then return end
     isNotifShowing = true
 
-    NotifText.Text = message or "Discord Link Copied to Clipboard!"
+    NotifText.Text = message or "Notification"
     NotifFrame.Position = UDim2.new(0, 12, 0, 10)
     NotifFrame.BackgroundTransparency = 1
     NotifStroke.Transparency = 1
@@ -639,7 +697,6 @@ local function ShowNotification(message)
     end)
 end
 
--- Top Toggle Floating Button
 local TopToggleButton = Instance.new("ImageButton")
 TopToggleButton.Name = "TopToggleButton"
 TopToggleButton.Parent = YanzHubUI
@@ -669,6 +726,7 @@ TopGlow.BackgroundTransparency = 0.85
 TopGlow.ZIndex = 99
 Instance.new("UICorner", TopGlow).CornerRadius = UDim.new(1, 0)
 
+local uiVisible = true
 local function ToggleUI()
     uiVisible = not uiVisible
     if uiVisible then
@@ -697,7 +755,6 @@ TopToggleButton.MouseLeave:Connect(function()
     TweenService:Create(TopGlow, TWEEN_FAST, { BackgroundTransparency = 0.85 }):Play()
 end)
 
--- Header Frame
 local Header = Instance.new("Frame")
 Header.Name = "Header"
 Header.Parent = MainFrame
@@ -753,7 +810,6 @@ AuraGrad.Transparency = NumberSequence.new({
     NumberSequenceKeypoint.new(1, 1),
 })
 
--- Particle Flame Tendrils & Sparks Data
 local FlameTendrils = {}
 for i = 1, 16 do
     local f = Instance.new("Frame")
@@ -852,7 +908,6 @@ SubtitleLabel.TextSize = 9
 SubtitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 SubtitleLabel.ZIndex = 5
 
--- Header Buttons
 local DiscordButton = Instance.new("ImageButton")
 DiscordButton.Name = "DiscordButton"
 DiscordButton.Parent = Header
@@ -925,7 +980,6 @@ end)
 
 CloseButton.MouseButton1Click:Connect(ToggleUI)
 
--- Egg / Fish Card Container
 local EggCard = Instance.new("Frame")
 EggCard.Name = "EggCard"
 EggCard.Parent = MainFrame
@@ -1037,7 +1091,6 @@ DropdownLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function(
     EggDropdownFrame.CanvasSize = UDim2.new(0, 0, 0, DropdownLayout.AbsoluteContentSize.Y + 8)
 end)
 
--- Control Panel Container
 local ControlPanel = Instance.new("Frame")
 ControlPanel.Name = "ControlPanel"
 ControlPanel.Parent = MainFrame
@@ -1054,6 +1107,8 @@ ControlStroke.Transparency = 0.88
 -- =============================================================
 -- [ VIEWPORT & MODEL CLEANING HELPERS ]
 -- =============================================================
+local currentViewportItem = nil
+
 local function CloneModelForViewport(model)
     local ok, cloned = pcall(function() return model:Clone() end)
     if not ok or not cloned then return nil end
@@ -1160,10 +1215,10 @@ local function UpdateViewportDisplay(model)
 end
 
 -- =============================================================
--- [ RARITY ANALYSIS ENGINE ]
+-- [ RARITY ANALYSIS ENGINE - FIXED ]
 -- =============================================================
 local function GetRarityFromColor(color)
-    if not color then return nil, nil end
+    if not color or typeof(color) ~= "Color3" then return nil, nil end
     local minDiff = math.huge
     local bestMatch = nil
 
@@ -1186,9 +1241,15 @@ end
 
 local function GetRarityFromLightOrParticles(model)
     for _, descendant in ipairs(model:GetDescendants()) do
-        if descendant:IsA("PointLight") or descendant:IsA("ParticleEmitter") then
+        if descendant:IsA("PointLight") then
             local name, glow = GetRarityFromColor(descendant.Color)
             if name then return name, glow end
+        elseif descendant:IsA("ParticleEmitter") then
+            local colorSeq = descendant.Color
+            if colorSeq and typeof(colorSeq) == "ColorSequence" and #colorSeq.Keypoints > 0 then
+                local name, glow = GetRarityFromColor(colorSeq.Keypoints[1].Value)
+                if name then return name, glow end
+            end
         end
     end
     return nil, nil
@@ -1207,10 +1268,12 @@ local function GetRarityFromBillboard(model)
         local maxRange = 0
         for _, kp in ipairs(grad.Color.Keypoints) do
             local val = kp.Value
-            local range = math.max(val.R, val.G, val.B) - math.min(val.R, val.G, val.B)
-            if range > maxRange then
-                bestVal = val
-                maxRange = range
+            if typeof(val) == "Color3" then
+                local range = math.max(val.R, val.G, val.B) - math.min(val.R, val.G, val.B)
+                if range > maxRange then
+                    bestVal = val
+                    maxRange = range
+                end
             end
         end
         local name, glow = GetRarityFromColor(bestVal)
@@ -1326,7 +1389,6 @@ IsPlayerHoldingFishOrEgg = function()
     local character = LocalPlayer.Character
     if not character then return false end
 
-    -- Check equipped tools
     for _, child in ipairs(character:GetChildren()) do
         if child:IsA("Tool") then
             local lowerName = string.lower(child.Name)
@@ -1345,7 +1407,6 @@ IsPlayerHoldingFishOrEgg = function()
         end
     end
 
-    -- Check character models
     for _, child in ipairs(character:GetChildren()) do
         if child:IsA("Model") or child:IsA("BasePart") then
             for _, name in ipairs(MODEL_LIST) do
@@ -1358,7 +1419,6 @@ IsPlayerHoldingFishOrEgg = function()
         end
     end
 
-    -- Check welded body parts
     local bodyParts = {
         character:FindFirstChild("RightHand"), character:FindFirstChild("LeftHand"),
         character:FindFirstChild("Right Arm"),  character:FindFirstChild("Left Arm"),
@@ -1387,7 +1447,6 @@ IsPlayerHoldingFishOrEgg = function()
         end
     end
 
-    -- Check Character/Player Attributes
     if character:GetAttribute("HasEgg") or character:GetAttribute("CarryingEgg") or character:GetAttribute("HasFish") or character:GetAttribute("CarryingFish") then
         return true
     end
@@ -1476,7 +1535,7 @@ end
 local function IsMagicFishReady(maxWait)
     maxWait = maxWait or 0.5
     local startTime = os.clock()
-    while isAutoStealEnabled and (os.clock() - startTime) < maxWait do
+    while SystemState.AutoStealEnabled and (os.clock() - startTime) < maxWait do
         if IsMagicToolWithFish() or IsPlayerHoldingFishOrEgg() then
             return true
         end
@@ -1488,6 +1547,10 @@ end
 -- =============================================================
 -- [ TARGET SCANNING & UI CONTROLLER ]
 -- =============================================================
+local isDropdownOpen     = false
+local dropdownBuildCount = 0
+local lastScannedItem    = nil
+
 ToggleDropdown = function(state)
     if state ~= nil then
         isDropdownOpen = state
@@ -1513,25 +1576,20 @@ FindBestSpawnedItem = function()
     local maxWeight = -1
     local bestModel = nil
 
+    local function CheckItem(item)
+        if not item or not item.Parent then return end
+        local weight = GetWeightFromModel(item)
+        if weight > maxWeight then
+            maxWeight = weight
+            bestModel = item
+        end
+    end
+
     for _, folderName in ipairs(CONFIG.SPAWN_FOLDER_NAMES) do
         local folder = Workspace:FindFirstChild(folderName)
         if folder then
             for _, item in ipairs(folder:GetChildren()) do
-                local weight = GetWeightFromModel(item)
-                local matchTarget = false
-                for _, target in ipairs(CONFIG.TARGET_NAMES) do
-                    if string.find(string.lower(item.Name), string.lower(target)) then
-                        matchTarget = true
-                        break
-                    end
-                end
-                if matchTarget and weight > maxWeight then
-                    maxWeight = weight
-                    bestModel = item
-                elseif weight > maxWeight and maxWeight == -1 then
-                    maxWeight = weight
-                    bestModel = item
-                end
+                CheckItem(item)
             end
         end
     end
@@ -1539,18 +1597,11 @@ FindBestSpawnedItem = function()
     if not bestModel then
         for _, child in ipairs(Workspace:GetChildren()) do
             if child:IsA("Model") or child:IsA("Tool") then
-                local matchTarget = false
+                local lowerName = string.lower(child.Name)
                 for _, target in ipairs(CONFIG.TARGET_NAMES) do
-                    if string.find(string.lower(child.Name), string.lower(target)) then
-                        matchTarget = true
+                    if string.find(lowerName, string.lower(target)) then
+                        CheckItem(child)
                         break
-                    end
-                end
-                if matchTarget then
-                    local weight = GetWeightFromModel(child)
-                    if weight > maxWeight then
-                        bestModel = child
-                        maxWeight = weight
                     end
                 end
             end
@@ -1560,56 +1611,45 @@ FindBestSpawnedItem = function()
     return bestModel, maxWeight
 end
 
-SelectTargetItem = function(targetModel)
-    if not targetModel or not (targetModel:IsA("Model") or targetModel:IsA("BasePart")) then
-        ItemNameLabel.Text = "No Fish Found"
-        RarityLabel.Text = "---"
-        RarityLabel.TextColor3 = Color3.fromRGB(150, 155, 165)
-        ValueLabel.Text = "0 kg"
-        selectedTargetItem = nil
-        UpdateViewportDisplay(nil)
-        lastScannedItem = nil
-        cachedWeight = -1
-        return
-    end
-
-    selectedTargetItem = targetModel
-    ItemNameLabel.Text = GetDisplayName(targetModel)
-
-    local weight = GetWeightFromModel(targetModel)
-    ValueLabel.Text = FormatNumberWithCommas(weight) .. " kg"
-
-    local rarityName, rarityColor = GetItemRarity(targetModel)
-    RarityLabel.Text = rarityName
-    RarityLabel.TextColor3 = rarityColor
-
-    if rarityColor then
-        TweenService:Create(EggCardStroke, TWEEN_FAST, { Color = rarityColor, Transparency = 0.3 }):Play()
-    end
-
-    UpdateViewportDisplay(targetModel)
-    lastScannedItem = targetModel
-    cachedWeight = weight
-end
-
-ArrowBtn.MouseButton1Click:Connect(function()
-    ToggleDropdown()
-end)
-
-local function PopulateDropdownList()
+PopulateDropdownList = function()
     dropdownBuildCount = dropdownBuildCount + 1
     local currentBuildId = dropdownBuildCount
 
     for _, child in ipairs(EggDropdownFrame:GetChildren()) do
-        if child:IsA("TextButton") or child:IsA("Frame") then child:Destroy() end
+        if child:IsA("TextButton") or child:IsA("Frame") then
+            pcall(function() child:Destroy() end)
+        end
     end
 
     local itemsList = {}
+    local addedMap = {}
+
+    local function TryAddItem(item)
+        if not item or not item.Parent or addedMap[item] then return end
+        if item == SystemState.TargetItem then return end
+
+        local weight = GetWeightFromModel(item)
+        addedMap[item] = true
+        table.insert(itemsList, { Model = item, Weight = weight })
+    end
+
     for _, folderName in ipairs(CONFIG.SPAWN_FOLDER_NAMES) do
         local folder = Workspace:FindFirstChild(folderName)
         if folder then
             for _, item in ipairs(folder:GetChildren()) do
-                table.insert(itemsList, { Model = item, Weight = GetWeightFromModel(item) })
+                TryAddItem(item)
+            end
+        end
+    end
+
+    for _, child in ipairs(Workspace:GetChildren()) do
+        if child:IsA("Model") or child:IsA("Tool") then
+            local lowerName = string.lower(child.Name)
+            for _, target in ipairs(CONFIG.TARGET_NAMES) do
+                if string.find(lowerName, string.lower(target)) then
+                    TryAddItem(child)
+                    break
+                end
             end
         end
     end
@@ -1620,7 +1660,7 @@ local function PopulateDropdownList()
         for _, entry in ipairs(itemsList) do
             if dropdownBuildCount ~= currentBuildId then break end
             local itemModel = entry.Model
-            if itemModel and itemModel.Parent then
+            if itemModel and itemModel.Parent and itemModel ~= SystemState.TargetItem then
                 local btn = Instance.new("TextButton")
                 btn.Name = itemModel.Name
                 btn.Parent = EggDropdownFrame
@@ -1696,18 +1736,61 @@ local function PopulateDropdownList()
                     ToggleDropdown(false)
                 end)
 
-                task.wait(0.03)
+                task.wait(0.01)
             end
         end
     end)
 end
 
-local function RefreshTargetAndList()
-    if not selectedTargetItem then
-        local bestItem = FindBestSpawnedItem()
-        if bestItem then SelectTargetItem(bestItem) else SelectTargetItem(nil) end
+SelectTargetItem = function(targetModel)
+    if not targetModel or not (targetModel:IsA("Model") or targetModel:IsA("BasePart")) or not targetModel.Parent then
+        ItemNameLabel.Text = "No Fish Found"
+        RarityLabel.Text = "---"
+        RarityLabel.TextColor3 = Color3.fromRGB(150, 155, 165)
+        ValueLabel.Text = "0 kg"
+        SystemState.TargetItem = nil
+        UpdateViewportDisplay(nil)
+        lastScannedItem = nil
+        SystemState.CachedWeight = -1
+        if PopulateDropdownList then PopulateDropdownList() end
+        return
     end
-    PopulateDropdownList()
+
+    local isNewTarget = (SystemState.TargetItem ~= targetModel)
+    SystemState.TargetItem = targetModel
+    ItemNameLabel.Text = GetDisplayName(targetModel)
+
+    local weight = GetWeightFromModel(targetModel)
+    ValueLabel.Text = FormatNumberWithCommas(weight) .. " kg"
+
+    local rarityName, rarityColor = GetItemRarity(targetModel)
+    RarityLabel.Text = rarityName
+    RarityLabel.TextColor3 = rarityColor
+
+    if rarityColor then
+        TweenService:Create(EggCardStroke, TWEEN_FAST, { Color = rarityColor, Transparency = 0.3 }):Play()
+    end
+
+    UpdateViewportDisplay(targetModel)
+    lastScannedItem = targetModel
+    SystemState.CachedWeight = weight
+
+    if isNewTarget and PopulateDropdownList then
+        PopulateDropdownList()
+    end
+end
+
+ArrowBtn.MouseButton1Click:Connect(function()
+    ToggleDropdown()
+end)
+
+local function RefreshTargetAndList()
+    if not SystemState.TargetItem or not SystemState.TargetItem.Parent then
+        local bestItem = FindBestSpawnedItem()
+        SelectTargetItem(bestItem)
+    else
+        PopulateDropdownList()
+    end
 end
 
 local function AttachFolderListeners(folder)
@@ -1732,25 +1815,26 @@ for _, folderName in ipairs(CONFIG.SPAWN_FOLDER_NAMES) do
 end
 RefreshTargetAndList()
 
--- Target Scanning Loop
 task.spawn(function()
     while true do
         if YanzHubUI and YanzHubUI.Parent then
             task.wait(0.5)
-            if selectedTargetItem then
-                if not selectedTargetItem.Parent then
-                    selectedTargetItem = nil
+            if SystemState.TargetItem then
+                if not SystemState.TargetItem.Parent then
+                    SystemState.TargetItem = nil
+                    local bestItem = FindBestSpawnedItem()
+                    SelectTargetItem(bestItem)
                 else
-                    local w = GetWeightFromModel(selectedTargetItem)
-                    if math.abs(w - cachedWeight) > 0.1 then
-                        SelectTargetItem(selectedTargetItem)
+                    local w = GetWeightFromModel(SystemState.TargetItem)
+                    if math.abs(w - SystemState.CachedWeight) > 0.1 then
+                        SelectTargetItem(SystemState.TargetItem)
                     end
                 end
             else
                 local bestItem, bestWeight = FindBestSpawnedItem()
                 if bestItem then
                     local needUpdate = false
-                    if bestItem ~= lastScannedItem or math.abs(bestWeight - cachedWeight) > 0.1 then
+                    if bestItem ~= lastScannedItem or math.abs(bestWeight - SystemState.CachedWeight) > 0.1 then
                         needUpdate = true
                     end
                     if needUpdate then SelectTargetItem(bestItem) end
@@ -1764,7 +1848,6 @@ task.spawn(function()
     end
 end)
 
--- Control Panel UI Controls
 local AutoStealLabel = Instance.new("TextLabel")
 AutoStealLabel.Parent = ControlPanel
 AutoStealLabel.BackgroundTransparency = 1
@@ -1777,17 +1860,19 @@ AutoStealLabel.TextSize = 11
 AutoStealLabel.TextXAlignment = Enum.TextXAlignment.Left
 
 local HoldLabel = Instance.new("TextLabel")
+HoldLabel.Name = "HoldLabel"
 HoldLabel.Parent = ControlPanel
 HoldLabel.BackgroundTransparency = 1
 HoldLabel.Position = UDim2.new(0, 12, 0, 48)
 HoldLabel.Size = UDim2.new(0, 80, 0, 12)
 HoldLabel.Font = Enum.Font.GothamMedium
-HoldLabel.Text = "HOLD-E 2.0s"
-HoldLabel.TextColor3 = Color3.fromRGB(110, 115, 125)
+HoldLabel.Text = "TP MODE"
+HoldLabel.TextColor3 = Color3.fromRGB(0, 255, 150)
 HoldLabel.TextSize = 9
 HoldLabel.TextXAlignment = Enum.TextXAlignment.Left
 
 local CycleBtn = Instance.new("TextButton")
+CycleBtn.Name = "SwapButton"
 CycleBtn.Parent = ControlPanel
 CycleBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 CycleBtn.Position = UDim2.new(0, 116, 0, 22)
@@ -1818,24 +1903,18 @@ CycleBtn.MouseButton1Click:Connect(function()
     totalCycleRot = totalCycleRot + 180
     TweenService:Create(CycleBtn, TWEEN_ELASTIC, { Rotation = totalCycleRot }):Play()
 
-    local allItems = {}
-    for _, folderName in ipairs(CONFIG.SPAWN_FOLDER_NAMES) do
-        local folder = Workspace:FindFirstChild(folderName)
-        if folder then
-            for _, item in ipairs(folder:GetChildren()) do table.insert(allItems, item) end
-        end
-    end
-
-    if #allItems > 0 then
-        local idx = 1
-        for i, item in ipairs(allItems) do
-            if item == selectedTargetItem then idx = i; break end
-        end
-        SelectTargetItem(allItems[idx % #allItems + 1])
+    SystemState.TeleportMode = not SystemState.TeleportMode
+    if SystemState.TeleportMode then
+        HoldLabel.Text = "TP MODE"
+        HoldLabel.TextColor3 = Color3.fromRGB(0, 255, 150)
+        ShowNotification("Switched to Safe TP Mode")
+    else
+        HoldLabel.Text = "FLY MODE"
+        HoldLabel.TextColor3 = Color3.fromRGB(110, 115, 125)
+        ShowNotification("Switched to FLY Mode")
     end
 end)
 
--- Loop Mode Checkbox
 local LoopCheckboxBtn = Instance.new("TextButton")
 LoopCheckboxBtn.Parent = ControlPanel
 LoopCheckboxBtn.BackgroundColor3 = Color3.fromRGB(22, 25, 32)
@@ -1854,8 +1933,8 @@ LoopStroke.Thickness = 1.2
 LoopStroke.Transparency = 0.3
 
 local function ToggleLoopMode()
-    isLoopEnabled = not isLoopEnabled
-    if isLoopEnabled then
+    SystemState.LoopModeEnabled = not SystemState.LoopModeEnabled
+    if SystemState.LoopModeEnabled then
         LoopCheckboxBtn.Text = "✓"
         TweenService:Create(LoopCheckboxBtn, TWEEN_SPRING, { Size = UDim2.new(0, 27, 0, 27), Position = UDim2.new(0, 170.5, 0, 28.5) }):Play()
         TweenService:Create(LoopStroke, TWEEN_FAST, { Color = Color3.fromRGB(255, 255, 255), Transparency = 0 }):Play()
@@ -1882,7 +1961,6 @@ LoopTextBtn.TextSize = 11
 LoopTextBtn.TextXAlignment = Enum.TextXAlignment.Left
 LoopTextBtn.MouseButton1Click:Connect(ToggleLoopMode)
 
--- Auto Steal Master Switch UI
 local AutoStealToggleBtn = Instance.new("TextButton")
 AutoStealToggleBtn.Parent = ControlPanel
 AutoStealToggleBtn.BackgroundColor3 = Color3.fromRGB(32, 35, 44)
@@ -1908,7 +1986,7 @@ local function GetRootPart()
 end
 
 DisableAutoSteal = function()
-    isAutoStealEnabled = false
+    SystemState.AutoStealEnabled = false
     DisableNoclip()
     TweenService:Create(AutoStealToggleBtn, TWEEN_FAST, { BackgroundColor3 = Color3.fromRGB(32, 35, 44) }):Play()
     ToggleKnob.Position = UDim2.new(0, 3, 0.5, 0)
@@ -1916,10 +1994,57 @@ DisableAutoSteal = function()
     ToggleKnob.BackgroundColor3 = Color3.fromRGB(150, 155, 165)
 end
 
+local ragdollAttrConn   = nil
+local stateChangeConn   = nil
+local snapbackCheckConn = nil
+
 DisconnectRagdollEvents = function()
     if ragdollAttrConn then ragdollAttrConn:Disconnect(); ragdollAttrConn = nil end
     if stateChangeConn then stateChangeConn:Disconnect(); stateChangeConn = nil end
     if snapbackCheckConn then snapbackCheckConn:Disconnect(); snapbackCheckConn = nil end
+end
+
+SafeBypassTeleport = function(targetCFrame)
+    local char = LocalPlayer.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    EnableNoclip()
+    pcall(function()
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
+    end)
+
+    local currentPos = hrp.Position
+    local targetPos = targetCFrame.Position
+    local dist = (targetPos - currentPos).Magnitude
+
+    if dist < 40 then
+        hrp.CFrame = targetCFrame
+        pcall(function() hrp.AssemblyLinearVelocity = Vector3.zero end)
+        DisableNoclip()
+        return
+    end
+
+    local duration = math.clamp(dist / CONFIG.BYPASS_TP_SPEED, 0.05, 0.25)
+    local twInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear)
+    local tween = TweenService:Create(hrp, twInfo, { CFrame = targetCFrame })
+
+    local conn
+    conn = RunService.Heartbeat:Connect(function()
+        pcall(function() hrp.AssemblyLinearVelocity = Vector3.zero end)
+    end)
+
+    tween:Play()
+    tween.Completed:Wait()
+    if conn then conn:Disconnect() end
+
+    pcall(function()
+        hrp.CFrame = targetCFrame
+        hrp.AssemblyLinearVelocity = Vector3.zero
+    end)
+    DisableNoclip()
 end
 
 SmoothFlyTo = function(targetCFrame, speed)
@@ -1928,7 +2053,7 @@ SmoothFlyTo = function(targetCFrame, speed)
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
 
-    speed = speed or 225
+    speed = speed or CONFIG.FLY_SPEED
     local duration = math.max((hrp.Position - targetCFrame.Position).Magnitude / speed, 0.12)
 
     EnableNoclip()
@@ -1938,7 +2063,7 @@ SmoothFlyTo = function(targetCFrame, speed)
 
     local conn
     conn = RunService.Heartbeat:Connect(function()
-        if not isAutoStealEnabled or not hrp or not hrp.Parent then
+        if not SystemState.AutoStealEnabled or not hrp or not hrp.Parent then
             if activeMoveTween then activeMoveTween:Cancel() end
             if conn then conn:Disconnect() end
             DisableNoclip()
@@ -1958,14 +2083,14 @@ SmoothFlyToWithLanding = function(targetCFrame, speed)
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
 
-    speed = speed or 225
+    speed = speed or CONFIG.FLY_SPEED
     EnableNoclip()
 
     local dist = (hrp.Position - targetCFrame.Position).Magnitude
-    if dist > 100 then
+    if dist > CONFIG.LANDING_DISTANCE then
         local dir = (targetCFrame.Position - hrp.Position)
         local unit = dir.Magnitude > 0.01 and dir.Unit or Vector3.zero
-        local midPos = targetCFrame.Position - unit * 100
+        local midPos = targetCFrame.Position - unit * CONFIG.LANDING_DISTANCE
         local midCF = CFrame.lookAt(midPos, targetCFrame.Position)
         local dur1 = math.max((hrp.Position - midPos).Magnitude / speed, 0.2)
 
@@ -1973,7 +2098,7 @@ SmoothFlyToWithLanding = function(targetCFrame, speed)
 
         local conn1
         conn1 = RunService.Heartbeat:Connect(function()
-            if not isAutoStealEnabled or not hrp or not hrp.Parent then
+            if not SystemState.AutoStealEnabled or not hrp or not hrp.Parent then
                 if activeMoveTween then activeMoveTween:Cancel() end
                 if conn1 then conn1:Disconnect() end
                 DisableNoclip()
@@ -1986,7 +2111,7 @@ SmoothFlyToWithLanding = function(targetCFrame, speed)
         activeMoveTween.Completed:Wait()
         if conn1 then conn1:Disconnect() end
 
-        if not isAutoStealEnabled or not hrp or not hrp.Parent then
+        if not SystemState.AutoStealEnabled or not hrp or not hrp.Parent then
             DisableNoclip()
             return
         end
@@ -1998,7 +2123,7 @@ SmoothFlyToWithLanding = function(targetCFrame, speed)
 
     local conn2
     conn2 = RunService.Heartbeat:Connect(function()
-        if not isAutoStealEnabled or not hrp or not hrp.Parent then
+        if not SystemState.AutoStealEnabled or not hrp or not hrp.Parent then
             if activeMoveTween then activeMoveTween:Cancel() end
             if conn2 then conn2:Disconnect() end
             DisableNoclip()
@@ -2024,38 +2149,34 @@ IsRagdolled = function()
         or char:GetAttribute("BeingChased") == true
 end
 
-HookRagdollDetector = function()
+local function HookRagdollDetector()
     if ragdollAttrConn then ragdollAttrConn:Disconnect(); ragdollAttrConn = nil end
     local char = LocalPlayer.Character
     if not char then return end
 
-    if IsRagdolled() then
-        isRagdolledAttr = true
-        isPhysicsRagdolled = true
-    end
+    if IsRagdolled() then SystemState.Ragdolled = true end
 
     local ragdollAttributes = { "Ragdolled", "ChaserFishRagdoll", "IsRagdolled", "BeingChased" }
     ragdollAttrConn = char.AttributeChanged:Connect(function(attr)
-        if not isAutoStealEnabled then return end
+        if not SystemState.AutoStealEnabled then return end
         for _, name in ipairs(ragdollAttributes) do
             if attr == name and char:GetAttribute(name) == true then
-                isRagdolledAttr = true
-                isPhysicsRagdolled = true
+                SystemState.Ragdolled = true
             end
         end
     end)
 end
 
-HookSnapbackDetector = function()
+local function HookSnapbackDetector()
     if snapbackCheckConn then snapbackCheckConn:Disconnect(); snapbackCheckConn = nil end
     local root = GetRootPart()
     if not root then return end
 
     local lastPos = root.Position
-    snapbackFrameCount = 0
+    local snapbackFrameCount = 0
 
     snapbackCheckConn = RunService.Heartbeat:Connect(function()
-        if not isAutoStealEnabled then return end
+        if not SystemState.AutoStealEnabled then return end
         local hrp = GetRootPart()
         if not hrp then return end
 
@@ -2064,7 +2185,7 @@ HookSnapbackDetector = function()
             if (curPos - lastPos).Magnitude > CONFIG.SNAPBACK_DIST then
                 snapbackFrameCount = snapbackFrameCount + 1
                 if snapbackFrameCount >= CONFIG.SNAPBACK_FRAMES then
-                    isSnapbackFlagged = true
+                    SystemState.SnapbackFlagged = true
                     snapbackFrameCount = 0
                 end
             else
@@ -2107,13 +2228,11 @@ RecoverFromRagdoll = function()
     end
 
     ResetWarpBaseline()
-    isRagdolledAttr = false
-    isPhysicsRagdolled = false
-    isSnapbackFlagged = false
-    snapbackFrameCount = 0
+    SystemState.Ragdolled = false
+    SystemState.SnapbackFlagged = false
 end
 
-HookStateDetector = function()
+local function HookStateDetector()
     if stateChangeConn then stateChangeConn:Disconnect(); stateChangeConn = nil end
     local char = LocalPlayer.Character
     if not char then return end
@@ -2123,11 +2242,10 @@ HookStateDetector = function()
 
     local lastState = humanoid:GetState()
     stateChangeConn = humanoid.StateChanged:Connect(function(_, newState)
-        if not isAutoStealEnabled then return end
+        if not SystemState.AutoStealEnabled then return end
         if lastState == Enum.HumanoidStateType.Swimming then
             if newState == Enum.HumanoidStateType.PlatformStanding or newState == Enum.HumanoidStateType.Physics or newState == Enum.HumanoidStateType.FallingDown or newState == Enum.HumanoidStateType.Ragdoll then
-                isRagdolledAttr = true
-                isPhysicsRagdolled = true
+                SystemState.Ragdolled = true
             end
         end
         lastState = newState
@@ -2138,15 +2256,13 @@ InitCharacterDetectors = function()
     HookRagdollDetector()
     HookStateDetector()
     HookSnapbackDetector()
-    isRagdolledAttr = false
-    isPhysicsRagdolled = false
-    isSnapbackFlagged = false
-    snapbackFrameCount = 0
+    SystemState.Ragdolled = false
+    SystemState.SnapbackFlagged = false
 end
 
 LocalPlayer.CharacterAdded:Connect(function()
     task.wait(0.7)
-    if isAutoStealEnabled then InitCharacterDetectors() end
+    if SystemState.AutoStealEnabled then InitCharacterDetectors() end
 end)
 
 -- =============================================================
@@ -2156,7 +2272,7 @@ local function TryDepositEgg()
     local bpCF = GetBaseplateCFrame()
     if not bpCF then return false end
 
-    SmoothFlyToWithLanding(bpCF, 225)
+    SmoothFlyToWithLanding(bpCF, CONFIG.FLY_SPEED)
     local root = GetRootPart()
     if root then pcall(function() root.AssemblyLinearVelocity = Vector3.zero end) end
 
@@ -2208,21 +2324,21 @@ end
 
 local function ReturnAndDepositCycle()
     local reefCF = GetCoralReefCFrame()
-    if reefCF and isAutoStealEnabled then
-        SmoothFlyToWithLanding(reefCF, 225)
+    if reefCF and SystemState.AutoStealEnabled then
+        SmoothFlyToWithLanding(reefCF, CONFIG.FLY_SPEED)
         task.wait(0.35)
     end
 
-    if isAutoStealEnabled then
+    if SystemState.AutoStealEnabled then
         if GetBaseplateCFrame() then
             TryDepositEgg()
             task.wait(0.3)
         end
     end
 
-    if isAutoStealEnabled and not IsPlayerInSafeZone() then
+    if SystemState.AutoStealEnabled and not IsPlayerInSafeZone() then
         local safeCF = GetSafeZoneCFrame()
-        if safeCF then SmoothFlyToWithLanding(safeCF, 225) end
+        if safeCF then SmoothFlyToWithLanding(safeCF, CONFIG.FLY_SPEED) end
     end
 end
 
@@ -2233,7 +2349,7 @@ TrySellItem = function()
             return true
         else
             local startTime = os.clock()
-            while isAutoStealEnabled and IsPlayerHoldingFishOrEgg() and (os.clock() - startTime) < 8 do
+            while SystemState.AutoStealEnabled and IsPlayerHoldingFishOrEgg() and (os.clock() - startTime) < 8 do
                 DropItem()
                 task.wait(0.4)
             end
@@ -2241,7 +2357,7 @@ TrySellItem = function()
         end
     else
         local startTime = os.clock()
-        while isAutoStealEnabled and IsPlayerHoldingFishOrEgg() and (os.clock() - startTime) < 8 do
+        while SystemState.AutoStealEnabled and IsPlayerHoldingFishOrEgg() and (os.clock() - startTime) < 8 do
             DropItem()
             task.wait(0.4)
         end
@@ -2278,9 +2394,16 @@ AdvancedHoldE = function(targetEgg)
 
     if IsPlayerHoldingFishOrEgg() then return false end
 
-    if isAutoStealEnabled then SmoothFlyTo(eggCF, 225) end
+    if SystemState.AutoStealEnabled then
+        if SystemState.TeleportMode then
+            SafeBypassTeleport(eggCF)
+            task.wait(3)
+        else
+            SmoothFlyTo(eggCF, CONFIG.FLY_SPEED)
+        end
+    end
 
-    if not isAutoStealEnabled or not targetEgg:IsDescendantOf(Workspace) then return false end
+    if not SystemState.AutoStealEnabled or not targetEgg:IsDescendantOf(Workspace) then return false end
 
     if warpAttachedChar ~= LocalPlayer.Character then StartWarpDetector() end
 
@@ -2298,23 +2421,22 @@ AdvancedHoldE = function(targetEgg)
     RunService.Heartbeat:Wait()
     ResetWarpBaseline()
 
-    -- Direct fire via Executor function (Mode 1)
     if type(firePrompt) == "function" then
         pcall(function()
             firePrompt(prompt)
             pcall(function() firePrompt(prompt, 0) end)
+            pcall(function() firePrompt(prompt, 1, true) end)
         end)
         task.wait(0.08)
-        if stealConfirmed or IsPlayerHoldingFishOrEgg() then return true end
+        if SystemState.StealConfirmed or IsPlayerHoldingFishOrEgg() then return true end
     end
 
-    -- Manual Hold Simulation & Input Hold (Mode 2)
-    warpedFlag = false
+    SystemState.Warped = false
     local isHolding = true
 
     local freezeConn
     freezeConn = RunService.Heartbeat:Connect(function()
-        if not isHolding or warpedFlag then return end
+        if not isHolding or SystemState.Warped then return end
         if hrp and hrp.Parent then
             pcall(function()
                 hrp.AssemblyLinearVelocity = Vector3.zero
@@ -2323,7 +2445,6 @@ AdvancedHoldE = function(targetEgg)
         end
     end)
 
-    -- Trigger Proximity Prompt Hold Begin
     pcall(function() prompt:InputHoldBegin() end)
     pcall(function() VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game) end)
     pcall(function() if keypress then keypress(69) end end)
@@ -2331,12 +2452,11 @@ AdvancedHoldE = function(targetEgg)
     local targetHoldTime = (prompt.HoldDuration and prompt.HoldDuration > 0) and prompt.HoldDuration or CONFIG.HOLD_DURATION
     local startTime = os.clock()
 
-    while isAutoStealEnabled and (os.clock() - startTime) < (targetHoldTime + 0.1) do
-        if stealConfirmed or IsPlayerHoldingFishOrEgg() or warpedFlag then break end
+    while SystemState.AutoStealEnabled and (os.clock() - startTime) < (targetHoldTime + 0.1) do
+        if SystemState.StealConfirmed or IsPlayerHoldingFishOrEgg() or SystemState.Warped then break end
         task.wait(0.02)
     end
 
-    -- Trigger Proximity Prompt Hold End
     pcall(function() prompt:InputHoldEnd() end)
     pcall(function() VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game) end)
     pcall(function() if keyrelease then keyrelease(69) end end)
@@ -2344,15 +2464,15 @@ AdvancedHoldE = function(targetEgg)
     isHolding = false
     if freezeConn then freezeConn:Disconnect() end
 
-    if stealConfirmed or IsPlayerHoldingFishOrEgg() then return true end
+    if SystemState.StealConfirmed or IsPlayerHoldingFishOrEgg() then return true end
 
     local settleDeadline = os.clock() + 0.2
-    while isAutoStealEnabled and os.clock() < settleDeadline do
-        if stealConfirmed or IsPlayerHoldingFishOrEgg() or warpedFlag then break end
+    while SystemState.AutoStealEnabled and os.clock() < settleDeadline do
+        if SystemState.StealConfirmed or IsPlayerHoldingFishOrEgg() or SystemState.Warped then break end
         task.wait(0.02)
     end
 
-    return stealConfirmed or IsPlayerHoldingFishOrEgg() or warpedFlag
+    return SystemState.StealConfirmed or IsPlayerHoldingFishOrEgg() or SystemState.Warped
 end
 
 TryStealTarget = function(targetEgg)
@@ -2362,14 +2482,14 @@ TryStealTarget = function(targetEgg)
         if AdvancedHoldE(targetEgg) then
             return true
         else
-            if not isAutoStealEnabled or not targetEgg or not targetEgg.Parent then return false end
-            warpedFlag = false
-            stealConfirmed = false
+            if not SystemState.AutoStealEnabled or not targetEgg or not targetEgg.Parent then return false end
+            SystemState.Warped = false
+            SystemState.StealConfirmed = false
             ResetWarpBaseline()
 
             if attempt < 2 then
                 task.wait(0.1)
-                if not isAutoStealEnabled or not targetEgg or not targetEgg.Parent then return false end
+                if not SystemState.AutoStealEnabled or not targetEgg or not targetEgg.Parent then return false end
             end
         end
     end
@@ -2388,14 +2508,14 @@ StartAutoStealLoop = function()
     initialStealDone = false
 
     task.spawn(function()
-        while isAutoStealEnabled do
+        while SystemState.AutoStealEnabled do
             if IsNightTime() then
                 WaitForDaytime()
-                if not isAutoStealEnabled then break end
+                if not SystemState.AutoStealEnabled then break end
                 task.wait(0.5)
             else
-                if selectedTargetItem and not selectedTargetItem.Parent then
-                    selectedTargetItem = nil
+                if SystemState.TargetItem and not SystemState.TargetItem.Parent then
+                    SystemState.TargetItem = nil
                 end
 
                 local hasItem = IsPlayerHoldingFishOrEgg()
@@ -2407,21 +2527,21 @@ StartAutoStealLoop = function()
                     if not initialStealDone then
                         initialStealDone = true
                         local markerCF = GetIgnoreMarkerCFrame()
-                        if markerCF and isAutoStealEnabled then
-                            SmoothFlyToWithLanding(markerCF, 225)
+                        if markerCF and SystemState.AutoStealEnabled then
+                            SmoothFlyToWithLanding(markerCF, CONFIG.FLY_SPEED)
                             task.wait(0.2)
                         end
-                        if isAutoStealEnabled then
+                        if SystemState.AutoStealEnabled then
                             local safeCF = GetSafeZoneCFrame()
-                            if safeCF then SmoothFlyToWithLanding(safeCF, 225) end
+                            if safeCF then SmoothFlyToWithLanding(safeCF, CONFIG.FLY_SPEED) end
                         end
                     end
 
                     task.wait(0.4)
-                    if isAutoStealEnabled then TrySellItem() end
-                    stealConfirmed = false
+                    if SystemState.AutoStealEnabled then TrySellItem() end
+                    SystemState.StealConfirmed = false
 
-                    if not isLoopEnabled or not isAutoStealEnabled then
+                    if not SystemState.LoopModeEnabled or not SystemState.AutoStealEnabled then
                         DisableAutoSteal()
                         break
                     else
@@ -2431,48 +2551,43 @@ StartAutoStealLoop = function()
                     if hasItem and not inSafe then
                         TriggerRedPart()
                         local safeCF = GetSafeZoneCFrame()
-                        if safeCF and isAutoStealEnabled then
-                            SmoothFlyToWithLanding(safeCF, 225)
+                        if safeCF and SystemState.AutoStealEnabled then
+                            SmoothFlyToWithLanding(safeCF, CONFIG.FLY_SPEED)
                         end
-                        stealConfirmed = false
+                        SystemState.StealConfirmed = false
                     else
-                        local target = selectedTargetItem or FindBestSpawnedItem()
+                        local target = SystemState.TargetItem or FindBestSpawnedItem()
                         if target and GetRootPart() then
-                            stealConfirmed = false
-                            warpedFlag = false
-                            isRagdolledAttr = false
-                            isPhysicsRagdolled = false
-                            isSnapbackFlagged = false
-                            snapbackFrameCount = 0
+                            SystemState:ResetStealFlags()
 
                             TryStealTarget(target)
 
-                            if isRagdolledAttr or isPhysicsRagdolled or isSnapbackFlagged then
+                            if SystemState.Ragdolled or SystemState.SnapbackFlagged then
                                 RecoverFromRagdoll()
                                 task.wait(0.2)
-                                stealConfirmed = false
+                                SystemState.StealConfirmed = false
                             else
-                                local gotItem = stealConfirmed or IsPlayerHoldingFishOrEgg() or IsMagicFishReady(0.5)
+                                local gotItem = SystemState.StealConfirmed or IsPlayerHoldingFishOrEgg() or IsMagicFishReady(0.5)
                                 if gotItem or IsPlayerHoldingFishOrEgg() then
                                     TriggerRedPart()
                                     if not IsPlayerInSafeZone() then
                                         local safeCF = GetSafeZoneCFrame()
-                                        if safeCF and isAutoStealEnabled then
-                                            SmoothFlyToWithLanding(safeCF, 225)
+                                        if safeCF and SystemState.AutoStealEnabled then
+                                            SmoothFlyToWithLanding(safeCF, CONFIG.FLY_SPEED)
                                         end
                                     end
-                                    stealConfirmed = false
+                                    SystemState.StealConfirmed = false
                                 else
                                     ReturnAndDepositCycle()
                                     task.wait(0.5)
-                                    if not isLoopEnabled then
+                                    if not SystemState.LoopModeEnabled then
                                         DisableAutoSteal()
                                         break
                                     end
                                 end
                             end
                         else
-                            if not isLoopEnabled then
+                            if not SystemState.LoopModeEnabled then
                                 DisableAutoSteal()
                                 break
                             else
@@ -2487,12 +2602,10 @@ StartAutoStealLoop = function()
     end)
 end
 
--- Connect Master Switch Button
 AutoStealToggleBtn.MouseButton1Click:Connect(function()
-    isAutoStealEnabled = not isAutoStealEnabled
-    if isAutoStealEnabled then
-        stealConfirmed = false
-        warpedFlag = false
+    SystemState.AutoStealEnabled = not SystemState.AutoStealEnabled
+    if SystemState.AutoStealEnabled then
+        SystemState:ResetStealFlags()
         initialStealDone = false
         StartWarpDetector()
         InitCharacterDetectors()
@@ -2520,13 +2633,14 @@ end)
 -- =============================================================
 -- [ DRAGGING & ANIMATION RENDER ENGINE ]
 -- =============================================================
-local dragStartPos = Vector2.zero
-local dragStartUI  = MainFrame.Position
+local isDragging       = false
+local dragStartPos     = Vector2.zero
+local dragStartUI      = MainFrame.Position
 local currentTargetPos = MainFrame.Position
-local dragVelocity = Vector2.zero
+local dragVelocity     = Vector2.zero
 local lastDragInputPos = Vector2.zero
-local currentInertiaRot = 0
-local dragOffsetLerp = Vector2.zero
+local currentInertiaRot= 0
+local dragOffsetLerp   = Vector2.zero
 
 local function OnDragBegan(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -2569,7 +2683,8 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
-local renderClock = os.clock()
+local renderClock       = os.clock()
+local viewportRotationY = 0
 local renderConnection
 
 renderConnection = RunService.RenderStepped:Connect(function(deltaTime)
@@ -2581,7 +2696,6 @@ renderConnection = RunService.RenderStepped:Connect(function(deltaTime)
 
     renderClock = renderClock + deltaTime
 
-    -- Viewport 3D Item Animation
     if currentViewportItem and currentViewportItem.Parent then
         viewportRotationY = (viewportRotationY + deltaTime * 45) % 360
         local animRot = CFrame.Angles(0, math.rad(viewportRotationY), math.rad(math.sin(renderClock * 2) * 4))
@@ -2594,7 +2708,6 @@ renderConnection = RunService.RenderStepped:Connect(function(deltaTime)
         end
     end
 
-    -- Smooth Dragging & Inertia Physics
     if isDragging and uiVisible then
         MainFrame.Position = currentTargetPos
         currentInertiaRot = currentInertiaRot + (math.clamp(dragVelocity.X * 0.25, -6, 6) - currentInertiaRot) * math.min(deltaTime * 20, 1)
@@ -2604,7 +2717,6 @@ renderConnection = RunService.RenderStepped:Connect(function(deltaTime)
         dragOffsetLerp = dragOffsetLerp:Lerp(Vector2.zero, math.min(deltaTime * 10, 1))
     end
 
-    -- Header Animated Flame & Glow Rendering
     local waveTime = renderClock * 18
     local sin1 = math.sin(waveTime)
     local cos1 = math.cos(waveTime * 1.2)
@@ -2618,7 +2730,6 @@ renderConnection = RunService.RenderStepped:Connect(function(deltaTime)
     AuraGlow.BackgroundTransparency = math.clamp(0.4 + cos1 * 0.12 + math.random() * 0.08, 0.2, 0.65)
     AuraGlow.Size = UDim2.new(0, 54 + math.sin(waveTime) * 5, 0, 60 + math.cos(waveTime * 1.5) * 6)
 
-    -- Flame Tendril Particle Updates
     for i = 1, 16 do
         local tendril = FlameTendrils[i]
         tendril.Life = tendril.Life + deltaTime
@@ -2653,7 +2764,6 @@ renderConnection = RunService.RenderStepped:Connect(function(deltaTime)
         tendril.Object.BackgroundTransparency = math.clamp(alpha, 0.05, 1)
     end
 
-    -- Sparks Particle Updates
     for i = 1, 18 do
         local spark = Sparks[i]
         spark.Life = spark.Life + deltaTime

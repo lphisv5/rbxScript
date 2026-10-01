@@ -1,12 +1,1096 @@
---[[
- .____                  ________ ___.    _____                           __                
- |    |    __ _______   \_____  \\_ |___/ ____\_ __  ______ ____ _____ _/  |_  ___________ 
- |    |   |  |  \__  \   /   |   \| __ \   __\  |  \/  ___// ___\\__  \\   __\/  _ \_  __ \
- |    |___|  |  // __ \_/    |    \ \_\ \  | |  |  /\___ \\  \___ / __ \|  | (  <_> )  | \/
- |_______ \____/(____  /\_______  /___  /__| |____//____  >\___  >____  /__|  \____/|__|   
-         \/          \/         \/    \/                \/     \/     \/                   
-          \_Welcome to LuaObfuscator.com   (Alpha 0.10.9) ~  Much Love, Ferib 
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local GuiService = game:GetService("GuiService")
+local Lighting = game:GetService("Lighting")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
-]]--
+-- ===== CONFIG =====
+local Config = {
+    Players = {
+        Killer = {Color = Color3.fromRGB(255, 93, 108)},
+        Survivor = {Color = Color3.fromRGB(64, 224, 255)}
+    },
+    Objects = {
+        Generator = {Color = Color3.fromRGB(150, 0, 200)},
+        Gate = {Color = Color3.fromRGB(255, 255, 255)},
+        Pallet = {Color = Color3.fromRGB(74, 255, 181)},
+        Window = {Color = Color3.fromRGB(74, 255, 181)},
+        Hook = {Color = Color3.fromRGB(132, 255, 169)}
+    }
+}
+local MaskNames = {["Richard"]="Rooster",["Tony"]="Tiger",["Brandon"]="Panther",["Cobra"]="Cobra",["Richter"]="Rat",["Rabbit"]="Rabbit",["Alex"]="Chainsaw"}
+local MaskColors = {["Richard"]=Color3.new(1,0,0),["Tony"]=Color3.new(1,1,0),["Brandon"]=Color3.fromRGB(160,32,240),["Cobra"]=Color3.new(0,1,0),["Richter"]=Color3.new(0,0,0),["Rabbit"]=Color3.fromRGB(255,105,180),["Alex"]=Color3.new(1,1,1)}
 
-local v0=tonumber;local v1=string.byte;local v2=string.char;local v3=string.sub;local v4=string.gsub;local v5=string.rep;local v6=table.concat;local v7=table.insert;local v8=math.ldexp;local v9=getfenv or function() return _ENV;end ;local v10=setmetatable;local v11=pcall;local v12=select;local v13=unpack or table.unpack ;local v14=tonumber;local function v15(v16,v17,...) local v18=1;local v19;v16=v4(v3(v16,5),"..",function(v30) if (v1(v30,2)==81) then v19=v0(v3(v30,1,1));return "";else local v87=0;local v88;while true do if (v87==0) then v88=v2(v0(v30,16));if v19 then local v128=0;local v129;while true do if (v128==1) then return v129;end if (v128==0) then v129=v5(v88,v19);v19=nil;v128=1;end end else return v88;end break;end end end end);local function v20(v31,v32,v33) if v33 then local v89=0 -0 ;local v90;while true do if ((0 -0)==v89) then v90=(v31/((2 + 0)^(v32-(1 -0))))%(2^(((v33-(2 -1)) -(v32-(620 -(555 + 64)))) + (932 -(857 + 74)))) ;return v90-(v90%((217 -99) -(32 + (155 -70)))) ;end end else local v91=568 -(367 + (551 -(87 + 263))) ;local v92;while true do if (v91==(927 -(214 + 713))) then v92=(1 + 1)^(v32-(1 + 0)) ;return (((v31%(v92 + v92))>=v92) and (958 -(892 + 65))) or (0 -0) ;end end end end local function v21() local v34=180 -(67 + 113) ;local v35;while true do if (v34==0) then v35=v1(v16,v18,v18);v18=v18 + 1 + (0 -0) ;v34=2 -1 ;end if (v34==(1 + 0)) then return v35;end end end local function v22() local v36,v37=v1(v16,v18,v18 + 2 );v18=v18 + (954 -(802 + 150)) ;return (v37 * (689 -433)) + v36 ;end local function v23() local v38,v39,v40,v41=v1(v16,v18,v18 + 3 );v18=v18 + ((4 + 2) -2) ;return (v41 * (12211951 + 4565265)) + (v40 * (66533 -(915 + 82))) + (v39 * ((951 -227) -468)) + v38 ;end local function v24() local v42=0;local v43;local v44;local v45;local v46;local v47;local v48;while true do if (v42==(1190 -(58 + 1011 + 118))) then if (v47==(0 -0)) then if (v46==(0 -0)) then return v48 * (0 + 0) ;else local v130=0 -0 ;while true do if (v130==(0 + 0)) then v47=792 -(368 + 423) ;v45=0 -0 ;break;end end end elseif (v47==(2065 -(10 + 8))) then return ((v46==(0 -(0 + 0))) and (v48 * ((443 -(416 + 26))/(0 -0)))) or (v48 * NaN) ;end return v8(v48,v47-1023 ) * (v45 + (v46/(2^((908 -(261 + 624)) + 29)))) ;end if (v42==(1 -0)) then v45=439 -(145 + 293) ;v46=(v20(v44,431 -(44 + 386) ,20) * ((1488 -(998 + 488))^((19 -8) + 21))) + v43 ;v42=2 + 0 ;end if (v42==2) then v47=v20(v44,793 -(201 + 571) ,1169 -(116 + 1022) );v48=((v20(v44,133 -101 )==1) and  -(1 + 0)) or (3 -2) ;v42=10 -7 ;end if (v42==((1939 -(1020 + 60)) -(814 + 45))) then v43=v23();v44=v23();v42=2 -1 ;end end end local function v25(v49) local v50;if  not v49 then local v93=1423 -(630 + 793) ;while true do if (v93==(0 -0)) then v49=v23();if (v49==(0 -0)) then return "";end break;end end end v50=v3(v16,v18,(v18 + v49) -1 );v18=v18 + v49 ;local v51={};for v68=1748 -(760 + 987) , #v50 do v51[v68]=v2(v1(v3(v50,v68,v68)));end return v6(v51);end local v26=v23;local function v27(...) return {...},v12("#",...);end local function v28() local v52=(function() return function(v94,v95,v96,v97,v98,v99,v100,v101) local v94=(function() return 0 -0 ;end)();local v95=(function() return;end)();local v96=(function() return;end)();while true do if (v94~= #"!") then else if (v95== #"|") then v96=(function() return v97()~=0 ;end)();elseif (v95==(1638 -(1373 + 263))) then v96=(function() return v98();end)();elseif (v95~= #"-19") then else v96=(function() return v99();end)();end v100[v101]=(function() return v96;end)();break;end if (v94==(1000 -(451 + 549))) then local v125=(function() return 0;end)();local v126=(function() return;end)();while true do if (v125~=(0 + 0)) then else v126=(function() return 0;end)();while true do if (v126==(0 -0)) then v95=(function() return v97();end)();v96=(function() return nil;end)();v126=(function() return 1 -0 ;end)();end if ((1385 -(746 + 638))==v126) then v94=(function() return  #":";end)();break;end end break;end end end end return v94,v95,v96,v97,v98,v99,v100,v101;end;end)();local v53=(function() return function(v102,v103,v104,v105,v106,v107,v108,v109,v110) local v111=(function() return 0 + 0 ;end)();local v102=(function() return;end)();local v103=(function() return;end)();while true do if ((0 -0)==v111) then v102=(function() return 341 -(218 + 123) ;end)();v103=(function() return nil;end)();v111=(function() return 1582 -(1535 + 46) ;end)();end if (v111~=(1 + 0)) then else local v127=(function() return 0;end)();while true do if (v127~=(0 + 0)) then else while true do if (v102==0) then v103=(function() return v104();end)();if (v105(v103, #" ", #"|")~=(560 -(306 + 254))) then else local v133=(function() return 0 + 0 ;end)();local v134=(function() return;end)();local v135=(function() return;end)();local v136=(function() return;end)();local v137=(function() return;end)();while true do if (v133==(1 -0)) then local v235=(function() return 1467 -(899 + 568) ;end)();while true do if (v235~=0) then else v136=(function() return nil;end)();v137=(function() return nil;end)();v235=(function() return 1 + 0 ;end)();end if (v235==1) then v133=(function() return 4 -2 ;end)();break;end end end if (v133==(605 -(268 + 335))) then while true do if (v134== #"xxx") then if (v105(v136, #"91(", #"-19")~= #"]") then else v137[ #"xnxx"]=(function() return v106[v137[ #"?id="]];end)();end v107[v108]=(function() return v137;end)();break;end if (0==v134) then local v375=(function() return 0;end)();local v376=(function() return;end)();while true do if (v375~=0) then else v376=(function() return 290 -(60 + 230) ;end)();while true do if (v376==0) then v135=(function() return v105(v103,2, #"91(");end)();v136=(function() return v105(v103, #"0313",578 -(426 + 146) );end)();v376=(function() return 1;end)();end if (v376~=(1 + 0)) then else v134=(function() return  #"/";end)();break;end end break;end end end if (v134~=(1458 -(282 + 1174))) then else local v377=(function() return 811 -(569 + 242) ;end)();local v378=(function() return;end)();while true do if (v377==0) then v378=(function() return 0;end)();while true do if ((2 -1)==v378) then v134=(function() return  #"xnx";end)();break;end if (v378==0) then if (v105(v136, #"[", #"<")== #"|") then v137[1 + 1 ]=(function() return v106[v137[2]];end)();end if (v105(v136,1026 -(706 + 318) ,2)== #" ") then v137[ #"gha"]=(function() return v106[v137[ #"nil"]];end)();end v378=(function() return 1252 -(721 + 530) ;end)();end end break;end end end if (v134~= #":") then else local v379=(function() return 0;end)();local v380=(function() return;end)();while true do if (v379~=0) then else v380=(function() return 1271 -(945 + 326) ;end)();while true do if (v380~=(2 -1)) then else v134=(function() return 2 + 0 ;end)();break;end if (v380==(700 -(271 + 429))) then v137=(function() return {v109(),v109(),nil,nil};end)();if (v135==0) then local v443=(function() return 0;end)();local v444=(function() return;end)();while true do if (v443~=0) then else v444=(function() return 0 + 0 ;end)();while true do if (v444~=0) then else v137[ #"19("]=(function() return v109();end)();v137[ #"?id="]=(function() return v109();end)();break;end end break;end end elseif (v135== #":") then v137[ #"-19"]=(function() return v110();end)();elseif (v135==(1502 -(1408 + 92))) then v137[ #"xnx"]=(function() return v110() -(2^(1102 -(461 + 625))) ;end)();elseif (v135== #"asd") then local v449=(function() return 0;end)();local v450=(function() return;end)();while true do if (v449~=0) then else v450=(function() return 1288 -(993 + 295) ;end)();while true do if (v450==0) then v137[ #"xxx"]=(function() return v110() -((1 + 1)^16) ;end)();v137[ #"http"]=(function() return v109();end)();break;end end break;end end end v380=(function() return 1172 -(418 + 753) ;end)();end end break;end end end end break;end if (v133~=0) then else local v236=(function() return 0 + 0 ;end)();while true do if (v236==0) then v134=(function() return 0 + 0 ;end)();v135=(function() return nil;end)();v236=(function() return 1;end)();end if (v236~=(1 + 0)) then else v133=(function() return 1;end)();break;end end end end end break;end end return v102,v103,v104,v105,v106,v107,v108,v109,v110;end end end end end;end)();local v54=(function() return function(v112,v113,v114) local v115=(function() return 0 + 0 ;end)();local v116=(function() return;end)();while true do if (v115==0) then v116=(function() return 0;end)();while true do if (v116~=(529 -(406 + 123))) then else local v131=(function() return 0;end)();while true do if (0~=v131) then else v112[v113-#"[" ]=(function() return v114();end)();return v112,v113,v114;end end end end break;end end end;end)();local v55=(function() return {};end)();local v56=(function() return {};end)();local v57=(function() return {};end)();local v58=(function() return {v55,v56,nil,v57};end)();local v59=(function() return v23();end)();local v60=(function() return {};end)();for v70= #"~",v59 do FlatIdent_104D4,Type,Cons,v21,v24,v25,v60,v70=(function() return v52(FlatIdent_104D4,Type,Cons,v21,v24,v25,v60,v70);end)();end v58[ #"19("]=(function() return v21();end)();for v71= #"/",v23() do FlatIdent_A9A3,Descriptor,v21,v20,v60,v55,v71,v22,v23=(function() return v53(FlatIdent_A9A3,Descriptor,v21,v20,v60,v55,v71,v22,v23);end)();end for v72= #"}",v23() do v56,v72,v28=(function() return v54(v56,v72,v28);end)();end return v58;end local function v29(v62,v63,v64) local v65=v62[1770 -(1749 + 20) ];local v66=v62[1 + 1 ];local v67=v62[1325 -(1249 + 73) ];return function(...) local v73=v65;local v74=v66;local v75=v67;local v76=v27;local v77=1 + 0 ;local v78= -(1146 -(466 + 679));local v79={};local v80={...};local v81=v12("#",...) -(2 -1) ;local v82={};local v83={};for v117=1900 -(106 + (2675 -(581 + 300))) ,v81 do if ((136<3668) and (v117>=v75)) then v79[v117-v75 ]=v80[v117 + 1 + 0 ];else v83[v117]=v80[v117 + 1 + 0 ];end end local v84=(v81-v75) + 1 + 0 ;local v85;local v86;while true do v85=v73[v77];v86=v85[1];if (v86<=((1279 -(855 + 365)) -15)) then if (v86<=(61 -(95 -55))) then if (v86<=(27 -17)) then if (v86<=(118 -(4 + 110))) then if (v86<=(1 + 0)) then if ((v86>(1880 -((1681 -(1030 + 205)) + 1434))) or (1784>4781)) then v83[v85[1285 -(1040 + 243) ]]=v64[v85[(552 + 35) -(57 + 527) ]];else v64[v85[3]]=v83[v85[1849 -(521 + 38 + 1288) ]];end elseif (v86<=(1429 -(41 + 1386))) then do return v83[v85[(391 -(156 + 130)) -(17 + 86) ]];end elseif (v86>(3 + 0)) then local v237=0 -0 ;local v238;while true do if (v237==(0 -0)) then v238=v85[168 -(122 + (99 -55)) ];v83[v238]=v83[v238](v13(v83,v238 + (1 -(0 -0)) ,v78));break;end end else v83[v85[6 -4 ]]=v29(v74[v85[3 + 0 ]],nil,v64);end elseif (v86<=((5 -2) + 4)) then if (v86<=(1 + 4)) then local v142=v74[v85[8 -5 ]];local v143;local v144={};v143=v10({},{__index=function(v201,v202) local v203=0 -0 ;local v204;while true do if (v203==0) then v204=v144[v202];return v204[66 -(30 + 35) ][v204[2 + 0 ]];end end end,__newindex=function(v205,v206,v207) local v208=v144[v206];v208[1258 -(1043 + 214) ][v208[1 + 1 ]]=v207;end});for v210=1,v85[15 -11 ] do local v211=1212 -(323 + 889) ;local v212;while true do if (v211==(2 -1)) then if (v212[581 -(361 + 219) ]==(33 + 6)) then v144[v210-(1 + 0) ]={v83,v212[3 + 0 ]};else v144[v210-(1 + 0) ]={v63,v212[985 -(18 + 964) ]};end v82[ #v82 + (3 -2) ]=v144;break;end if (v211==(0 + 0)) then v77=v77 + (668 -(89 + 578)) ;v212=v73[v77];v211=1 + 0 + 0 ;end end end v83[v85[2 + (1215 -(369 + 846)) ]]=v29(v142,v143,v64);elseif ((4585>3298) and (v86==6)) then local v240=850 -(20 + 830) ;local v241;local v242;local v243;local v244;while true do if (((2 + 0)==v240) or (1664>1698)) then for v405=v241,v78 do local v406=1049 -(152 + 420 + 477) ;while true do if (v406==((108 + 18) -(116 + (1955 -(1036 + 909))))) then v244=v244 + 1 + 0 + 0 ;v83[v405]=v242[v244];break;end end end break;end if (v240==(738 -(542 + 196))) then v241=v85[3 -1 ];v242,v243=v76(v83[v241](v83[v241 + 1 + 0 ]));v240=(1 -0) + 0 ;end if (v240==(1 + 0)) then v78=(v243 + v241) -(2 -1) ;v244=0 -0 ;v240=1553 -(1126 + 425) ;end end else v83[v85[407 -(118 + 287) ]]=v83[v85[11 -8 ]][v85[1125 -(118 + 1003) ]];end elseif (v86<=((226 -(11 + 192)) -15)) then local v146=377 -(142 + 235) ;local v147;while true do if (v146==(0 -(0 + 0))) then v147=v85[1 + 1 ];v83[v147]=v83[v147](v13(v83,v147 + (978 -(553 + 424)) ,v78));break;end end elseif (v86>(16 -7)) then v83[v85[2 + 0 ]][v83[v85[3 + 0 ]]]=v85[3 + 1 ];else v83[v85[1 + 1 ]][v85[2 + 1 ]]=v83[v85[8 -4 ]];end elseif (v86<=(41 -26)) then if ((v86<=12) or (3427<2849)) then if (v86>(24 -13)) then v83[v85[5 -3 ]]=v83[v85[1 + 2 ]]%v83[v85[8 -4 ]] ;else local v149=v85[2 + 1 ];local v150=v83[v149];for v213=v149 + (4 -(178 -(135 + 40))) ,v85[757 -(239 + 514) ] do v150=v150   .. v83[v213] ;end v83[v85[1 + 1 ]]=v150;end elseif ((3616<=4429) and (v86<=(1342 -(797 + 532)))) then local v152=v85[2 + 0 ];local v153,v154=v76(v83[v152](v83[v152 + 1 + 0 ]));v78=(v154 + v152) -(2 -1) ;local v155=(2912 -1710) -(373 + 829) ;for v214=v152,v78 do v155=v155 + (606 -(316 + 289)) ;v83[v214]=v153[v155];end elseif (v86>(745 -(476 + 255))) then v83[v85[1132 -(369 + 761) ]]=v85[2 + 1 ];else v64[v85[1 + 2 + 0 ]]=v83[v85[2 -0 ]];end elseif (v86<=(33 -15)) then if (v86<=((32 -17) + 1)) then v83[v85[240 -(64 + 174) ]]=v83[v85[257 -((117 -38) + (351 -(50 + 126))) ]] + v85[11 -7 ] ;elseif ((3988>=66) and (v86==(26 -9))) then local v255=0 + 0 ;local v256;local v257;local v258;while true do if (v255==(0 + 0)) then v256=v85[5 -3 ];v257=v83[v256];v255=1 -0 ;end if ((v255==(1 -0)) or (862>4644)) then v258=v83[v256 + (338 -(144 + 192)) ];if ((1221==1221) and (v258>(181 -(21 + 71 + 89)))) then if (v257>v83[v256 + (217 -(42 + 174)) ]) then v77=v85[3];else v83[v256 + 2 + 1 ]=v257;end elseif (v257<v83[v256 + 1 + (1413 -(1233 + 180)) ]) then v77=v85[3 + 0 ];else v83[v256 + 2 + 1 ]=v257;end break;end end else v83[v85[1 + 1 ]]=v83[v85[(2476 -(522 + 447)) -(363 + 1141) ]][v83[v85[1584 -(1183 + 397) ]]];end elseif ((v86<=(57 -(1459 -(107 + 1314)))) or (45>1271)) then v83[v85[2 + 0 ]]= #v83[v85[8 -5 ]];elseif ((3877>1530) and (v86>(15 + 5))) then local v261=v85[(918 + 1059) -(1913 + 62) ];local v262={v83[v261](v83[v261 + (1245 -(485 + 759)) ])};local v263=0 + 0 ;for v341=v261,v85[(30 -20) -6 ] do local v342=1933 -(565 + 1368) ;while true do if (v342==(946 -(88 + 858))) then v263=v263 + (3 -2) ;v83[v341]=v262[v263];break;end end end else local v264=v85[1663 -(1477 + 184) ];v83[v264](v83[v264 + (1 -0) ]);end elseif (v86<=(30 + 2)) then if (v86<=(815 -(766 + 23))) then if ((v86<=(879 -(564 + 292))) or (4798==1255)) then if (v86>(37 -15)) then if ((v85[2 -0 ]==v83[v85[4]]) or (2541>2860)) then v77=v77 + (2 -1) ;else v77=v85[307 -(244 + 60) ];end else local v158=0 + 0 ;local v159;local v160;local v161;while true do if (v158==1) then v161=476 -(41 + 435) ;for v355=v159,v85[1077 -(1036 + 37) ] do v161=v161 + (1002 -(399 + 539 + 63)) ;v83[v355]=v160[v161];end break;end if ((v158==((0 -0) + 0)) or (2902>3629)) then v159=v85[1127 -(936 + 189) ];v160={v83[v159](v83[v159 + (1614 -(1565 + 48)) ])};v158=1 + 0 ;end end end elseif (v86<=(1162 -(782 + 356))) then if v83[v85[269 -((2086 -(716 + 1194)) + 91) ]] then v77=v77 + (2 -1) ;else v77=v85[7 -4 ];end elseif (v86>(36 -11)) then v77=v85[1095 -(975 + 117) ];else local v268=1875 -(157 + 1718) ;local v269;local v270;local v271;local v272;while true do if ((2 + 0)==v268) then for v409=v269,v78 do local v410=0 -0 ;while true do if (v410==(0 -0)) then v272=v272 + (1019 -(697 + 321)) ;v83[v409]=v270[v272];break;end end end break;end if ((0 -0)==v268) then v269=v85[3 -1 ];v270,v271=v76(v83[v269](v13(v83,v269 + (2 -(1 + 0)) ,v85[3])));v268=1 + 0 ;end if (v268==(1 -0)) then v78=(v271 + v269) -(2 -1) ;v272=(132 + 1095) -(322 + 905) ;v268=613 -((1105 -(74 + 429)) + 9) ;end end end elseif ((427<3468) and (v86<=(1418 -(135 + 1254)))) then if ((4190>=2804) and (v86<=(1216 -(449 + (1427 -687))))) then local v162=v85[(434 + 440) -((1890 -1064) + 46) ];do return v13(v83,v162,v162 + v85[950 -(245 + 702) ] );end elseif ((2086==2086) and (v86>(88 -60))) then do return v83[v85[1529 -(389 + 1138) ]];end elseif (v83[v85[1 + 1 ]]==v85[1902 -(260 + 1638) ]) then v77=v77 + 1 + 0 ;else v77=v85[443 -(382 + 58) ];end elseif ((4148>2733) and (v86<=(96 -(47 + 19)))) then local v163=v85[2 + 0 ];v83[v163](v13(v83,v163 + (1 -0) ,v78));elseif (v86==(91 -60)) then do return;end else v77=v85[1208 -(902 + 303) ];end elseif (v86<=((255 -172) -45)) then if ((3054>=1605) and (v86<=((9 -5) + 31))) then if (v86<=(79 -46)) then local v164=0 + 0 ;local v165;local v166;local v167;local v168;while true do if (v164==(0 + (433 -(279 + 154)))) then v165=v85[1692 -(1121 + 569) ];v166,v167=v76(v83[v165](v13(v83,v165 + (215 -(22 + 192)) ,v78)));v164=684 -(483 + 200) ;end if ((1044<1519) and (v164==(1464 -(1404 + 59)))) then v78=(v167 + v165) -(2 -1) ;v168=0 -0 ;v164=767 -((1246 -(454 + 324)) + 297) ;end if ((1707<=4200) and ((564 -(334 + 228))==v164)) then for v359=v165,v78 do v168=v168 + (3 -2) ;v83[v359]=v166[v168];end break;end end elseif (v86>34) then v83[v85[4 -2 ]]=v63[v85[2 + 1 ]];elseif  not v83[v85[4 -(2 + 0) ]] then v77=v77 + (1 -0) ;else v77=v85[1 + 2 ];end elseif (v86<=(272 -(141 + (112 -(12 + 5))))) then do return;end elseif (v86==(37 + 0)) then v83[v85[4 -2 ]]=v85[6 -3 ];else v83[v85[1 + 1 + 0 ]]=v83[v85[8 -5 ]][v85[3 + 1 ]];end elseif (v86<=((55 -33) + 19)) then if (v86<=(921 -(244 + 638))) then v83[v85[2 -0 ]]=v83[v85[2 + 1 ]];elseif (v86==(203 -(92 + 71))) then if (v85[1 + 1 ]==v83[v85[6 -2 ]]) then v77=v77 + (766 -(574 + 191)) ;else v77=v85[3 + 0 ];end else local v280=v85[719 -(373 + 128 + 216) ];do return v83[v280](v13(v83,v280 + (2 -1) ,v85[2 + 1 ]));end end elseif (v86<=(891 -(254 + 595))) then local v171=v85[128 -(55 + 71) ];v83[v171](v13(v83,v171 + ((1094 -(277 + 816)) -0) ,v78));elseif ((580==580) and (v86>(1833 -((2448 -1875) + 1217)))) then local v281=0 -(1183 -(1058 + 125)) ;local v282;while true do if (v281==(0 + 0)) then v282=v85[2 -0 ];v83[v282]=v83[v282](v83[v282 + (940 -(714 + 43 + 182)) ]);break;end end else local v283=0 -0 ;local v284;while true do if ((601<=999) and (v283==(0 -0))) then v284=v85[(2643 -(815 + 160)) -(636 + 1030) ];do return v13(v83,v284,v78);end break;end end end elseif (v86<=(8 + 59)) then if (v86<=((338 -259) -24)) then if ((3970==3970) and (v86<=(48 + 1))) then if ((v86<=(852 -(118 + 688))) or (98==208)) then if (v86==(93 -(25 + 23))) then v83[v85[1 + (2 -1) ]]=v83[v85[1889 -(927 + 959) ]] * v83[v85[13 -9 ]] ;else local v173=v85[734 -(16 + 716) ];local v174,v175=v76(v83[v173](v13(v83,v173 + (1 -0) ,v85[100 -(11 + 21 + 65) ])));v78=(v175 + v173) -(2 -1) ;local v176=285 -(175 + 110) ;for v217=v173,v78 do local v218=0;while true do if ((2006<=3914) and (v218==(0 -0))) then v176=v176 + ((11 -7) -3) ;v83[v217]=v174[v176];break;end end end end elseif (v86<=(1843 -(503 + 1293))) then v83[v85[5 -3 ]]=v83[v85[(1901 -(41 + 1857)) + 0 ]] * v83[v85[1065 -(810 + 251) ]] ;elseif (v86==(34 + 14)) then v83[v85[1895 -(1222 + 671) ]]={};else v83[v85[1 + 1 ]]=v85[3]~=(0 + (0 -0)) ;v77=v77 + (534 -(43 + 490)) ;end elseif (v86<=(785 -(711 + 22))) then if ((v86<=(193 -143)) or (3101<=2971)) then local v178=v85[861 -((344 -104) + 619) ];v83[v178](v83[v178 + 1 + 0 ]);elseif ((v86>((1262 -(229 + 953)) -29)) or (2073<=671)) then v83[v85[1 + 1 ]]= #v83[v85[1777 -(1111 + 663) ]];else v83[v85[1746 -(1344 + 400) ]]=v83[v85[408 -(255 + 150) ]][v83[v85[4 + 0 ]]];end elseif (v86<=(29 + 24)) then v83[v85[8 -6 ]]=v85[(1588 -(874 + 705)) -(1 + 5) ] + v83[v85[1743 -(404 + 1335) ]] ;elseif ((3305>95) and (v86>(460 -(183 + 223)))) then local v290=v85[2 -0 ];do return v83[v290](v13(v83,v290 + 1 + 0 ,v85[2 + 0 + (1 -0) ]));end else v83[v85[1 + 1 ]][v83[v85[11 -8 ]]]=v83[v85[2 + 2 ]];end elseif (v86<=(398 -(10 + 10 + 317))) then if ((2727==2727) and (v86<=(41 + 17))) then if ((v86<=(394 -(118 + 220))) or (2970>=4072)) then v83[v85[1 + 1 ]][v85[11 -8 ]]=v83[v85[453 -((787 -(642 + 37)) + 341) ]];elseif (v86==(6 + 20 + 31)) then local v293=v85[4 -2 ];local v294=v85[(3 + 13) -12 ];local v295=v293 + (5 -3) ;local v296={v83[v293](v83[v293 + 1 + 0 ],v83[v295])};for v345=4 -3 ,v294 do v83[v295 + v345 ]=v296[v345];end local v297=v296[1 -0 ];if ((3881>814) and v297) then local v366=(1177 -708) -((724 -(233 + 221)) + 199) ;while true do if ((0 + 0)==v366) then v83[v295]=v297;v77=v85[3];break;end end else v77=v77 + (1820 -(580 + 1239)) ;end else local v298=v85[(11 -6) -3 ];v83[v298]=v83[v298](v83[v298 + 1 + 0 ]);end elseif ((v86<=(3 + 0 + 56)) or (4932<4868)) then if (v83[v85[1 + 1 ]]<v83[v85[9 -5 ]]) then v77=v77 + 1 + 0 ;else v77=v85[1170 -(645 + 522) ];end elseif ((3667<=4802) and (v86>((1542 -(718 + 823)) + 59))) then local v301=1790 -(1010 + 780) ;local v302;while true do if (v301==(0 + 0 + 0)) then v302=v85[(814 -(266 + 539)) -7 ];v83[v302]=v83[v302](v13(v83,v302 + (1 -(0 -0)) ,v85[1 + 2 ]));break;end end else v83[v85[5 -3 ]][v83[v85[1839 -(1045 + 791) ]]]=v83[v85[9 -5 ]];end elseif ((1260>=858) and (v86<=((1322 -(636 + 589)) -33))) then if (v86<=(567 -(351 + (365 -211)))) then if v83[v85[515 -(203 + 310) ]] then v77=v77 + (1575 -((2641 -1360) + 293)) ;else v77=v85[269 -(23 + 5 + 238) ];end elseif (v86==(140 -77)) then v83[v85[1561 -(502 + 879 + 178) ]]=v64[v85[3 + 0 ]];else v83[v85[2 -0 ]]={};end elseif ((v86<=(929 -(196 + 668))) or (3911==4700)) then if ((3000<4194) and (v83[v85[2 + 0 ]]<v83[v85[2 + 2 ]])) then v77=v77 + (3 -2) ;else v77=v85[2 + 1 ];end elseif ((651<4442) and (v86==(536 -(381 + 89)))) then if  not v83[v85[2 + 0 ]] then v77=v77 + (3 -2) ;else v77=v85[3 + 0 ];end else local v310=0 -0 ;local v311;while true do if (v310==(0 -0)) then v311=v85[1158 -((2089 -(657 + 358)) + 82) ];do return v13(v83,v311,v78);end break;end end end elseif ((v86<=(170 -92)) or (195>=1804)) then if (v86<=(1856 -(214 + 1570))) then if (v86<=69) then if ((v86>((5456 -3395) -((2143 -1202) + 1052))) or (1382>2216)) then v83[v85[2]]=v83[v85[1458 -(990 + 465) ]];else local v184=v74[v85[2 + 1 ]];local v185;local v186={};v185=v10({},{__index=function(v219,v220) local v221=0 + 0 ;local v222;while true do if ((0 + 0)==v221) then v222=v186[v220];return v222[3 -2 ][v222[1728 -(1668 + 58) ]];end end end,__newindex=function(v223,v224,v225) local v226=0 + 0 ;local v227;while true do if ((v226==(626 -(512 + 114))) or (2861==2459)) then v227=v186[v224];v227[2 -1 ][v227[4 -2 ]]=v225;break;end end end});for v228=1 -0 ,v85[437 -(114 + 319) ] do local v229=0 -0 ;local v230;while true do if ((1903<4021) and (v229==(0 + 0))) then v77=v77 + 1 + 0 ;v230=v73[v77];v229=1 -0 ;end if ((v229==(1 + 0 + 0 + 0)) or (2270>=4130)) then if ((2593<=3958) and (v230[3 -2 ]==(2033 -(109 + 1885)))) then v186[v228-(1470 -(1269 + 200)) ]={v83,v230[3 + 0 ]};else v186[v228-(827 -(802 + 24)) ]={v63,v230[3 -0 ]};end v82[ #v82 + 1 + 0 ]=v186;break;end end end v83[v85[2 + 0 ]]=v29(v184,v185,v64);end elseif (v86<=(12 + 58)) then local v188=v85[1 + 1 ];local v189=v85[1 + 3 ];local v190=v188 + 1 + 1 ;local v191={v83[v188](v83[v188 + (3 -2) ],v83[v190])};for v231=2 -(2 -1) ,v189 do v83[v190 + v231 ]=v191[v231];end local v192=v191[1 + 0 ];if v192 then local v312=0 + 0 ;while true do if (v312==(0 + 0)) then v83[v190]=v192;v77=v85[(1835 -(1552 + 280)) + 0 ];break;end end else v77=v77 + 1 + 0 ;end elseif (v86>(1504 -(797 + 636))) then v83[v85[9 -7 ]]=v83[v85[1 + 2 ]] + v85[1623 -(1427 + (1026 -(64 + 770))) ] ;else for v348=v85[953 -(783 + 168) ],v85[3] do v83[v348]=nil;end end elseif (v86<=(26 + 49)) then if (v86<=(169 -96)) then v83[v85[2 + 0 ]]=v29(v74[v85[2 + 1 ]],nil,v64);elseif ((1176==1176) and (v86==(385 -(309 + 2)))) then local v314=326 -(192 + 134) ;local v315;local v316;local v317;while true do if (v314==(1277 -(316 + 960))) then v317=v83[v315] + v316 ;v83[v315]=v317;v314=2 + 0 + 0 ;end if (v314==(2 + 0)) then if (v316>(0 + 0)) then if ((v317<=v83[v315 + (3 -2) ]) or (3062==1818)) then v77=v85[554 -(83 + 468) ];v83[v315 + (1809 -(1202 + 604)) ]=v317;end elseif ((v317>=v83[v315 + (4 -3) ]) or (3717<3149)) then local v433=(0 -0) -0 ;while true do if ((3195<3730) and (v433==(0 -(0 + 0)))) then v77=v85[8 -5 ];v83[v315 + 3 ]=v317;break;end end end break;end if (v314==(325 -(45 + (1523 -(157 + 1086))))) then v315=v85[1 + 1 ];v316=v83[v315 + 2 + (0 -0) ];v314=1 + 0 ;end end else v83[v85[1 + 1 ]]=v85[2 + 1 ]~=(0 + 0) ;v77=v77 + (1 -0) ;end elseif ((2797<=3980) and (v86<=((398 -307) -(6 + 9)))) then v83[v85[1913 -(340 + 1571) ]]=v83[v85[3]]%v85[(2 -0) + 2 ] ;elseif ((1944<=2368) and (v86==(1849 -(1733 + 39)))) then v83[v85[5 -3 ]]=v83[v85[1037 -(125 + 909) ]]%v83[v85[1952 -(1096 + (1162 -310)) ]] ;elseif (v83[v85[1 + 1 ]]==v85[5 -1 ]) then v77=v77 + 1 ;else v77=v85[3 + 0 ];end elseif (v86<=((1415 -(599 + 220)) -(409 + 103))) then if (v86<=((631 -314) -(46 + 190))) then if (v86<=((2105 -(1813 + 118)) -(51 + 44))) then v83[v85[5 -3 ]]=v85[1 + 2 ] + v83[v85[1321 -(1114 + 203) ]] ;elseif (v86==(806 -(228 + 498))) then v83[v85[1 + 1 ]]=v63[v85[1266 -(668 + 595) ]];else local v322=v85[2 + 0 ];local v323=v83[v322];local v324=v83[v322 + (665 -(128 + 46 + (1706 -(841 + 376)))) ];if (v324>(0 -0)) then if (v323>v83[v322 + (1906 -(830 + 1075)) ]) then v77=v85[3];else v83[v322 + (527 -(303 + 221)) ]=v323;end elseif ((1709<4248) and (v323<v83[v322 + (388 -(371 + 16)) ])) then v77=v85[1272 -(231 + (1454 -416)) ];else v83[v322 + (5 -2) ]=v323;end end elseif (v86<=(69 + 13)) then local v196=v85[1165 -(40 + 131 + 991) ];local v197=v83[v196];for v234=v196 + (4 -3) ,v85[10 -6 ] do v197=v197   .. v83[v234] ;end v83[v85[4 -2 ]]=v197;elseif (v86>((182 -115) + 16)) then v83[v85[2]]=v83[v85[10 -7 ]]%v85[2 + 2 ] ;else v83[v85[5 -3 ]][v83[v85[4 -1 ]]]=v85[12 -8 ];end elseif (v86<=(1335 -(111 + 1137))) then if (v86<=85) then v83[v85[160 -(91 + 67) ]]=v85[3]~=(0 -0) ;elseif (v86>(22 + 64)) then local v328=v85[(1661 -(464 + 395)) -(24 + 776) ];v83[v328]=v83[v328](v13(v83,v328 + (524 -(423 + 100)) ,v85[1 + 2 ]));else for v350=v85[3 -1 ],v85[7 -4 ] do v83[v350]=nil;end end elseif (v86<=(278 -(23 + (428 -261)))) then v83[v85[2 + 0 ]]=v85[774 -(157 + 169 + (1282 -(467 + 370))) ]~=((0 -0) -0) ;elseif ((v86>((145 + 52) -108)) or (3970==3202)) then local v330=0 + 0 ;local v331;local v332;local v333;while true do if ((850 -(40 + 808))==v330) then if (v332>(0 -0)) then if (v333<=v83[v331 + ((2440 -1728) -(530 + 29 + 152)) ]) then v77=v85[(2056 -1172) -(614 + 267) ];v83[v331 + (35 -(19 + 13)) ]=v333;end elseif ((v333>=v83[v331 + 1 + 0 ]) or (3918>=4397)) then local v436=520 -(150 + 370) ;while true do if (v436==(0 -0)) then v77=v85[6 -(1285 -(74 + 1208)) ];v83[v331 + (8 -5) ]=v333;break;end end end break;end if (v330==(0 + 0)) then v331=v85[3 -1 ];v332=v83[v331 + (3 -1) ];v330=1813 -(1293 + 519) ;end if ((v330==1) or (780==3185)) then v333=v83[v331] + v332 ;v83[v331]=v333;v330=(7 -4) -1 ;end end else local v334=0 -0 ;local v335;local v336;local v337;local v338;while true do if ((v334==((4 -3) -0)) or (3202>=4075)) then v78=(v337 + v335) -(480 -(341 + 138)) ;v338=0 + 0 ;v334=2;end if (v334==(1 + 1)) then for v417=v335,v78 do v338=v338 + (4 -3) ;v83[v417]=v336[v338];end break;end if ((64==64) and (v334==0)) then v335=v85[4 -2 ];v336,v337=v76(v83[v335](v13(v83,v335 + 1 + 0 ,v78)));v334=1 + 0 ;end end end v77=v77 + (2 -1) ;end end;end return v29(v28(),{},v17)(...);end return v15("LOL!283Q0003063Q00737472696E6703043Q006368617203043Q00627974652Q033Q0073756203053Q0062697433322Q033Q0062697403043Q0062786F7203053Q007461626C6503063Q00636F6E63617403063Q00696E73657274026Q001C4003163Q00E33330A6CAA58B3325E0CBB9C83D33E39EA8CE2F33B903063Q00CAAB5C4786BE026Q00184003153Q0011B38E21DC3DB58D08DC10BB9F38CA16B28E39DC1103053Q00B962DAEB57026Q000840030D3Q008CD1DE2Q076BBACCC2040671FC03063Q004BDCA3B76A62027Q004003343Q006A4E0926424B0E22097933315B4B0E225A7F4032404E0C654A4D0D3545471420455B402D404605655D4A093609511437404C076403043Q0045292260026Q00F03F03193Q00B454CFB5295331D5BE16DDA83F1033CEB552C0B4335F3ED2FA03083Q00A1DB36A9C05A3050028Q0003043Q000DADC4DA03073Q005479DFB1BFED4C023Q00406E9B5E4103053Q007072696E74024Q00F0E4FD40026Q003440025Q00C05940026Q00104003053Q00706169727303153Q0073696576655F6F665F657261746F737468656E657303023Q005F47025Q00407A40025Q005D3241024Q0087C63241007D4Q00307Q001201000100013Q002026000100010002001201000200013Q002026000200020003001201000300013Q002026000300030004001201000400053Q0006420004000B000100010004203Q000B0001001201000400063Q002026000500040007001201000600083Q002026000600060009001201000700083Q00202600070007000A00060500083Q000100062Q00273Q00074Q00273Q00014Q00273Q00054Q00273Q00024Q00273Q00034Q00273Q00064Q0045000900083Q00120F000A000C3Q00120F000B000D4Q00570009000B00020010383Q000B00092Q0045000900083Q00120F000A000F3Q00120F000B00104Q00570009000B00020010383Q000E00092Q0045000900083Q00120F000A00123Q00120F000B00134Q00570009000B00020010383Q001100092Q0045000900083Q00120F000A00153Q00120F000B00164Q00570009000B00020010383Q001400092Q0045000900083Q00120F000A00183Q00120F000B00194Q00570009000B00020010383Q001700092Q0045000900083Q00120F000A001B3Q00120F000B001C4Q00570009000B00020010383Q001A000900120F0009001A4Q0047000A000D3Q00264E00090040000100140004203Q0040000100120F000D001D3Q000641000B003F0001000C0004203Q003F0001001201000E001E3Q002026000F3Q001A2Q0014000E0002000100120F000900113Q00264E000900460001001A0004203Q0046000100120F000A001F3Q002010000E000A0020002010000A000E002100120F000900173Q00264E00090052000100110004203Q0052000100104F000E0017000D000641000C004E0001000E0004203Q004E0001001201000E001E3Q002026000F3Q00172Q0014000E00020001001201000E001E3Q002026000F3Q00142Q0014000E0002000100120F000900223Q00264E00090076000100220004203Q0076000100120F000E001A4Q0047000F000F3Q000E28001700660001000E0004203Q00660001001201001000234Q00450011000F4Q00150010000200120004203Q0063000100063E0014006300013Q0004203Q006300010012010015001E3Q00202600163Q00112Q0045001700134Q00520016001600172Q00140015000200010006460010005C000100020004203Q005C00010004203Q0072000100264E000E00560001001A0004203Q00560001000203001000013Q00122Q001000243Q001201001000253Q00202600113Q000E2Q001200100010001100120F001100264Q002C0010000200022Q0045000F00103Q00120F000E00173Q0004203Q00560001001201000E001E3Q002026000F3Q000B2Q0014000E000200010004203Q007C000100264E00090037000100170004203Q0037000100120F000B00273Q00120F000C00283Q00120F000900143Q0004203Q003700012Q00243Q00013Q00023Q00023Q00026Q00F03F026Q00704002264Q003000025Q00120F000300014Q001300045Q00120F000500013Q0004110003002100012Q002300076Q0045000800024Q0023000900014Q0023000A00024Q0023000B00034Q0023000C00044Q0045000D6Q0045000E00063Q002010000F000600012Q0019000C000F4Q0004000B3Q00022Q0023000C00034Q0023000D00044Q0045000E00014Q0013000F00014Q004D000F0006000F00104F000F0001000F2Q0013001000014Q004D00100006001000104F0010000100100020100010001000012Q0019000D00104Q0021000C6Q0004000A3Q000200204C000A000A00022Q000D0009000A4Q001E00073Q000100045A0003000500012Q0023000300054Q0045000400024Q0037000300044Q004300036Q00243Q00017Q00073Q00028Q00026Q00F03F027Q004003043Q006D61746803053Q00666C2Q6F7203043Q0073717274010001553Q00120F000100014Q0047000200043Q00264E0001004E000100020004203Q004E00012Q0047000400043Q00264E0002003F000100020004203Q003F0001000E280001001E000100030004203Q001E000100120F000500013Q000E280002000E000100050004203Q000E000100120F000300023Q0004203Q001E0001000E280001000A000100050004203Q000A00012Q003000066Q0045000400063Q00120F000600024Q004500075Q00120F000800023Q0004110006001C0001000E2800020019000100090004203Q001900012Q004B000A6Q0058000A00014Q003C00040009000A00045A00060016000100120F000500023Q0004203Q000A000100264E00030007000100020004203Q0007000100120F000500013Q00264E00050021000100010004203Q0021000100120F000600013Q00264E00060024000100010004203Q0024000100120F000700033Q001201000800043Q002026000800080005001201000900043Q0020260009000900062Q0045000A6Q000D0009000A4Q000400083Q000200120F000900023Q0004110007003A00012Q0012000B0004000A00063E000B003900013Q0004203Q003900012Q002F000B000A000A2Q0045000C6Q0045000D000A3Q000411000B0039000100200A0004000E000700045A000B0037000100045A0007003000012Q001D000400023Q0004203Q002400010004203Q002100010004203Q000700010004203Q0054000100264E00020005000100010004203Q0005000100120F000500013Q00264E00050046000100020004203Q0046000100120F000200023Q0004203Q00050001000E2800010042000100050004203Q0042000100120F000300014Q0047000400043Q00120F000500023Q0004203Q004200010004203Q000500010004203Q0054000100264E00010002000100010004203Q0002000100120F000200014Q0047000300033Q00120F000100023Q0004203Q000200012Q00243Q00017Q00",v9(),...);
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+
+local Window = Fluent:CreateWindow({
+    Title = "YANZ HUB",
+    SubTitle = "Violence District",
+    TabWidth = 120,
+    Size = UDim2.fromOffset(580, 460),
+    Acrylic = false,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.LeftControl
+})
+local Options = Fluent.Options
+
+local Tabs = {
+    Home = Window:AddTab({Title = "Home", Icon = "home"}),
+    Survivor = Window:AddTab({Title = "Survivor", Icon = "shield"}),
+    Killer = Window:AddTab({Title = "Killer", Icon = "swords"}),
+    ESP = Window:AddTab({Title = "ESP", Icon = "eye"}),
+    Settings = Window:AddTab({Title = "Settings", Icon = "settings"})
+}
+
+Tabs.Home:AddParagraph({Title = "Information", Content = "Welcome to YANZ HUB - Violence District Script\nStatus: Working\nVersion: 2.0.1"})
+Tabs.Home:AddParagraph({Title = "Credits", Content = "Developer: _lphisv5 & ! YANZ"})
+local nextKillerLabel = Tabs.Home:AddParagraph({
+    Title = "Next Killer",
+    Content = "กำลังโหลดข้อมูล..."
+})
+
+-- SURVIVOR
+Tabs.Survivor:AddToggle("AutoPerfectSkill", {Title = "Auto Perfect Skill Check", Default = false})
+Tabs.Survivor:AddToggle("AntiFailGen", {Title = "Anti-Fail Generator", Default = false})
+Tabs.Survivor:AddToggle("AutoGenRepair", {Title = "Auto Generator Repair", Default = false})
+Tabs.Survivor:AddToggle("AutoHealingSkill", {Title = "Auto Healing Skill Check", Default = false})
+
+local InstantEscape
+Tabs.Survivor:AddButton({Title = "Instant Escape", Description = "Teleport to exit", Callback = function() if InstantEscape then InstantEscape() end end})
+Tabs.Survivor:AddToggle("AutoEscape", {Title = "Auto Escape", Default = false})
+Tabs.Survivor:AddToggle("AutoUnhook", {Title = "Auto Unhook / Auto Wiggle", Default = false})
+Tabs.Survivor:AddToggle("AutoCarry", {Title = "Auto Carry Resistance", Default = false})
+
+-- KILLER
+Tabs.Killer:AddToggle("AutoParry", {Title = "Auto Parry", Default = false})
+Tabs.Killer:AddToggle("NoParryCooldown", {Title = "No Parry Cooldown", Default = false})
+Tabs.Killer:AddToggle("AutoAttackKill", {Title = "Auto Attack / Auto Kill", Default = false})
+Tabs.Killer:AddToggle("AutoHook", {Title = "Auto Hook", Default = false})
+Tabs.Killer:AddToggle("AutoChase", {Title = "Auto Chase", Default = false})
+Tabs.Killer:AddToggle("AutoFarm", {Title = "Auto Farm / Full Control", Default = false})
+
+-- ✅ ESP UI
+Tabs.ESP:AddToggle("PlayerESP", {Title = "Player ESP Master", Default = false})
+Tabs.ESP:AddToggle("KillerESP", {Title = "Killer ESP", Default = false})
+Tabs.ESP:AddToggle("SurvivorESP", {Title = "Survivor ESP", Default = false})
+Tabs.ESP:AddToggle("GeneratorESP", {Title = "Generator ESP", Default = false})
+Tabs.ESP:AddToggle("GateESP", {Title = "Gate ESP", Default = false})
+Tabs.ESP:AddToggle("HookESP", {Title = "Hook ESP", Default = false})
+Tabs.ESP:AddToggle("PalletESP", {Title = "Pallet ESP", Default = false})
+Tabs.ESP:AddToggle("WindowESP", {Title = "Window ESP", Default = false})
+Tabs.ESP:AddToggle("GenProgressESP", {Title = "Generator Progress ESP", Default = false})
+
+SaveManager:SetLibrary(Fluent)
+InterfaceManager:SetLibrary(Fluent)
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({})
+InterfaceManager:SetFolder("YANZHUB")
+SaveManager:SetFolder("YANZHUB/ViolenceDistrict")
+InterfaceManager:BuildInterfaceSection(Tabs.Settings)
+SaveManager:BuildConfigSection(Tabs.Settings)
+SaveManager:LoadAutoloadConfig()
+
+-- ===== CORE VARIABLES & CACHE =====
+local MapCache = {
+    Generators = {},
+    Hooks = {},
+    Gates = {},
+    Pallets = {},
+    Windows = {},
+    ExitPos = nil
+}
+local ActiveGenerators = {}
+local LastUpdateTick, LastFullESPRefresh, LastParryTime, LastAutoHookTime, LastWiggleTime = 0, 0, 0, 0, 0
+local LastAttackTick, LastGenTick, LastLightingTick = 0, 0, 0
+local IndicatorGui = nil
+local AutoHookState = {phase = 0, target = nil, startTime = 0}
+local KillerTarget, LastFinishPos, BeatSurvivorDone = nil, nil, false
+local QTEHandler = {Monitoring = false, FrameConn = nil, UIConn = nil, Elements = nil}
+
+-- ===== HELPERS =====
+local function SetupGui()
+    if PlayerGui:FindFirstChild("ChasedInds") then
+        pcall(function() PlayerGui.ChasedInds:Destroy() end)
+    end
+    IndicatorGui = Instance.new("ScreenGui")
+    IndicatorGui.Name = "ChasedInds"
+    IndicatorGui.IgnoreGuiInset = true
+    IndicatorGui.DisplayOrder = 9999
+    IndicatorGui.Parent = PlayerGui
+end
+
+local function GetGameValue(obj, name)
+    if not obj then return nil end
+    local a = obj:GetAttribute(name)
+    if a ~= nil then return a end
+    local c = obj:FindFirstChild(name)
+    if c then
+        local s, v = pcall(function() return c.Value end)
+        if s then return v end
+    end
+    return nil
+end
+
+local function ManageHighlight(obj, color, on)
+    pcall(function()
+        if not obj or not obj.Parent then return end
+        local h = obj:FindFirstChild("YANZ_HL")
+        if on then
+            if not h then
+                h = Instance.new("Highlight")
+                h.Name = "YANZ_HL"
+                h.Adornee = obj
+                h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                h.Parent = obj
+            end
+            h.FillColor = color
+            h.OutlineColor = color
+            h.FillTransparency = 0.82
+            h.OutlineTransparency = 0.25
+            h.Enabled = true
+        else
+            if h then h:Destroy() end
+        end
+    end)
+end
+
+local function CreateBillboard(text, color, size, tsize, offset)
+    local b = Instance.new("BillboardGui")
+    b.Name = "YANZ_BB"
+    b.AlwaysOnTop = true
+    b.Size = size or UDim2.new(0, 140, 0, 35)
+    b.StudsOffset = offset or Vector3.new(0, 2.5, 0)
+    b.MaxDistance = math.huge
+    b.Enabled = true
+    
+    local l = Instance.new("TextLabel")
+    l.Name = "Label"
+    l.Size = UDim2.new(1, 0, 1, 0)
+    l.BackgroundTransparency = 1
+    l.Text = text
+    l.TextColor3 = color
+    l.TextStrokeTransparency = 0
+    l.Font = Enum.Font.GothamBold
+    l.TextSize = tsize or 12
+    l.TextWrapped = true
+    l.RichText = true
+    l.TextXAlignment = Enum.TextXAlignment.Center
+    l.TextYAlignment = Enum.TextYAlignment.Center
+    l.Parent = b
+    return b
+end
+
+local function CleanBB(rt, name)
+    if rt then
+        local o = rt:FindFirstChild(name)
+        if o then o:Destroy() end
+    end
+end
+
+local function IsKiller(p) return p and p.Team and p.Team.Name:lower():find("killer") end
+local function IsSurvivor(p) return p and p.Team and p.Team.Name == "Survivors" end
+local function GetRoot(c) return c and c:FindFirstChild("HumanoidRootPart") end
+local function GetHum(c) return c and c:FindFirstChildOfClass("Humanoid") end
+local function GetHP(h) return h and h.MaxHealth > 0 and h.Health / h.MaxHealth or 0 end
+local function IsDowned(h) local p = GetHP(h) return p <= 0.25 and p > 0 end
+local function IsAlive(h) return GetHP(h) > 0.25 end
+
+local function SpamSpace(d)
+    task.spawn(function()
+        local e = tick() + d
+        while tick() < e do
+            pcall(function()
+                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
+                task.wait(0.05)
+                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
+            end)
+            task.wait(0.09)
+        end
+    end)
+end
+
+local function LookAt(pos)
+    local c = Workspace.CurrentCamera
+    if c then c.CFrame = CFrame.new(c.CFrame.Position, pos) end
+end
+
+local function SetCol(on)
+    local c = LocalPlayer.Character
+    if not c then return end
+    for _, v in c:GetDescendants() do
+        if v:IsA("BasePart") then v.CanCollide = on end
+    end
+end
+
+local function RestoreCol()
+    task.delay(0.4, function()
+        local c = LocalPlayer.Character
+        if not c then return end
+        for _, v in c:GetDescendants() do
+            if v:IsA("BasePart") and v.Name ~= "HumanoidRootPart" then v.CanCollide = true end
+        end
+    end)
+end
+
+-- =================================================
+-- ✅ MAP CACHING SYSTEM (OPTIMIZED TO ELIMINATE LAG)
+-- =================================================
+local function ScanMapObjects()
+    MapCache.Generators = {}
+    MapCache.Hooks = {}
+    MapCache.Gates = {}
+    MapCache.Pallets = {}
+    MapCache.Windows = {}
+    MapCache.ExitPos = nil
+
+    for _, o in Workspace:GetChildren() do
+        if o.Name == "Window" and (o:IsA("BasePart") or o:IsA("Model")) then
+            table.insert(MapCache.Windows, o)
+        end
+    end
+
+    local map = Workspace:FindFirstChild("Map")
+    if not map then return end
+
+    for _, o in map:GetDescendants() do
+        if o.Name == "Generator" and o:IsA("Model") then
+            table.insert(MapCache.Generators, o)
+        elseif o.Name == "Hook" then
+            local target = o:IsA("BasePart") and o or o:FindFirstChildWhichIsA("BasePart", true) or (o:FindFirstChild("Model") and o.Model:FindFirstChildWhichIsA("BasePart", true))
+            if target then
+                table.insert(MapCache.Hooks, {model = o, target = target})
+            end
+        elseif (o.Name == "Pallet" or o.Name == "Palletwrong") and (o:IsA("Model") or o:IsA("BasePart")) then
+            table.insert(MapCache.Pallets, o)
+        elseif o.Name == "Gate" and (o:IsA("Model") or o:IsA("BasePart")) then
+            table.insert(MapCache.Gates, o)
+        end
+    end
+
+    if map:FindFirstChild("RooftopHitbox") or map:FindFirstChild("Rooftop") then
+        MapCache.ExitPos = Vector3.new(3098.16, 454.04, -4918.74)
+    elseif map:FindFirstChild("HooksMeat") then
+        MapCache.ExitPos = Vector3.new(1546.12, 152.21, -796.72)
+    elseif map:FindFirstChild("churchbell") then
+        MapCache.ExitPos = Vector3.new(760.98, -20.14, -78.48)
+    else
+        local f = map:FindFirstChild("Finishline") or map:FindFirstChild("FinishLine") or map:FindFirstChild("Fininshline")
+        if f then
+            MapCache.ExitPos = f:IsA("BasePart") and f.Position or (f:FindFirstChildWhichIsA("BasePart") and f:FindFirstChildWhichIsA("BasePart").Position)
+        else
+            for _, o in map:GetChildren() do
+                if o.Name:lower():find("finish") then
+                    MapCache.ExitPos = o:IsA("BasePart") and o.Position or (o:FindFirstChildWhichIsA("BasePart") and o:FindFirstChildWhichIsA("BasePart").Position)
+                    break
+                end
+            end
+        end
+    end
+end
+
+-- =================================================
+-- ✅ ESP SYSTEM - OPTIMIZED
+-- =================================================
+local function ClearAllESP()
+    pcall(function()
+        for _, o in Workspace:GetDescendants() do
+            if o.Name == "YANZ_HL" then o:Destroy() end
+        end
+        for _, p in Players:GetPlayers() do
+            if p.Character then
+                for _, o in p.Character:GetDescendants() do
+                    if o.Name == "YANZ_HL" or o.Name == "YANZ_BB" then o:Destroy() end
+                end
+            end
+        end
+        local m = Workspace:FindFirstChild("Map")
+        if m then
+            for _, o in m:GetDescendants() do
+                if o.Name == "YANZ_HL" or o.Name == "YANZ_BB" then o:Destroy() end
+            end
+        end
+        if IndicatorGui then
+            for _, o in IndicatorGui:GetChildren() do o:Destroy() end
+        end
+        table.clear(ActiveGenerators)
+    end)
+end
+
+local function RefreshESP()
+    pcall(function()
+        if not IndicatorGui then return end
+        table.clear(ActiveGenerators)
+
+        for _, o in MapCache.Windows do
+            if o and o.Parent then
+                ManageHighlight(o, Config.Objects.Window.Color, Options.WindowESP.Value)
+            end
+        end
+
+        for _, o in MapCache.Generators do
+            if o and o.Parent then
+                ManageHighlight(o, Config.Objects.Generator.Color, Options.GeneratorESP.Value)
+                table.insert(ActiveGenerators, o)
+            end
+        end
+
+        for _, item in MapCache.Hooks do
+            if item.target and item.target.Parent then
+                ManageHighlight(item.target, Config.Objects.Hook.Color, Options.HookESP.Value)
+            end
+        end
+
+        for _, o in MapCache.Pallets do
+            if o and o.Parent then
+                ManageHighlight(o, Config.Objects.Pallet.Color, Options.PalletESP.Value)
+            end
+        end
+
+        for _, o in MapCache.Gates do
+            if o and o.Parent then
+                ManageHighlight(o, Config.Objects.Gate.Color, Options.GateESP.Value)
+            end
+        end
+    end)
+end
+
+local function UpdateGenProgress(gen)
+    pcall(function()
+        if not gen or not gen.Parent then return true end
+        local p = GetGameValue(gen, "RepairProgress") or GetGameValue(gen, "Progress") or GetGameValue(gen, "repair") or 0
+        local bb = gen:FindFirstChild("YANZ_BB")
+        if p >= 100 or not Options.GenProgressESP.Value then
+            if bb then bb:Destroy() end
+            return p >= 100
+        end
+        p = math.clamp(tonumber(p) or 0, 0, 100)
+        local col
+        if p < 50 then 
+            col = Config.Objects.Generator.Color:Lerp(Color3.new(0.85, 0.85, 0), p / 50)
+        else 
+            col = Color3.new(0.85, 0.85, 0):Lerp(Color3.new(0, 0.8, 0.3), (p - 50) / 50) 
+        end
+        local str = string.format("⚡ %.1f%%", p)
+        if not bb then
+            bb = CreateBillboard(str, col, UDim2.new(0, 100, 0, 25), 13, Vector3.new(0, 3.2, 0))
+            bb.Adornee = gen:FindFirstChild("defaultMaterial", true) or gen:FindFirstChildWhichIsA("BasePart", true) or gen
+            bb.Parent = gen
+        else
+            bb.Label.Text, bb.Label.TextColor3 = str, col
+        end
+        return false
+    end)
+    return false
+end
+
+local function UpdatePlayerESP(p)
+    pcall(function()
+        if not IndicatorGui or not IndicatorGui.Parent then return end
+        if p == LocalPlayer then return end
+
+        local ik = IsKiller(p)
+        local show = Options.PlayerESP.Value and ((ik and Options.KillerESP.Value) or (not ik and Options.SurvivorESP.Value))
+        local char = p.Character
+        local rt = GetRoot(char)
+
+        if not show or not char or not rt then
+            for _, n in {p.Name, p.Name .. "_Chased", p.Name .. "_Killer"} do
+                local o = IndicatorGui:FindFirstChild(n)
+                if o then o:Destroy() end
+            end
+            if char then ManageHighlight(char, Color3.new(1, 1, 1), false) end
+            CleanBB(rt, "YANZ_BB")
+            CleanBB(rt, "MaskHook")
+            CleanBB(rt, "ChasedLabel")
+            return
+        end
+
+        local hu = GetHum(char)
+        local sel = GetGameValue(p, "SelectedKiller")
+        local mask = GetGameValue(p, "Mask") or GetGameValue(char, "Mask")
+        local kd = GetGameValue(char, "Knocked")
+        local hk = GetGameValue(char, "IsHooked")
+        local ch = GetGameValue(char, "IsChased")
+        local myRt = GetRoot(LocalPlayer.Character)
+        local dist = myRt and math.floor((rt.Position - myRt.Position).Magnitude) or 0
+
+        local col = ik and Config.Players.Killer.Color or Config.Players.Survivor.Color
+        if hk then 
+            col = Color3.new(1, 0.71, 0.75)
+        elseif hu and hu.Health < hu.MaxHealth then
+            col = IsDowned(hu) and Color3.new(0.85, 0.4, 0) or Color3.new(0.95, 0.85, 0)
+        end
+
+        local displayName = ik and sel and tostring(sel) ~= "" and tostring(sel) or p.Name
+        local hpStr = hu and string.format(" %.0f%%", GetHP(hu) * 100) or ""
+        local status = (kd and " ⚠DOWN" or "") .. (hk and " HOOKED" or "") .. (ch and " CHASED" or "")
+        local fullText = string.format("%s%s\n[%d studs]%s", displayName, hpStr, dist, status)
+
+        local mainBB = rt:FindFirstChild("YANZ_BB")
+        if not mainBB then
+            mainBB = CreateBillboard(fullText, col, UDim2.new(0, 160, 0, 45), 12, Vector3.new(0, 3.8, 0))
+            mainBB.Adornee = rt
+            mainBB.Parent = rt
+        else
+            mainBB.Label.Text, mainBB.Label.TextColor3 = fullText, col
+        end
+
+        ManageHighlight(char, col, true)
+
+        local hasMask = false
+        if ik and sel and tostring(sel):lower():match("masked") and mask then
+            local maskL = tostring(mask):lower()
+            for key, mName in MaskNames do
+                if key:lower() == maskL then
+                    hasMask = true
+                    local mBB = rt:FindFirstChild("MaskHook")
+                    local mCol = MaskColors[key] or Color3.new(1, 1, 1)
+                    if not mBB then
+                        mBB = CreateBillboard("🎭" .. mName, mCol, UDim2.new(0, 110, 0, 22), 13, Vector3.new(0, 6.2, 0))
+                        mBB.Name = "MaskHook"
+                        mBB.Adornee = rt
+                        mBB.Parent = rt
+                    else
+                        mBB.Label.Text, mBB.Label.TextColor3 = "🎭" .. mName, mCol
+                    end
+                    break
+                end
+            end
+        end
+        if not hasMask then CleanBB(rt, "MaskHook") end
+
+        local chased2D = IndicatorGui:FindFirstChild(p.Name .. "_Chased")
+        local cam = Workspace.CurrentCamera
+        if not cam then return end
+        local vps = cam.ViewportSize
+        local vc = vps / 2
+
+        if ch then
+            local cLbl = mainBB:FindFirstChild("ChasedLabel")
+            if not cLbl then
+                cLbl = Instance.new("TextLabel")
+                cLbl.Name = "ChasedLabel"
+                cLbl.Size = UDim2.new(1, 0, 0, 28)
+                cLbl.Position = UDim2.new(0, 0, -1.6, 0)
+                cLbl.BackgroundTransparency = 1
+                cLbl.Font = Enum.Font.GothamBold
+                cLbl.TextSize = 30
+                cLbl.TextStrokeTransparency = 0
+                cLbl.TextXAlignment = Enum.TextXAlignment.Center
+                cLbl.Parent = mainBB
+            end
+            cLbl.Text, cLbl.TextColor3 = "⚠️ CHASED ⚠️", Color3.new(1, 0.2, 0.2)
+
+            local sp, on = cam:WorldToViewportPoint(rt.Position)
+            if not chased2D then
+                chased2D = Instance.new("TextLabel")
+                chased2D.Name = p.Name .. "_Chased"
+                chased2D.BackgroundTransparency = 1
+                chased2D.Font = Enum.Font.GothamBold
+                chased2D.TextSize = 32
+                chased2D.TextStrokeTransparency = 0
+                chased2D.AnchorPoint = Vector2.new(0.5, 0.5)
+                chased2D.Size = UDim2.new(0, 60, 0, 40)
+                chased2D.Parent = IndicatorGui
+            end
+            chased2D.Text, chased2D.TextColor3 = "🔥", col
+            if on then
+                chased2D.Visible = false
+            else
+                chased2D.Visible = true
+                local dr = Vector2.new(sp.X, sp.Y) - vc
+                if sp.Z < 0 then dr = -dr end
+                local ms = math.max(math.abs(dr.X) / (vc.X - 40), math.abs(dr.Y) / (vc.Y - 40))
+                local div = ms == 0 and 1 or ms
+                chased2D.Position = UDim2.new(0, vc.X + dr.X / div, 0, vc.Y + dr.Y / div)
+            end
+        else
+            if chased2D then chased2D:Destroy() end
+            local cLbl = mainBB:FindFirstChild("ChasedLabel")
+            if cLbl then cLbl:Destroy() end
+        end
+
+        local k2d = IndicatorGui:FindFirstChild(p.Name .. "_Killer")
+        if ik then
+            local sp, on = cam:WorldToViewportPoint(rt.Position)
+            if not on then
+                if not k2d then
+                    k2d = Instance.new("TextLabel")
+                    k2d.Name = p.Name .. "_Killer"
+                    k2d.BackgroundTransparency = 1
+                    k2d.Font = Enum.Font.GothamBold
+                    k2d.TextSize = 14
+                    k2d.TextStrokeTransparency = 0
+                    k2d.AnchorPoint = Vector2.new(0.5, 0.5)
+                    k2d.RichText = true
+                    k2d.Size = UDim2.new(0, 140, 0, 38)
+                    k2d.Parent = IndicatorGui
+                end
+                k2d.Text, k2d.TextColor3 = string.format("🗡️ %s\n[%d]", displayName, dist), col
+                k2d.Visible = true
+                local dr = Vector2.new(sp.X, sp.Y) - vc
+                if sp.Z < 0 then dr = -dr end
+                local ms = math.max(math.abs(dr.X) / (vc.X - 50), math.abs(dr.Y) / (vc.Y - 50))
+                local div = ms == 0 and 1 or ms
+                k2d.Position = UDim2.new(0, vc.X + dr.X / div, 0, vc.Y + dr.Y / div)
+            else
+                if k2d then k2d.Visible = false end
+            end
+        else
+            if k2d then k2d:Destroy() end
+        end
+    end)
+end
+
+local function UpdateNextKiller()
+    pcall(function()
+        local tm = LocalPlayer.Team and LocalPlayer.Team.Name:lower() or ""
+        
+        if tm:find("spectator") or tm:find("lobby") then
+            local pl = Players:GetPlayers()
+            table.sort(pl, function(a, b)
+                local aa = GetGameValue(a, "AllowKiller") or false
+                local ba = GetGameValue(b, "AllowKiller") or false
+                if aa ~= ba then return aa end
+                return (GetGameValue(a, "KillerChance") or 0) > (GetGameValue(b, "KillerChance") or 0)
+            end)
+            
+            local nk = pl[1]
+            local killerName = nk == LocalPlayer and "YOU" or tostring(GetGameValue(nk, "SelectedKiller") or nk.Name)
+            
+            if nextKillerLabel then
+                nextKillerLabel:SetDesc("Waiting for the next killer...\nPlayers:" .. killerName)
+            end
+        else
+            if nextKillerLabel then
+                nextKillerLabel:SetDesc("Not in the Killer selection phase.")
+            end
+        end
+    end)
+end
+
+local function UpdateKillerWarning()
+    pcall(function()
+        local mr = GetRoot(LocalPlayer.Character)
+        if not mr then return end
+        local warn = mr:FindFirstChild("KillerWarn")
+        local near = false
+        for _, p in Players:GetPlayers() do
+            if IsKiller(p) then
+                local kr = GetRoot(p.Character)
+                if kr and (kr.Position - mr.Position).Magnitude < 100 then
+                    near = true
+                    break
+                end
+            end
+        end
+        if near then
+            if not warn then
+                warn = CreateBillboard("KILLER NEAR", Color3.new(1, 0, 0), UDim2.new(0, 200, 0, 40), 28, Vector3.new(0, 6, 0))
+                warn.Name = "KillerWarn"
+                warn.Adornee = mr
+                warn.Parent = mr
+            end
+        elseif warn then
+            warn:Destroy()
+        end
+    end)
+end
+
+-- =================================================
+-- ✅ COMBAT / SURVIVOR SYSTEMS
+-- =================================================
+local function AutoAttack()
+    if not Options.AutoAttackKill.Value then return end
+    local r = GetRoot(LocalPlayer.Character)
+    if not r then return end
+    for _, p in Players:GetPlayers() do
+        if p ~= LocalPlayer and IsSurvivor(p) then
+            local tr = GetRoot(p.Character)
+            if tr and (tr.Position - r.Position).Magnitude <= 14 then
+                pcall(function() ReplicatedStorage.Remotes.Attacks.BasicAttack:FireServer(false) end)
+                break
+            end
+        end
+    end
+end
+
+local function AutoParry()
+    if not Options.AutoParry.Value then return end
+    local cd = Options.NoParryCooldown.Value and 0.05 or 0.55
+    if tick() - LastParryTime < cd then return end
+    local r = GetRoot(LocalPlayer.Character)
+    if not r then return end
+    for _, p in Players:GetPlayers() do
+        if IsKiller(p) then
+            local kr = GetRoot(p.Character)
+            if kr and (kr.Position - r.Position).Magnitude <= 16 then
+                pcall(function()
+                    ReplicatedStorage.Remotes.Items["Parrying Dagger"].parry:FireServer()
+                    LastParryTime = tick()
+                end)
+                break
+            end
+        end
+    end
+end
+
+local function HookOcc(hp)
+    for _, p in Players:GetPlayers() do
+        if IsSurvivor(p) then
+            local pr = GetRoot(p.Character)
+            if pr and (pr.Position - hp.Position).Magnitude < 8 then return true end
+        end
+    end
+    return false
+end
+
+local function FindBestHook()
+    local r = GetRoot(LocalPlayer.Character)
+    if not r then return end
+    local best, bd = nil, math.huge
+    for _, item in MapCache.Hooks do
+        local p = item.target
+        if p and p.Parent and not HookOcc(p) then
+            local d = (p.Position - r.Position).Magnitude
+            if d < bd then bd = d best = p end
+        end
+    end
+    return best
+end
+
+local function AutoHook()
+    if not Options.AutoHook.Value or not IsKiller(LocalPlayer) then
+        AutoHookState = {phase = 0}
+        return
+    end
+    local r = GetRoot(LocalPlayer.Character)
+    if not r then return end
+    local s = AutoHookState
+    if s.phase == 3 then
+        if tick() - s.startTime > 2 then
+            s = {phase = 0}
+            LastAutoHookTime = tick()
+        end
+        return
+    end
+    if s.phase == 2 then
+        local h = FindBestHook()
+        if h then
+            SetCol(false)
+            r.CFrame = CFrame.new(h.Position + Vector3.new(0, 2, 0), h.Position)
+            LookAt(h.Position)
+            SpamSpace(1.5)
+            RestoreCol()
+            s.phase = 3
+            s.startTime = tick()
+        else
+            s = {phase = 0}
+        end
+        return
+    end
+    if s.phase == 1 then
+        if tick() - s.startTime > 1.5 then s.phase = 2 end
+        return
+    end
+    if tick() - LastAutoHookTime < 0.5 then return end
+    local cd, dd = nil, math.huge
+    for _, p in Players:GetPlayers() do
+        if IsSurvivor(p) then
+            local tr, th = GetRoot(p.Character), GetHum(p.Character)
+            if tr and th and IsDowned(th) then
+                local d = (tr.Position - r.Position).Magnitude
+                if d < dd then dd = d cd = {p = p, rt = tr} end
+            end
+        end
+    end
+    if cd then
+        SetCol(false)
+        r.CFrame = CFrame.new(cd.rt.Position + Vector3.new(0, 3, 0), cd.rt.Position - Vector3.new(0, 5, 0))
+        LookAt(cd.rt.Position)
+        SpamSpace(1.5)
+        RestoreCol()
+        s.phase = 1
+        s.target = cd.p
+        s.startTime = tick()
+        LastAutoHookTime = tick()
+    end
+end
+
+local function AutoChase()
+    if not Options.AutoChase.Value or not IsKiller(LocalPlayer) then
+        KillerTarget = nil
+        return
+    end
+    local r = GetRoot(LocalPlayer.Character)
+    if not r then return end
+    local t = KillerTarget
+    if not (t and t.Character and GetRoot(t.Character) and IsAlive(GetHum(t.Character))) then
+        local cl, cd = nil, math.huge
+        for _, p in Players:GetPlayers() do
+            if IsSurvivor(p) then
+                local tr = GetRoot(p.Character)
+                if tr and IsAlive(GetHum(p.Character)) then
+                    local d = (tr.Position - r.Position).Magnitude
+                    if d < cd then cd = d cl = p end
+                end
+            end
+        end
+        KillerTarget = cl
+        t = cl
+    end
+    if not t then return end
+    local tr = GetRoot(t.Character)
+    if not tr then return end
+    SetCol(false)
+    local d = (r.Position - tr.Position).Unit
+    if d ~= d then d = Vector3.new(1, 0, 0) end
+    r.CFrame = CFrame.new(tr.Position + d * 3 + Vector3.new(0, 1, 0), tr.Position)
+    pcall(function() ReplicatedStorage.Remotes.Attacks.BasicAttack:FireServer(false) end)
+end
+
+local function AutoFarm()
+    if Options.AutoFarm.Value and IsKiller(LocalPlayer) then
+        Options.AutoChase:SetValue(true)
+        Options.AutoAttackKill:SetValue(true)
+        Options.AutoHook:SetValue(true)
+    end
+end
+
+local function FindExit()
+    if MapCache.ExitPos then return MapCache.ExitPos end
+    ScanMapObjects()
+    return MapCache.ExitPos
+end
+
+InstantEscape = function()
+    local r = GetRoot(LocalPlayer.Character)
+    if not r then return end
+    local e = FindExit()
+    if e then
+        r.CFrame = CFrame.new(e + Vector3.new(0, 3, 0))
+        Fluent:Notify({Title = "YANZ", Content = "Teleported to Exit!", Duration = 3})
+    else
+        Fluent:Notify({Title = "❌", Content = "Exit not found", Duration = 3})
+    end
+end
+
+local function AutoEscape()
+    if not Options.AutoEscape.Value or not IsSurvivor(LocalPlayer) then
+        BeatSurvivorDone = false
+        return
+    end
+    local r = GetRoot(LocalPlayer.Character)
+    local e = FindExit()
+    if not r or not e then return end
+    if LastFinishPos and (e - LastFinishPos).Magnitude > 50 then BeatSurvivorDone = false end
+    if BeatSurvivorDone then return end
+    r.CFrame = CFrame.new(e + Vector3.new(0, 3, 0))
+    BeatSurvivorDone = true
+    LastFinishPos = e
+end
+
+local repairRemote, skillRemote
+local function AutoGen()
+    if not Options.AutoGenRepair.Value then return end
+    if not repairRemote then
+        local g = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes.Generator
+        repairRemote = g and g.RepairEvent
+        skillRemote = g and g.SkillCheckResultEvent
+    end
+    if repairRemote and skillRemote then
+        for _, v in MapCache.Generators do
+            if v and v.Parent then
+                for _, c in v:GetChildren() do
+                    if c.Name:match("GeneratorPoint") then
+                        pcall(repairRemote.FireServer, repairRemote, c, true)
+                        if Options.AntiFailGen.Value then
+                            pcall(skillRemote.FireServer, skillRemote, "success", 1, v, c)
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function AutoUnhook()
+    if not (Options.AutoUnhook.Value or Options.AutoCarry.Value) or not IsSurvivor(LocalPlayer) or tick() - LastWiggleTime < 0.25 then return end
+    local hk = GetGameValue(LocalPlayer.Character, "IsHooked")
+    local cr = GetGameValue(LocalPlayer.Character, "IsCarried")
+    if hk or cr then
+        pcall(function()
+            ReplicatedStorage.Remotes.Carry.SelfUnHookEvent:FireServer()
+            LastWiggleTime = tick()
+        end)
+        if Options.AutoCarry.Value then SpamSpace(0.4) end
+    end
+end
+
+-- SKILL CHECK
+local function GetQTE()
+    local p = PlayerGui:FindFirstChild("SkillCheckPromptGui")
+    if not p then return end
+    local f = p:FindFirstChild("Check")
+    if not f then return end
+    return {frame = f, line = f:FindFirstChild("Line"), goal = f:FindFirstChild("Goal")}
+end
+
+local function InZone(nr, gr)
+    nr, gr = nr % 360, gr % 360
+    local s, e = (gr + 104) % 360, (gr + 115) % 360
+    return s > e and (nr >= s or nr <= e) or nr >= s and nr <= e
+end
+
+local function PressSpace()
+    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
+    task.defer(function() VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game) end)
+end
+
+local function StopQTE()
+    if QTEHandler.FrameConn then
+        QTEHandler.FrameConn:Disconnect()
+        QTEHandler.FrameConn = nil
+    end
+    QTEHandler.Monitoring = false
+end
+
+local function QTEFrame()
+    local healOnly = not Options.AutoPerfectSkill.Value and Options.AutoHealingSkill.Value
+    if healOnly then
+        local h = GetGameValue(LocalPlayer.Character, "HealingActive")
+        if not h then StopQTE() return end
+    end
+    local u = QTEHandler.Elements
+    if not (u and u.line and u.goal) then StopQTE() return end
+    if InZone(u.line.Rotation, u.goal.Rotation) then
+        PressSpace()
+        StopQTE()
+    end
+end
+
+local function StartQTE()
+    if QTEHandler.Monitoring then return end
+    QTEHandler.Monitoring = true
+    QTEHandler.FrameConn = RunService.Heartbeat:Connect(QTEFrame)
+end
+
+local function VisChanged()
+    local any = Options.AutoPerfectSkill.Value or Options.AutoHealingSkill.Value
+    if not any or not IsSurvivor(LocalPlayer) then StopQTE() return end
+    local u = QTEHandler.Elements
+    if u and u.frame and u.frame.Visible then StartQTE() else StopQTE() end
+end
+
+local function InitSkillCheck()
+    task.spawn(function()
+        while true do
+            local u = GetQTE()
+            if u and u.line and u.goal then
+                QTEHandler.Elements = u
+                if QTEHandler.UIConn then QTEHandler.UIConn:Disconnect() end
+                QTEHandler.UIConn = u.frame:GetPropertyChangedSignal("Visible"):Connect(VisChanged)
+                break
+            end
+            task.wait(1)
+        end
+    end)
+end
+
+-- =================================================
+-- ✅ MAIN LOOP & EVENT HANDLING
+-- =================================================
+Workspace.ChildAdded:Connect(function(c)
+    if c.Name == "Map" then
+        task.wait(1.2)
+        ClearAllESP()
+        ScanMapObjects()
+        RefreshESP()
+    end
+end)
+
+LocalPlayer.CharacterAdded:Connect(function()
+    if QTEHandler.FrameConn then QTEHandler.FrameConn:Disconnect() end
+    if QTEHandler.UIConn then QTEHandler.UIConn:Disconnect() end
+    SetupGui()
+    task.wait(1)
+    InitSkillCheck()
+    ScanMapObjects()
+    task.defer(function() RefreshESP() end)
+end)
+
+Players.PlayerRemoving:Connect(function(p)
+    if IndicatorGui then
+        for _, n in {p.Name, p.Name .. "_Chased", p.Name .. "_Killer"} do
+            local o = IndicatorGui:FindFirstChild(n)
+            if o then o:Destroy() end
+        end
+    end
+end)
+
+-- Initial Scan
+ScanMapObjects()
+
+RunService.Heartbeat:Connect(function()
+    local now = tick()
+
+    -- Throttled Combat / Survivor Actions
+    if now - LastAttackTick > 0.05 then
+        LastAttackTick = now
+        AutoAttack()
+        AutoParry()
+        AutoChase()
+    end
+
+    AutoHook()
+    AutoFarm()
+    
+    if now - LastGenTick > 0.3 then
+        LastGenTick = now
+        AutoGen()
+    end
+
+    AutoEscape()
+    AutoUnhook()
+
+    -- Apply Lighting Fullbright efficiently
+    if now - LastLightingTick > 2 then
+        LastLightingTick = now
+        if Lighting.ClockTime ~= 14 then
+            Lighting.Ambient, Lighting.OutdoorAmbient, Lighting.Brightness, Lighting.ClockTime, Lighting.GlobalShadows, Lighting.FogEnd = Color3.new(1, 1, 1), Color3.new(1, 1, 1), 2, 14, false, 9e9
+        end
+    end
+
+    -- Throttled UI & ESP Loop
+    if now - LastUpdateTick < 0.08 then return end
+    LastUpdateTick = now
+
+    if now - LastFullESPRefresh > 5 then
+        LastFullESPRefresh = now
+        ScanMapObjects()
+        RefreshESP()
+    end
+
+    for _, p in Players:GetPlayers() do
+        UpdatePlayerESP(p)
+    end
+
+    for i = #ActiveGenerators, 1, -1 do
+        local g = ActiveGenerators[i]
+        if g and g.Parent then
+            if UpdateGenProgress(g) then table.remove(ActiveGenerators, i) end
+        else
+            table.remove(ActiveGenerators, i)
+        end
+    end
+
+    UpdateNextKiller()
+    UpdateKillerWarning()
+end)
+
+-- =================================================
+-- ✅ INIT & DISCORD DRAWING API
+-- =================================================
+task.spawn(function()
+    task.wait(2)
+
+    if not (Drawing and Drawing.new) then 
+        return 
+    end
+
+    local cam = Workspace.CurrentCamera
+    if not cam then return end
+
+    local DISCORD_INVITE = "discord.gg/mNGeUVcjKB"
+    local DISPLAY_DURATION = 6
+    local FADE_DURATION = 0.4
+
+    local bg = Drawing.new("Square")
+    bg.Filled = true
+    bg.Color = Color3.fromRGB(30, 31, 34)
+    bg.Thickness = 0
+    bg.Transparency = 0
+    bg.Visible = true
+
+    local accent = Drawing.new("Square")
+    accent.Filled = true
+    accent.Color = Color3.fromRGB(88, 101, 242)
+    accent.Thickness = 0
+    accent.Transparency = 0
+    accent.Visible = true
+
+    local text = Drawing.new("Text")
+    text.Size = 17
+    text.Font = Drawing.Fonts.UI
+    text.Center = true
+    text.Outline = true
+    text.OutlineColor = Color3.fromRGB(0, 0, 0)
+    text.Color = Color3.fromRGB(242, 243, 245)
+    text.Text = "Join Discord: " .. DISCORD_INVITE
+    text.Transparency = 0
+    text.Visible = true
+
+    local function updatePositions()
+        if not cam then return end
+        local viewport = cam.ViewportSize
+        local width = 340
+        local height = 45
+        local x = (viewport.X / 2) - (width / 2)
+        local y = 70
+
+        bg.Size = Vector2.new(width, height)
+        bg.Position = Vector2.new(x, y)
+
+        accent.Size = Vector2.new(4, height)
+        accent.Position = Vector2.new(x, y)
+
+        text.Position = Vector2.new(x + (width / 2), y + (height / 2) - 8)
+    end
+
+    updatePositions()
+
+    local resizeConnection
+    resizeConnection = cam:GetPropertyChangedSignal("ViewportSize"):Connect(updatePositions)
+
+    local function fade(targetTransparency)
+        local steps = 12
+        local stepDelay = FADE_DURATION / steps
+        local startTrans = bg.Transparency
+        local diff = targetTransparency - startTrans
+        for i = 1, steps do
+            local currentTrans = startTrans + (diff * (i / steps))
+            bg.Transparency = currentTrans * 0.92
+            accent.Transparency = currentTrans
+            text.Transparency = currentTrans
+            task.wait(stepDelay)
+        end
+    end
+
+    fade(1)
+
+    task.wait(DISPLAY_DURATION)
+
+    fade(0)
+
+    if resizeConnection then
+        resizeConnection:Disconnect()
+    end
+    bg:Remove()
+    accent:Remove()
+    text:Remove()
+end)
+
+SetupGui()
+task.wait(0.3)
+ScanMapObjects()
+RefreshESP()
+InitSkillCheck()
+Window:SelectTab(1)
+task.wait(0.2)
+Fluent:Notify({Title = "YANZ HUB Successfully", Content = "https://discord.gg/mNGeUVcjKB", Duration = 10})

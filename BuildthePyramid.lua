@@ -150,7 +150,7 @@ local function processAutoUpgrade()
 	local rf = getPurchaseRF()
 	if not rf then return end
 
-	local upgradeList = {"bulkPickup", "bulkPlace"}
+	local upgradeList = {"bulkPickup", "bulkPlace", "placementRange"}
 	for _, upId in ipairs(upgradeList) do
 		task.spawn(function()
 			local ok, result = pcall(function()
@@ -1063,6 +1063,6 @@ getgenv().PyramidFarm = {
 	poolInfo = poolInfo,
 	carryCount = carryCount,
 	carryCapacity = carryCapacity,
-	version = "gui-v9-autoupgrade",
+	version = "gui-v10",
 	cleanup = cleanup,
 }

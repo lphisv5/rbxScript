@@ -275,17 +275,11 @@ local function teleportTo(target)
 	if not hrp then
 		return false
 	end
-	if (hrp.Position - target).Magnitude > 10 then
+	if (hrp.Position - target).Magnitude > 8 then
 		hrp.CFrame = CFrame.new(target + Vector3.new(0, 3, 0))
 		RunService.Heartbeat:Wait()
 	end
 	return true
-end
-
-local function layerPlacedCount()
-	local model = workspace:FindFirstChild(PyramidConfig.ModelName)
-	local n = model and model:GetAttribute(PyramidConfig.LayerPlacedAttribute)
-	return type(n) == "number" and n or -1
 end
 
 local function rpcPickup(svc, quarryPart)
@@ -327,11 +321,10 @@ local function runtimeInstance()
 end
 
 local function rpcPlace(svc, slot)
-	if not svc or not svc.PyramidService then
+	if not svc or not svc.PyramidService or not slot then
 		return false
 	end
-	local before = carryCount()
-	if before <= 0 then
+	if carryCount() <= 0 then
 		return false
 	end
 	local ok = pcall(function()
@@ -340,17 +333,7 @@ local function rpcPlace(svc, slot)
 			p:catch(function() end)
 		end
 	end)
-	if not ok then
-		return false
-	end
-	local deadline = os.clock() + 1.5
-	while os.clock() < deadline do
-		if carryCount() < before then
-			return true
-		end
-		RunService.Heartbeat:Wait()
-	end
-	return false
+	return ok
 end
 
 local farmThread = nil
@@ -388,7 +371,7 @@ local function pickPhase(svc, quarryPos, quarryPart)
 
 		local canPickup = true
 		if State.teleport then
-			if dist > 10 then
+			if dist > 8 then
 				teleportTo(quarryPos)
 			end
 			lastWalk = os.clock()
@@ -421,9 +404,8 @@ local function pickPhase(svc, quarryPos, quarryPart)
 end
 
 local function placePhase(svc)
-	local range = PlacementRange.forPlayer(LP, PyramidConfig.PlaceDistance)
-
 	local rt, irt = runtimeInstance()
+
 	if rt and irt and type(irt.beginPlaceHold) == "function" then
 		local started = false
 		while State.running and alive() do
@@ -454,82 +436,18 @@ local function placePhase(svc)
 
 			local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
 			if not hrp then
-				task.wait(1)
-			else
-				local slot = PyramidRuntime.resolveSlot(hrp.Position, workspace, nil, range)
-				if not slot then
-					if started then
-						pcall(function() irt.endPlaceHold(rt) end)
-						started = false
-					end
-					local model = workspace:FindFirstChild(PyramidConfig.ModelName)
-					if model then
-						local far = PyramidRuntime.resolveSlot(partPosition(model), workspace, nil, 900)
-						local goal = far and far.position or partPosition(model)
-						State.status = "Approaching"
-						if State.teleport then
-							teleportTo(goal)
-						else
-							walkTo(goal, math.min(12, range), 4)
-						end
-					end
-					task.wait(0.05)
-				else
-					State.status = "Placing"
-					if not started then
-						pcall(function() irt.beginPlaceHold(rt) end)
-						started = true
-					end
-					local before = carry
-					task.wait(State.placeDelay)
-					local landed = before - carryCount()
-					if landed > 0 then
-						State.placed = State.placed + landed
-					end
-				end
+				task.wait(0.2)
+				continue
 			end
-		end
-		if started then
-			pcall(function() irt.endPlaceHold(rt) end)
-		end
-		return
-	end
 
-	local cachedSlot = nil
-	local slotAge = 0
-
-	while State.running and alive() do
-		processAutoUpgrade()
-
-		local carry = carryCount()
-		if carry <= 0 then
-			cachedSlot = nil
-			State.status = "Carry empty"
-			return
-		end
-		if pyramidComplete() then
-			cachedSlot = nil
-			State.status = "Pyramid complete"
-			return
-		end
-		if poolReady() then
-			State.status = "Pool available"
-			return
-		end
-
-		local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-		if not hrp then
-			task.wait(1)
-		else
-			slotAge = slotAge + 1
-			local slot = cachedSlot
-			if not slot or slotAge > 4 then
-				slot = PyramidRuntime.resolveSlot(hrp.Position, workspace, nil, range)
-				cachedSlot = slot
-				slotAge = 0
-			end
+			local range = PlacementRange.forPlayer(LP, PyramidConfig.PlaceDistance)
+			local slot = PyramidRuntime.resolveSlot(hrp.Position, workspace, nil, range)
 
 			if not slot then
+				if started then
+					pcall(function() irt.endPlaceHold(rt) end)
+					started = false
+				end
 				local model = workspace:FindFirstChild(PyramidConfig.ModelName)
 				if model then
 					local far = PyramidRuntime.resolveSlot(partPosition(model), workspace, nil, 900)
@@ -541,16 +459,81 @@ local function placePhase(svc)
 						walkTo(goal, math.min(12, range), 4)
 					end
 				end
-				task.wait(0.05)
-			else
-				State.status = "Placing"
-				if rpcPlace(svc, slot) then
-					State.placed = State.placed + 1
-				else
-					cachedSlot = nil
-				end
-				task.wait(State.placeDelay)
+				task.wait(0.01)
+				continue
 			end
+
+			State.status = "Placing"
+			if not started then
+				pcall(function() irt.beginPlaceHold(rt) end)
+				started = true
+			end
+			local before = carry
+			task.wait(State.placeDelay)
+			local landed = before - carryCount()
+			if landed > 0 then
+				State.placed = State.placed + landed
+			end
+		end
+		if started then
+			pcall(function() irt.endPlaceHold(rt) end)
+		end
+		return
+	end
+
+	-- โหมด RPC Place ความเร็วสูง (สำหรับกรณีที่เกมไม่มี Hold Place)
+	while State.running and alive() do
+		processAutoUpgrade()
+
+		local carry = carryCount()
+		if carry <= 0 then
+			State.status = "Carry empty"
+			return
+		end
+		if pyramidComplete() then
+			State.status = "Pyramid complete"
+			return
+		end
+		if poolReady() then
+			State.status = "Pool available"
+			return
+		end
+
+		local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+		if not hrp then
+			task.wait(0.2)
+			continue
+		end
+
+		local range = PlacementRange.forPlayer(LP, PyramidConfig.PlaceDistance)
+		local slot = PyramidRuntime.resolveSlot(hrp.Position, workspace, nil, range)
+
+		if not slot then
+			local model = workspace:FindFirstChild(PyramidConfig.ModelName)
+			if model then
+				local far = PyramidRuntime.resolveSlot(partPosition(model), workspace, nil, 900)
+				local goal = far and far.position or partPosition(model)
+				State.status = "Approaching"
+				if State.teleport then
+					teleportTo(goal)
+				else
+					walkTo(goal, math.min(12, range), 4)
+				end
+			end
+			task.wait(0.01)
+			continue
+		end
+
+		State.status = "Placing"
+		local before = carry
+		if rpcPlace(svc, slot) then
+			task.wait(State.placeDelay)
+			local current = carryCount()
+			if current < before then
+				State.placed = State.placed + (before - current)
+			end
+		else
+			task.wait(0.02)
 		end
 	end
 end
@@ -1063,6 +1046,6 @@ getgenv().PyramidFarm = {
 	poolInfo = poolInfo,
 	carryCount = carryCount,
 	carryCapacity = carryCapacity,
-	version = "gui-v10",
+	version = "gui-v11",
 	cleanup = cleanup,
 }

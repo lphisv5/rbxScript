@@ -40,7 +40,7 @@ local State = {
 	placeDelay = 0,
 	teleport = true,
 	usePool = true,
-	autoUpgrade = true, -- เพิ่มระบบ Auto Upgrade
+	autoUpgrade = true,
 	logToChat = false,
 	log = {},
 }
@@ -90,7 +90,6 @@ local function services()
 	return svc
 end
 
--- ดึง Remote Function สำหรับการสั่งอัพเกรด
 local function getPurchaseRF()
 	local ok, rf = pcall(function()
 		return ReplicatedStorage.Packages._Index["sleitnick_knit@1.7.0"].knit.Services.DataService.RF.PurchaseUpgrade
@@ -116,7 +115,6 @@ local function getPurchaseRF()
 	return nil
 end
 
--- เช็คจำนวนเงินของผู้เล่น
 local function getPlayerMoney()
 	local leaderstats = LP:FindFirstChild("leaderstats")
 	if leaderstats then
@@ -139,12 +137,10 @@ end
 local lastUpgradeAttempt = 0
 local lastMoney = -1
 
--- ระบบกด Auto Upgrade ระหว่างฟาร์ม
 local function processAutoUpgrade()
 	if not State.autoUpgrade or not State.running then return end
 
 	local currentMoney = getPlayerMoney()
-	-- หน่วงเวลาเช็คอัพเกรดทุกๆ 3 วินาที หรือเมื่อเงินเปลี่ยนแปลง
 	if os.clock() - lastUpgradeAttempt < 3 and currentMoney <= lastMoney then
 		return
 	end
@@ -274,14 +270,12 @@ local function walkTo(target, stopDistance, budgetSeconds)
 	return (hrp.Position - target).Magnitude <= stopDistance
 end
 
--- ปรับปรุงแก้ไขฟังก์ชัน Teleport ป้องกันการกระตุกสั่นขึ้นลง
 local function teleportTo(target)
 	local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
 	if not hrp then
 		return false
 	end
-	-- ย้าย CFrame เฉพาะเมื่อระยะห่างไกลกว่าจุดเป้าหมาย (เกิน 8 studs)
-	if (hrp.Position - target).Magnitude > 8 then
+	if (hrp.Position - target).Magnitude > 10 then
 		hrp.CFrame = CFrame.new(target + Vector3.new(0, 3, 0))
 		RunService.Heartbeat:Wait()
 	end
@@ -376,7 +370,7 @@ local function pickPhase(svc, quarryPos, quarryPart)
 	local lastWalk = 0
 	local idleRounds = 0
 	while State.running and alive() do
-		processAutoUpgrade() -- ตรวจสอบการอัพเกรดระหว่างทำงาน
+		processAutoUpgrade()
 
 		local capacity = carryCapacity()
 		if carryCount() >= capacity then
@@ -391,8 +385,7 @@ local function pickPhase(svc, quarryPos, quarryPart)
 		local dist = hrp and (hrp.Position - quarryPos).Magnitude or 999
 
 		if State.teleport then
-			-- วาร์ปเฉพาะเมื่อไม่อยู่ในระยะเก็บของ เพื่อแก้ปัญหาสั่นกระตุก
-			if dist > 8 then
+			if dist > 10 then
 				teleportTo(quarryPos)
 			end
 			lastWalk = os.clock()
@@ -428,7 +421,7 @@ local function placePhase(svc)
 	if rt and irt and type(irt.beginPlaceHold) == "function" then
 		local started = false
 		while State.running and alive() do
-			processAutoUpgrade() -- ตรวจสอบการอัพเกรดระหว่างทำงาน
+			processAutoUpgrade()
 
 			local carry = carryCount()
 			if carry <= 0 then
@@ -502,7 +495,7 @@ local function placePhase(svc)
 	local slotAge = 0
 
 	while State.running and alive() do
-		processAutoUpgrade() -- ตรวจสอบการอัพเกรดระหว่างทำงาน
+		processAutoUpgrade()
 
 		local carry = carryCount()
 		if carry <= 0 then

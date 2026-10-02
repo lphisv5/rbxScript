@@ -127,12 +127,12 @@ local MODEL_LIST = {
 -- [ ENGINE CONFIGURATION ]
 -- =============================================================
 local CONFIG = {
-    FLY_SPEED              = 226,
-    BYPASS_TP_SPEED        = 1000,
+    FLY_SPEED              = 225,
+    BYPASS_TP_SPEED        = 500,
     LANDING_DISTANCE       = 100,
     LANDING_SPEED          = 95,
     WARP_DETECT_THRESHOLD  = 75,
-    SNAPBACK_DIST          = 140,
+    SNAPBACK_DIST          = 135,
     SNAPBACK_FRAMES        = 3,
     SAFE_ZONE_RADIUS       = 25,
     HOLD_DURATION          = 1.8,
@@ -142,7 +142,7 @@ local CONFIG = {
     TARGET_NAMES           = { "Fish", "FishTool", "MagicFish", "Egg", "Magic" },
     SPAWN_FOLDER_NAMES     = { "SpawnedFish", "SpawnedEggs", "SpawnedItems", "SpawnedTools" },
     MAGIC_TOOL_NAME        = "MagicFishTool",
-    MAGIC_POLL_INTERVAL    = 0.03,
+    MAGIC_POLL_INTERVAL    = 0.01,
     DEPOSIT_MAX_WAIT       = 8,
     DEPOSIT_CHECK_INTERVAL = 0.4,
     DEPOSIT_SETTLE_WAIT    = 0.4,
@@ -277,7 +277,7 @@ end
 
 task.spawn(function()
     while true do
-        task.wait(0.1)
+        task.wait(0.2)
         if SystemState.AutoStealEnabled then
             local char = LocalPlayer.Character
             if char and char:FindFirstChild("HumanoidRootPart") then
@@ -347,7 +347,7 @@ Workspace.DescendantAdded:Connect(function(descendant)
 end)
 
 task.spawn(function()
-    while task.wait(3) do
+    while task.wait(2) do
         for _, descendant in ipairs(Workspace:GetDescendants()) do
             if descendant.Name == CONFIG.SPEEDBUBBLE_NAME and descendant:IsA("BasePart") then
                 if descendant.CanTouch then descendant.CanTouch = false end
@@ -1214,7 +1214,7 @@ local function UpdateViewportDisplay(model)
 end
 
 -- =============================================================
--- [ RARITY ANALYSIS ENGINE - FIXED ]
+-- [ RARITY ANALYSIS ENGINE ]
 -- =============================================================
 local function GetRarityFromColor(color)
     if not color or typeof(color) ~= "Color3" then return nil, nil end
@@ -1538,7 +1538,7 @@ local function IsMagicFishReady(maxWait)
         if IsMagicToolWithFish() or IsPlayerHoldingFishOrEgg() then
             return true
         end
-        task.wait(0.03)
+        task.wait(0.02)
     end
     return IsPlayerHoldingFishOrEgg() or IsMagicToolWithFish()
 end
@@ -1865,7 +1865,7 @@ HoldLabel.BackgroundTransparency = 1
 HoldLabel.Position = UDim2.new(0, 12, 0, 48)
 HoldLabel.Size = UDim2.new(0, 80, 0, 12)
 HoldLabel.Font = Enum.Font.GothamMedium
-HoldLabel.Text = "TP MODE"
+HoldLabel.Text = "FAST MODE"
 HoldLabel.TextColor3 = Color3.fromRGB(0, 255, 150)
 HoldLabel.TextSize = 9
 HoldLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -1904,9 +1904,9 @@ CycleBtn.MouseButton1Click:Connect(function()
 
     SystemState.TeleportMode = not SystemState.TeleportMode
     if SystemState.TeleportMode then
-        HoldLabel.Text = "TP MODE"
+        HoldLabel.Text = "FAST MODE"
         HoldLabel.TextColor3 = Color3.fromRGB(0, 255, 150)
-        ShowNotification("Switched to Safe TP Mode")
+        ShowNotification("Switched to Safe FAST Mode")
     else
         HoldLabel.Text = "FLY MODE"
         HoldLabel.TextColor3 = Color3.fromRGB(110, 115, 125)
@@ -1977,7 +1977,7 @@ ToggleKnob.Size = UDim2.new(0, 16, 0, 16)
 Instance.new("UICorner", ToggleKnob).CornerRadius = UDim.new(1, 0)
 
 -- =============================================================
--- [ MOVEMENT & RAGDOLL RECOVERY ENGINE - FIXED ]
+-- [ MOVEMENT & RAGDOLL RECOVERY ENGINE ]
 -- =============================================================
 local function GetRootPart()
     local char = LocalPlayer.Character
@@ -2182,7 +2182,7 @@ SmoothFlyToWithLanding = function(targetCFrame, speed)
     end)
 
     DisableNoclip()
-    task.wait(0.15)
+    task.wait(0.12)
 end
 
 IsRagdolled = function()
@@ -2305,12 +2305,12 @@ InitCharacterDetectors = function()
 end
 
 LocalPlayer.CharacterAdded:Connect(function()
-    task.wait(0.7)
+    task.wait(0.6)
     if SystemState.AutoStealEnabled then InitCharacterDetectors() end
 end)
 
 -- =============================================================
--- [ DEPOSIT & STEAL LOGIC - FIXED ]
+-- [ DEPOSIT & STEAL LOGIC ]
 -- =============================================================
 local function TryDepositEgg()
     local bpCF = GetBaseplateCFrame()
@@ -2352,7 +2352,7 @@ local function DropItem()
 
     pcall(function()
         VirtualInputManager:SendKeyEvent(true, Q_ENUM, false, game)
-        task.wait(0.05)
+        task.wait(0.06)
         VirtualInputManager:SendKeyEvent(false, Q_ENUM, false, game)
     end)
 
@@ -2370,13 +2370,13 @@ local function ReturnAndDepositCycle()
     local reefCF = GetCoralReefCFrame()
     if reefCF and SystemState.AutoStealEnabled then
         SmoothFlyToWithLanding(reefCF, CONFIG.FLY_SPEED)
-        task.wait(0.35)
+        task.wait(0.2)
     end
 
     if SystemState.AutoStealEnabled then
         if GetBaseplateCFrame() then
             TryDepositEgg()
-            task.wait(0.3)
+            task.wait(0.2)
         end
     end
 
@@ -2388,7 +2388,7 @@ end
 
 TrySellItem = function()
     if TriggerRedPart() then
-        task.wait(0.2)
+        task.wait(0.1)
         if not IsPlayerHoldingFishOrEgg() then
             return true
         else
@@ -2473,7 +2473,7 @@ AdvancedHoldE = function(targetEgg)
             pcall(function() firePrompt(prompt, 0) end)
             pcall(function() firePrompt(prompt, 1, true) end)
         end)
-        task.wait(0.08)
+        task.wait(0.07)
         if SystemState.StealConfirmed or IsPlayerHoldingFishOrEgg() then return true end
     end
 
@@ -2596,7 +2596,7 @@ StartAutoStealLoop = function()
                         DisableAutoSteal()
                         break
                     else
-                        task.wait(0.1)
+                        task.wait(0.2)
                     end
                 else
                     if hasItem and not inSafe then
@@ -2642,7 +2642,7 @@ StartAutoStealLoop = function()
                                 DisableAutoSteal()
                                 break
                             else
-                                task.wait(0.1)
+                                task.wait(0.2)
                             end
                         end
                     end

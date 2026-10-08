@@ -43,6 +43,26 @@ if not GenvOk or type(Genv) ~= "table" then
     Genv = _G
 end
 
+local function XorBytes(a, b)
+    if bit32 and bit32.bxor then
+        return bit32.bxor(a, b)
+    end
+
+    local result = 0
+    local place = 1
+    while a > 0 or b > 0 do
+        local aBit = a % 2
+        local bBit = b % 2
+        if aBit ~= bBit then
+            result = result + place
+        end
+        a = math.floor(a / 2)
+        b = math.floor(b / 2)
+        place = place * 2
+    end
+    return result
+end
+
 local function GenerateUltraUserToken(userId)
     local randNonce = tostring(math.random(10000000, 99999999))
     local raw = "YANZ_V3_AUTH_PAYLOAD_IDENTITY:" .. tostring(userId) .. ":" .. tostring(os.time()) .. ":" .. randNonce
@@ -51,13 +71,7 @@ local function GenerateUltraUserToken(userId)
     for i = 1, #raw do
         local byte = string.byte(raw, i)
         local kByte = string.byte(key, ((i - 1) % #key) + 1)
-        local bxorVal = 0
-        if bit32 and bit32.bxor then
-            bxorVal = bit32.bxor(byte, kByte)
-        else
-            bxorVal = byte
-        end
-        table.insert(hexTable, string.format("%02X", bxorVal))
+        table.insert(hexTable, string.format("%02X", XorBytes(byte, kByte)))
     end
     return "YANZSECURE_" .. table.concat(hexTable)
 end
@@ -135,16 +149,25 @@ local function QueryServer(key)
     if not http_request then
         return false, "no_http"
     end
-    local url = Config.VerifyURL .. "?key=" .. HttpService:UrlEncode(key) .. "&userId=" .. tostring(LocalPlayer.UserId)
+
+    local requestBody = HttpService:JSONEncode({
+        key = Trim(key),
+        userId = tostring(LocalPlayer.UserId),
+    })
     local ok, response = pcall(function()
         return http_request({
-            Url = url,
-            Method = "GET",
+            Url = Config.VerifyURL,
+            Method = "POST",
+            Headers = {
+                ["Content-Type"] = "application/json",
+            },
+            Body = requestBody,
         })
     end)
     if not ok or type(response) ~= "table" then
         return false, "connection"
     end
+
     local rawBody = response.Body or response.body or ""
     local decodeOk, data = pcall(function()
         return HttpService:JSONDecode(rawBody)
@@ -155,6 +178,7 @@ local function QueryServer(key)
     return false, "invalid"
 end
 
+Genv.YANZ_KEY_VERIFIED = false
 if LocalPlayer.UserId == Config.OwnerUserId then
     print("Owner Whitelist")
     Genv.YANZ_KEY_VERIFIED = true
@@ -195,15 +219,13 @@ local savedKey = LoadSavedKey()
 local initialNotice = nil
 local silentAccountCheck = false
 
-if savedKey ~= "" then
-    local ok, data = QueryServer(savedKey)
-    if ok and data.success then
-        Genv.YANZ_KEY_VERIFIED = true
-        return
-    elseif ok then
-        initialNotice = tostring(data.message or "Saved key is invalid or expired")
-    end
-else
+local serverOk, serverData = QueryServer(savedKey)
+if serverOk and serverData.success then
+    Genv.YANZ_KEY_VERIFIED = true
+    return
+elseif savedKey ~= "" and serverOk then
+    initialNotice = tostring(serverData.message or "Saved key is invalid or expired")
+elseif savedKey == "" then
     silentAccountCheck = true
 end
 

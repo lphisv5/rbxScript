@@ -117,10 +117,15 @@ local function Trim(value)
     return (tostring(value or ""):match("^%s*(.-)%s*$"))
 end
 
+local function CleanKey(value)
+    local str = tostring(value or ""):gsub("[%s%-_]", "")
+    return string.upper(str)
+end
+
 local function SaveKeyLocally(key)
     if type(writefile) == "function" then
         pcall(function()
-            writefile(Config.SaveFileName, Trim(key))
+            writefile(Config.SaveFileName, CleanKey(key))
         end)
     end
 end
@@ -134,7 +139,7 @@ local function LoadSavedKey()
             end
         end)
     end
-    return Trim(saved)
+    return CleanKey(saved)
 end
 
 local function CopyToClipboard(text)
@@ -151,7 +156,7 @@ local function QueryServer(key)
     end
 
     local requestBody = HttpService:JSONEncode({
-        key = Trim(key),
+        key = CleanKey(key),
         userId = tostring(LocalPlayer.UserId),
     })
     local ok, response = pcall(function()
@@ -556,7 +561,6 @@ Create("Frame", {
     Parent = LeftPanel,
 }, { Corner(16), AuroraGradient })
 
--- Floating particles
 local Particles = {}
 do
     local layer = Create("Frame", {
@@ -784,7 +788,6 @@ Create("TextLabel", {
     Parent = LeftPanel,
 })
 
--- Drag layer covering the showcase panel (nothing interactive lives there)
 local LeftDrag = Create("Frame", {
     Name = "LeftDragHandle",
     Size = UDim2.fromScale(1, 1),
@@ -1095,7 +1098,7 @@ local ClipBtn = Create("TextButton", {
 }, { Corner(9) })
 
 local function RefreshClipButton()
-    local hasText = Trim(KeyBox.Text) ~= ""
+    local hasText = CleanKey(KeyBox.Text) ~= ""
     if hasText then
         ClipBtn.Text = "CLEAR"
         ClipBtn.Visible = true
@@ -1193,7 +1196,7 @@ local function ShowToast(text, color, duration)
             return
         end
         toastVisible = false
-        Tween(Toast, 0.3, { Position = TOAST_HIDDEN }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+        Tween(Toast, 0.3, { Position = TOAST_SHOWN and TOAST_HIDDEN }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
     end)
 end
 
@@ -1583,7 +1586,7 @@ local function ProcessVerify()
     if isVerifying or granted or Closing then
         return
     end
-    local key = Trim(KeyBox.Text)
+    local key = CleanKey(KeyBox.Text)
 
     if key == "" then
         ShowToast("Please enter your key!", Config.Error)
@@ -1648,7 +1651,7 @@ Track(KeyBox.FocusLost:Connect(function(enterPressed)
 end))
 
 Track(KeyBox:GetPropertyChangedSignal("Text"):Connect(function()
-    StepState.KeyEntered = Trim(KeyBox.Text) ~= ""
+    StepState.KeyEntered = CleanKey(KeyBox.Text) ~= ""
     RefreshClipButton()
     if not granted then
         RefreshSteps()
@@ -1659,13 +1662,13 @@ Track(KeyBox:GetPropertyChangedSignal("Text"):Connect(function()
 end))
 
 Track(ClipBtn.MouseButton1Click:Connect(function()
-    if Trim(KeyBox.Text) ~= "" then
+    if CleanKey(KeyBox.Text) ~= "" then
         KeyBox.Text = ""
         KeyBox:CaptureFocus()
     elseif get_clipboard then
         local ok, content = pcall(get_clipboard)
-        if ok and type(content) == "string" and Trim(content) ~= "" then
-            KeyBox.Text = Trim(content)
+        if ok and type(content) == "string" and CleanKey(content) ~= "" then
+            KeyBox.Text = CleanKey(content)
             ShowToast("Key pasted from clipboard", Config.Accent)
         else
             ShowToast("Clipboard is empty", Config.Error)

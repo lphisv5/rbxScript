@@ -692,7 +692,8 @@ end
 
 local function ParseHpNumber(str)
     if not str or type(str) ~= "string" then return 0 end
-    local numStr, unit = str:match("([%d%.]+)%s*([KkMmBbTtQqRr]?[AaIi]?)")
+    local cleanStr = str:gsub("[%$,%s]", "")
+    local numStr, unit = cleanStr:match("([%d%.]+)%s*([KkMmBbTtQqRr]?[AaIi]?)")
     if not numStr then return 0 end
     local val = tonumber(numStr) or 0
     unit = unit:upper()
@@ -1287,6 +1288,25 @@ local function GetPlayerCash()
     local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
     if not playerGui then return nil end
 
+    -- Check direct path MainGUI.Currencies.Cash.Amount from verified game structure
+    pcall(function()
+        local mainGui = playerGui:FindFirstChild("MainGUI")
+        local currencies = mainGui and mainGui:FindFirstChild("Currencies")
+        local cash = currencies and currencies:FindFirstChild("Cash")
+        local amountObj = cash and cash:FindFirstChild("Amount")
+        if amountObj then
+            local text = GetGuiText(amountObj)
+            if text then
+                local parsed = ParseHpNumber(text)
+                if parsed > 0 then
+                    return parsed
+                end
+            elseif amountObj:IsA("ValueBase") and typeof(amountObj.Value) == "number" then
+                return amountObj.Value
+            end
+        end
+    end)
+
     local bestCash
     for _, desc in ipairs(playerGui:GetDescendants()) do
         local displayText = GetGuiText(desc)
@@ -1438,6 +1458,50 @@ local function BuildShopGuiIndex(playerGui)
         end
     end
     return indexedNodes
+end
+
+-- ====================================================================
+-- DIRECT PICKAXE SHOP UI INSPECTOR
+-- ====================================================================
+local function GetDirectPickaxeState(itemIndex)
+    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+    if not playerGui then return nil, nil end
+
+    local mainGui = playerGui:FindFirstChild("MainGUI")
+    local frames = mainGui and mainGui:FindFirstChild("Frames")
+    local pickaxesFrame = frames and frames:FindFirstChild("Pickaxes")
+    local scrollingFrame = pickaxesFrame and pickaxesFrame:FindFirstChild("ScrollingFrame")
+    if not scrollingFrame then return nil, nil end
+
+    local tierFrame = scrollingFrame:FindFirstChild("Tier" .. tostring(itemIndex))
+    if not tierFrame then return nil, nil end
+
+    local container = tierFrame:FindFirstChild("Container")
+    if not container then return nil, nil end
+
+    local equipBtn = container:FindFirstChild("Equip")
+    local purchaseBtn = container:FindFirstChild("Purchase")
+
+    -- Check if already owned
+    if equipBtn and equipBtn.Visible then
+        return "Owned", nil
+    end
+    if purchaseBtn and not purchaseBtn.Visible then
+        return "Owned", nil
+    end
+
+    -- Check purchase price
+    if purchaseBtn and purchaseBtn.Visible then
+        local titleLabel = purchaseBtn:FindFirstChild("Title")
+        if titleLabel and titleLabel:IsA("TextLabel") and titleLabel.Text ~= "" then
+            local price = ParseHpNumber(titleLabel.Text)
+            if price > 0 then
+                return "Buy", price
+            end
+        end
+    end
+
+    return nil, nil
 end
 
 local function GetShopItemState(itemName, guiIndex)
@@ -2641,7 +2705,7 @@ UpgradeTab:Toggle({
 
 UpgradeTab:Toggle({
     Title = "Auto Buy Pickaxe",
-    Desc = "Buy pickaxes only when their price is visible and cash is sufficient",
+    Desc = "Buy pickaxes automatically when cash is sufficient and not owned",
     Value = Config.AutoBuyPickaxe,
     Callback = function(Value)
         Config.AutoBuyPickaxe = Value
@@ -2867,12 +2931,15 @@ task.spawn(function()
                 if Config.AutoBuyTrails then
                     local remote = ReplicatedStorage:FindFirstChild("TrailShopRequest") or TrailShopRequest
                     if remote then
+                        if nextTrailIndex > #TrailShopItems then
+                            nextTrailIndex = 1
+                        end
                         local itemIndex = nextTrailIndex
                         local itemName = TrailShopItems[itemIndex]
                         if itemName then
                             local itemState, cost = GetShopItemState(itemName, shopGuiIndex)
                             if itemState == "Owned" then
-                                nextTrailIndex += 1
+                                nextTrailIndex = (nextTrailIndex % #TrailShopItems) + 1
                                 missingShopPriceWarnings.Trails = nil
                             elseif itemState == "Buy" and cost then
                                 missingShopPriceWarnings.Trails = nil
@@ -2894,7 +2961,7 @@ task.spawn(function()
                                     insufficientCashWarnings.Trails = nil
                                     if FireShopPurchase("Trails", remote, itemIndex) then
                                         availableCash -= cost
-                                        nextTrailIndex += 1
+                                        nextTrailIndex = (nextTrailIndex % #TrailShopItems) + 1
                                     end
                                 else
                                     SystemManager:Log("Upgrades", "TrailShopRequest is not a RemoteEvent.")
@@ -2910,12 +2977,20 @@ task.spawn(function()
                 if Config.AutoBuyPickaxe then
                     local remote = ReplicatedStorage:FindFirstChild("PickaxeShopRequest") or PickaxeShopRequest
                     if remote then
+                        if nextPickaxeIndex > #PickaxeShopItems then
+                            nextPickaxeIndex = 1
+                        end
+
                         local itemIndex = nextPickaxeIndex
                         local itemName = PickaxeShopItems[itemIndex]
                         if itemName then
-                            local itemState, cost = GetShopItemState(itemName, shopGuiIndex)
+                            local itemState, cost = GetDirectPickaxeState(itemIndex)
+                            if not itemState then
+                                itemState, cost = GetShopItemState(itemName, shopGuiIndex)
+                            end
+
                             if itemState == "Owned" then
-                                nextPickaxeIndex += 1
+                                nextPickaxeIndex = (nextPickaxeIndex % #PickaxeShopItems) + 1
                                 missingShopPriceWarnings.Pickaxes = nil
                             elseif itemState == "Buy" and cost then
                                 missingShopPriceWarnings.Pickaxes = nil
@@ -2928,7 +3003,7 @@ task.spawn(function()
                                     if not insufficientCashWarnings.Pickaxes then
                                         SystemManager:Log(
                                             "Upgrades",
-                                            itemName .. " skipped: balance " .. FormatNumber(availableCash)
+                                            itemName .. " (Tier " .. tostring(itemIndex) .. ") skipped: balance " .. FormatNumber(availableCash)
                                                 .. " is below price " .. FormatNumber(cost) .. "."
                                         )
                                         insufficientCashWarnings.Pickaxes = true
@@ -2937,13 +3012,13 @@ task.spawn(function()
                                     insufficientCashWarnings.Pickaxes = nil
                                     if FireShopPurchase("Pickaxes", remote, itemIndex) then
                                         availableCash -= cost
-                                        nextPickaxeIndex += 1
+                                        nextPickaxeIndex = (nextPickaxeIndex % #PickaxeShopItems) + 1
                                     end
                                 else
                                     SystemManager:Log("Upgrades", "PickaxeShopRequest is not a RemoteEvent.")
                                 end
                             elseif not missingShopPriceWarnings.Pickaxes then
-                                SystemManager:Log("Upgrades", itemName .. " skipped: visible shop card or price not found.")
+                                SystemManager:Log("Upgrades", itemName .. " (Tier " .. tostring(itemIndex) .. ") skipped: visible shop card or price not found.")
                                 missingShopPriceWarnings.Pickaxes = true
                             end
                         end

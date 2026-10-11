@@ -6,7 +6,6 @@ if getgenv().YanzHub_Engine then
 end
 getgenv().YanzHub_Engine = true
 
--- Services
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -15,7 +14,6 @@ local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 local Environment = getgenv()
 
--- Global Configuration State
 local Config = {
     AutoFlyAndSmash = false,
     AutoPromptAndFlyBack = false,
@@ -23,8 +21,8 @@ local Config = {
     AutoUpgradePen = false,
     AutoBuyTrails = false,
     AutoBuyPickaxe = false,
-    HitCooldown = 0.1,
-    FlySpeed = 65,
+    HitCooldown = 0.3,
+    FlySpeed = 75,
     TargetZone = "All",
     FlyOffset = Vector3.new(0, 1, 2)
 }
@@ -85,16 +83,12 @@ local TrailShopItems = {
     "Moonlight Trail"
 }
 
--- Remotes
 local EggHitRequest = ReplicatedStorage:WaitForChild("EggHitRequest", 5)
 local AnimalBankedRemote = ReplicatedStorage:FindFirstChild("AnimalBankedRemote")
 
 local TrailShopRequest = ReplicatedStorage:FindFirstChild("TrailShopRequest")
 local PickaxeShopRequest = ReplicatedStorage:FindFirstChild("PickaxeShopRequest")
 
--- ====================================================================
--- CENTRALIZED INTER-SYSTEM STATE MANAGER
--- ====================================================================
 local SystemManager = {
     State = {
         CurrentTask = "Idle", -- "Idle", "Farming", "Collecting", "ReturningToBase", "Upgrading"
@@ -1256,6 +1250,30 @@ local function IsCashBalanceLabel(label, playerGui)
 end
 
 local function GetPlayerCash()
+    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+    
+    -- 1. ตรวจสอบจาก UI หลักโดยตรง (MainGUI.Currencies.Cash.Amount)
+    if playerGui then
+        local mainGui = playerGui:FindFirstChild("MainGUI")
+        local currencies = mainGui and mainGui:FindFirstChild("Currencies")
+        local cash = currencies and currencies:FindFirstChild("Cash")
+        local amountObj = cash and cash:FindFirstChild("Amount")
+        if amountObj then
+            local text = GetGuiText(amountObj)
+            if text and text ~= "" then
+                local parsed = ParseHpNumber(text)
+                if parsed > 0 then
+                    return parsed
+                end
+            elseif amountObj:IsA("ValueBase") and typeof(amountObj.Value) == "number" then
+                if amountObj.Value > 0 then
+                    return amountObj.Value
+                end
+            end
+        end
+    end
+
+    -- 2. ตรวจสอบจาก leaderstats
     local leaderstats = LocalPlayer:FindFirstChild("leaderstats")
     if leaderstats then
         local cashObj = leaderstats:FindFirstChild("# Cash")
@@ -1264,20 +1282,9 @@ local function GetPlayerCash()
         if cashObj and cashObj:IsA("ValueBase") and typeof(cashObj.Value) == "number" and not IsIncomeRate(cashObj.Name) then
             return cashObj.Value
         end
-
-        for _, stat in ipairs(leaderstats:GetChildren()) do
-            if not stat:IsA("ValueBase") or typeof(stat.Value) ~= "number" then
-                continue
-            end
-
-            local statName = stat.Name:lower()
-            local isWalletStat = statName:find("cash", 1, true) or statName:find("money", 1, true) or statName:find("coin", 1, true)
-            if isWalletStat and not IsIncomeRate(stat.Name) then
-                return stat.Value
-            end
-        end
     end
 
+    -- 3. ตรวจสอบจาก Attributes
     for attr, val in pairs(LocalPlayer:GetAttributes()) do
         local lowerAttr = attr:lower()
         if (lowerAttr:find("cash") or lowerAttr:find("money")) and not IsIncomeRate(attr) and typeof(val) == "number" then
@@ -1285,28 +1292,8 @@ local function GetPlayerCash()
         end
     end
 
-    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+    -- 4. ระบบค้นหาสำรองจาก UI ทั้งหมด
     if not playerGui then return nil end
-
-    -- Check direct path MainGUI.Currencies.Cash.Amount from verified game structure
-    pcall(function()
-        local mainGui = playerGui:FindFirstChild("MainGUI")
-        local currencies = mainGui and mainGui:FindFirstChild("Currencies")
-        local cash = currencies and currencies:FindFirstChild("Cash")
-        local amountObj = cash and cash:FindFirstChild("Amount")
-        if amountObj then
-            local text = GetGuiText(amountObj)
-            if text then
-                local parsed = ParseHpNumber(text)
-                if parsed > 0 then
-                    return parsed
-                end
-            elseif amountObj:IsA("ValueBase") and typeof(amountObj.Value) == "number" then
-                return amountObj.Value
-            end
-        end
-    end)
-
     local bestCash
     for _, desc in ipairs(playerGui:GetDescendants()) do
         local displayText = GetGuiText(desc)
@@ -1461,7 +1448,7 @@ local function BuildShopGuiIndex(playerGui)
 end
 
 -- ====================================================================
--- DIRECT PICKAXE SHOP UI INSPECTOR
+-- DIRECT SHOP UI INSPECTORS (PICKAXE & TRAIL)
 -- ====================================================================
 local function GetDirectPickaxeState(itemIndex)
     local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
@@ -1494,6 +1481,45 @@ local function GetDirectPickaxeState(itemIndex)
     if purchaseBtn and purchaseBtn.Visible then
         local titleLabel = purchaseBtn:FindFirstChild("Title")
         if titleLabel and titleLabel:IsA("TextLabel") and titleLabel.Text ~= "" then
+            local price = ParseHpNumber(titleLabel.Text)
+            if price > 0 then
+                return "Buy", price
+            end
+        end
+    end
+
+    return nil, nil
+end
+
+local function GetDirectTrailState(itemIndex)
+    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+    if not playerGui then return nil, nil end
+
+    local mainGui = playerGui:FindFirstChild("MainGUI")
+    local frames = mainGui and mainGui:FindFirstChild("Frames")
+    local trailsFrame = frames and (frames:FindFirstChild("Trails") or frames:FindFirstChild("TrailShop") or frames:FindFirstChild("Trail"))
+    local scrollingFrame = trailsFrame and trailsFrame:FindFirstChild("ScrollingFrame")
+    if not scrollingFrame then return nil, nil end
+
+    local trailItem = scrollingFrame:FindFirstChild("Trail" .. tostring(itemIndex))
+        or scrollingFrame:FindFirstChild("Tier" .. tostring(itemIndex))
+        or scrollingFrame:FindFirstChild("Item" .. tostring(itemIndex))
+    if not trailItem then return nil, nil end
+
+    local container = trailItem:FindFirstChild("Container") or trailItem
+    local equipBtn = container:FindFirstChild("Equip") or container:FindFirstChild("Equipped")
+    local purchaseBtn = container:FindFirstChild("Purchase") or container:FindFirstChild("Buy")
+
+    if equipBtn and equipBtn.Visible then
+        return "Owned", nil
+    end
+    if purchaseBtn and not purchaseBtn.Visible then
+        return "Owned", nil
+    end
+
+    if purchaseBtn and purchaseBtn.Visible then
+        local titleLabel = purchaseBtn:FindFirstChild("Title") or purchaseBtn:FindFirstChild("Amount")
+        if titleLabel and (titleLabel:IsA("TextLabel") or titleLabel:IsA("TextBox")) and titleLabel.Text ~= "" then
             local price = ParseHpNumber(titleLabel.Text)
             if price > 0 then
                 return "Buy", price
@@ -2695,7 +2721,7 @@ UpgradeTab:Toggle({
 
 UpgradeTab:Toggle({
     Title = "Auto Buy Trails",
-    Desc = "Buy all 11 trails only when unowned and cash is sufficient",
+    Desc = "Buy all 18 trails automatically when cash is sufficient and unowned",
     Value = Config.AutoBuyTrails,
     Callback = function(Value)
         Config.AutoBuyTrails = Value
@@ -2705,7 +2731,7 @@ UpgradeTab:Toggle({
 
 UpgradeTab:Toggle({
     Title = "Auto Buy Pickaxe",
-    Desc = "Buy pickaxes automatically when cash is sufficient and not owned",
+    Desc = "Buy pickaxes automatically when cash is sufficient and unowned",
     Value = Config.AutoBuyPickaxe,
     Callback = function(Value)
         Config.AutoBuyPickaxe = Value
@@ -2870,7 +2896,7 @@ local function FireShopPurchase(category, remote, itemIndex)
     end
 
     local now = os.clock()
-    if now - (lastShopPurchase[category] or 0) < 1.5 then
+    if now - (lastShopPurchase[category] or 0) < 0.5 then
         return false
     end
 
@@ -2935,41 +2961,44 @@ task.spawn(function()
                             nextTrailIndex = 1
                         end
                         local itemIndex = nextTrailIndex
-                        local itemName = TrailShopItems[itemIndex]
-                        if itemName then
-                            local itemState, cost = GetShopItemState(itemName, shopGuiIndex)
-                            if itemState == "Owned" then
-                                nextTrailIndex = (nextTrailIndex % #TrailShopItems) + 1
-                                missingShopPriceWarnings.Trails = nil
-                            elseif itemState == "Buy" and cost then
-                                missingShopPriceWarnings.Trails = nil
-                                if availableCash == nil then
-                                    if not cashReadWarnings.Trails then
-                                        SystemManager:Log("Upgrades", "Trail purchase skipped: current cash could not be read.")
-                                        cashReadWarnings.Trails = true
-                                    end
-                                elseif availableCash < cost then
-                                    if not insufficientCashWarnings.Trails then
-                                        SystemManager:Log(
-                                            "Upgrades",
-                                            itemName .. " skipped: balance " .. FormatNumber(availableCash)
-                                                .. " is below price " .. FormatNumber(cost) .. "."
-                                        )
-                                        insufficientCashWarnings.Trails = true
-                                    end
-                                elseif remote:IsA("RemoteEvent") then
-                                    insufficientCashWarnings.Trails = nil
-                                    if FireShopPurchase("Trails", remote, itemIndex) then
-                                        availableCash -= cost
-                                        nextTrailIndex = (nextTrailIndex % #TrailShopItems) + 1
-                                    end
-                                else
-                                    SystemManager:Log("Upgrades", "TrailShopRequest is not a RemoteEvent.")
+                        local itemName = TrailShopItems[itemIndex] or ("Trail " .. tostring(itemIndex))
+                        
+                        local itemState, cost = GetDirectTrailState(itemIndex)
+                        if not itemState then
+                            itemState, cost = GetShopItemState(itemName, shopGuiIndex)
+                        end
+
+                        if itemState == "Owned" then
+                            nextTrailIndex = (nextTrailIndex % #TrailShopItems) + 1
+                            missingShopPriceWarnings.Trails = nil
+                        elseif itemState == "Buy" and cost then
+                            missingShopPriceWarnings.Trails = nil
+                            if availableCash == nil then
+                                if not cashReadWarnings.Trails then
+                                    SystemManager:Log("Upgrades", "Trail purchase skipped: current cash could not be read.")
+                                    cashReadWarnings.Trails = true
                                 end
-                            elseif not missingShopPriceWarnings.Trails then
-                                SystemManager:Log("Upgrades", itemName .. " skipped: visible shop card or price not found.")
-                                missingShopPriceWarnings.Trails = true
+                            elseif availableCash < cost then
+                                if not insufficientCashWarnings.Trails then
+                                    SystemManager:Log(
+                                        "Upgrades",
+                                        itemName .. " (Trail " .. tostring(itemIndex) .. ") skipped: balance " .. FormatNumber(availableCash)
+                                            .. " is below price " .. FormatNumber(cost) .. "."
+                                    )
+                                    insufficientCashWarnings.Trails = true
+                                end
+                            elseif remote:IsA("RemoteEvent") then
+                                insufficientCashWarnings.Trails = nil
+                                if FireShopPurchase("Trails", remote, itemIndex) then
+                                    availableCash -= cost
+                                    nextTrailIndex = (nextTrailIndex % #TrailShopItems) + 1
+                                end
+                            else
+                                SystemManager:Log("Upgrades", "TrailShopRequest is not a RemoteEvent.")
                             end
+                        elseif not missingShopPriceWarnings.Trails then
+                            SystemManager:Log("Upgrades", itemName .. " (Trail " .. tostring(itemIndex) .. ") skipped: visible shop card or price not found.")
+                            missingShopPriceWarnings.Trails = true
                         end
                     end
                 end
@@ -3034,12 +3063,12 @@ task.spawn(function()
         else
             upgradeLoopFailureShown = false
         end
-        task.wait(automationEnabled and 2 or 3.5)
+        task.wait(automationEnabled and 0.2 or 2)
     end
 end)
 
 -- ====================================================================
--- AUTO BACK HOLDING ANIMAL MONITOR THREAD
+-- AUTO BACK
 -- ====================================================================
 task.spawn(function()
     while getgenv().YanzHub_Engine do
